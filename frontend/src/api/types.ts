@@ -1,0 +1,109 @@
+// Benutzer-Rollen
+export type UserRole = 'member' | 'officer' | 'treasurer' | 'admin'
+
+// Benutzer
+export interface User {
+  id: number
+  discord_id: string
+  username: string
+  display_name: string | null
+  avatar: string | null
+  role: UserRole
+  created_at: string
+}
+
+// Komponenten
+export interface Component {
+  id: number
+  name: string
+  category: string | null
+  is_predefined: boolean
+  created_at: string
+}
+
+// Inventar
+export interface InventoryItem {
+  id: number
+  user_id: number
+  component: Component
+  quantity: number
+}
+
+export interface Transfer {
+  id: number
+  from_user: User
+  to_user: User
+  component: Component
+  quantity: number
+  notes: string | null
+  created_at: string
+}
+
+// Kasse
+export type TransactionType = 'income' | 'expense'
+
+export interface Treasury {
+  id: number
+  current_balance: number
+}
+
+export interface Transaction {
+  id: number
+  amount: number
+  transaction_type: TransactionType
+  description: string
+  category: string | null
+  created_by: User
+  created_at: string
+}
+
+// Anwesenheit
+export interface AttendanceRecord {
+  id: number
+  user: User | null
+  detected_name: string | null
+  created_at: string
+}
+
+export interface AttendanceSession {
+  id: number
+  date: string
+  notes: string | null
+  created_by: User
+  records: AttendanceRecord[]
+  created_at: string
+}
+
+// Loot
+export interface LootDistribution {
+  id: number
+  user: User
+  quantity: number
+}
+
+export interface LootItem {
+  id: number
+  component: Component
+  quantity: number
+  distributions: LootDistribution[]
+}
+
+export interface LootSession {
+  id: number
+  attendance_session_id: number
+  created_by: User
+  items: LootItem[]
+  created_at: string
+}
+
+// OCR Scan Ergebnis
+export interface ScanResult {
+  matched: {
+    user_id: number
+    username: string
+    display_name: string | null
+    detected_name: string
+  }[]
+  unmatched: string[]
+  total_detected: number
+}
