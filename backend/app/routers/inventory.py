@@ -5,12 +5,38 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.inventory import Inventory, InventoryTransfer
+from app.models.inventory_log import InventoryLog, InventoryAction
 from app.models.component import Component
-from app.schemas.inventory import InventoryResponse, InventoryUpdate, TransferCreate, TransferResponse
+from app.schemas.inventory import InventoryResponse, InventoryUpdate, TransferCreate, TransferResponse, InventoryLogResponse
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
 
 router = APIRouter()
+
+
+def log_inventory_change(
+    db: Session,
+    user_id: int,
+    component_id: int,
+    action: InventoryAction,
+    quantity: int,
+    quantity_before: int,
+    quantity_after: int,
+    related_user_id: int = None,
+    notes: str = None
+):
+    """Protokolliert eine Lager-Änderung."""
+    log = InventoryLog(
+        user_id=user_id,
+        component_id=component_id,
+        action=action,
+        quantity=quantity,
+        quantity_before=quantity_before,
+        quantity_after=quantity_after,
+        related_user_id=related_user_id,
+        notes=notes
+    )
+    db.add(log)
 
 
 @router.get("/", response_model=List[InventoryResponse])
@@ -36,6 +62,28 @@ async def get_my_inventory(
         Inventory.user_id == current_user.id,
         Inventory.quantity > 0
     ).all()
+
+
+@router.get("/history", response_model=List[InventoryLogResponse])
+async def get_inventory_history(
+    user_id: Optional[int] = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt die Lager-Historie zurück. Offiziere sehen nur eigene, Admins sehen alle."""
+    query = db.query(InventoryLog)
+
+    if user_id:
+        # Spezifischer Benutzer angefragt
+        if user_id != current_user.id:
+            check_role(current_user, UserRole.ADMIN)
+        query = query.filter(InventoryLog.user_id == user_id)
+    elif not current_user.has_permission(UserRole.ADMIN):
+        # Nicht-Admin sieht nur eigene Historie
+        query = query.filter(InventoryLog.user_id == current_user.id)
+
+    return query.order_by(InventoryLog.created_at.desc()).limit(limit).all()
 
 
 @router.post("/{component_id}/add")
@@ -68,6 +116,8 @@ async def add_to_inventory(
         Inventory.component_id == component_id
     ).first()
 
+    quantity_before = inventory.quantity if inventory else 0
+
     if inventory:
         inventory.quantity += quantity
     else:
@@ -77,6 +127,18 @@ async def add_to_inventory(
             quantity=quantity
         )
         db.add(inventory)
+        db.flush()
+
+    # Historie loggen
+    log_inventory_change(
+        db=db,
+        user_id=current_user.id,
+        component_id=component_id,
+        action=InventoryAction.ADD,
+        quantity=quantity,
+        quantity_before=quantity_before,
+        quantity_after=inventory.quantity
+    )
 
     db.commit()
     db.refresh(inventory)
@@ -110,7 +172,20 @@ async def remove_from_inventory(
             detail="Nicht genug Komponenten auf Lager"
         )
 
+    quantity_before = inventory.quantity
     inventory.quantity -= quantity
+
+    # Historie loggen
+    log_inventory_change(
+        db=db,
+        user_id=current_user.id,
+        component_id=component_id,
+        action=InventoryAction.REMOVE,
+        quantity=-quantity,
+        quantity_before=quantity_before,
+        quantity_after=inventory.quantity
+    )
+
     db.commit()
     db.refresh(inventory)
 
@@ -161,13 +236,17 @@ async def transfer_components(
             detail="Komponente nicht gefunden"
         )
 
-    # Transfer durchführen
-    from_inventory.quantity -= transfer.quantity
+    # Mengen vorher speichern
+    from_quantity_before = from_inventory.quantity
 
     to_inventory = db.query(Inventory).filter(
         Inventory.user_id == transfer.to_user_id,
         Inventory.component_id == transfer.component_id
     ).first()
+    to_quantity_before = to_inventory.quantity if to_inventory else 0
+
+    # Transfer durchführen
+    from_inventory.quantity -= transfer.quantity
 
     if to_inventory:
         to_inventory.quantity += transfer.quantity
@@ -178,6 +257,7 @@ async def transfer_components(
             quantity=transfer.quantity
         )
         db.add(to_inventory)
+        db.flush()
 
     # Transfer protokollieren
     transfer_record = InventoryTransfer(
@@ -188,6 +268,32 @@ async def transfer_components(
         notes=transfer.notes
     )
     db.add(transfer_record)
+
+    # Historie für Sender
+    log_inventory_change(
+        db=db,
+        user_id=current_user.id,
+        component_id=transfer.component_id,
+        action=InventoryAction.TRANSFER_OUT,
+        quantity=-transfer.quantity,
+        quantity_before=from_quantity_before,
+        quantity_after=from_inventory.quantity,
+        related_user_id=transfer.to_user_id,
+        notes=transfer.notes
+    )
+
+    # Historie für Empfänger
+    log_inventory_change(
+        db=db,
+        user_id=transfer.to_user_id,
+        component_id=transfer.component_id,
+        action=InventoryAction.TRANSFER_IN,
+        quantity=transfer.quantity,
+        quantity_before=to_quantity_before,
+        quantity_after=to_inventory.quantity,
+        related_user_id=current_user.id,
+        notes=transfer.notes
+    )
 
     db.commit()
     db.refresh(transfer_record)

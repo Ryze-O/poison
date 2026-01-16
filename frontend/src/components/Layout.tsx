@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   X,
+  Boxes,
 } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/attendance', icon: ClipboardList, label: 'Anwesenheit' },
   { to: '/loot', icon: Gift, label: 'Loot' },
   { to: '/inventory', icon: Package, label: 'Lager' },
+  { to: '/components', icon: Boxes, label: 'Komponenten' },
   { to: '/treasury', icon: Wallet, label: 'Kasse' },
   { to: '/users', icon: Users, label: 'Benutzer' },
 ]

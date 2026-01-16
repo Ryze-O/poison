@@ -4,6 +4,7 @@ from datetime import datetime
 
 from app.schemas.component import ComponentResponse
 from app.schemas.user import UserResponse
+from app.models.inventory_log import InventoryAction
 
 
 class InventoryResponse(BaseModel):
@@ -33,6 +34,22 @@ class TransferResponse(BaseModel):
     to_user: UserResponse
     component: ComponentResponse
     quantity: int
+    notes: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class InventoryLogResponse(BaseModel):
+    id: int
+    user: UserResponse
+    component: ComponentResponse
+    action: InventoryAction
+    quantity: int
+    quantity_before: int
+    quantity_after: int
+    related_user: Optional[UserResponse]
     notes: Optional[str]
     created_at: datetime
 
