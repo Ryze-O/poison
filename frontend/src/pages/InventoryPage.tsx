@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, Minus, ArrowRight, Search, History, Package } from 'lucide-react'
-import type { InventoryItem, User, Component } from '../api/types'
+import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft } from 'lucide-react'
+import type { InventoryItem, User, Component, Location } from '../api/types'
 
 type InventoryAction = 'add' | 'remove' | 'loot' | 'transfer_in' | 'transfer_out'
 
@@ -41,16 +41,23 @@ export default function InventoryPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('')
+  const [filterLocation, setFilterLocation] = useState<string>('')
   const [showHistory, setShowHistory] = useState(false)
   const [transferModal, setTransferModal] = useState<{
     component: Component
     quantity: number
+    locationId: number | null
   } | null>(null)
   const [transferTo, setTransferTo] = useState<number | null>(null)
   const [transferAmount, setTransferAmount] = useState(1)
+  const [transferToLocation, setTransferToLocation] = useState<number | null>(null)
   const [addModal, setAddModal] = useState(false)
   const [selectedComponent, setSelectedComponent] = useState<number | null>(null)
   const [addQuantity, setAddQuantity] = useState(1)
+  const [addLocation, setAddLocation] = useState<number | null>(null)
+  const [bulkMoveModal, setBulkMoveModal] = useState(false)
+  const [bulkFromLocation, setBulkFromLocation] = useState<number | null>(null)
+  const [bulkToLocation, setBulkToLocation] = useState<number | null>(null)
 
   const canManage = user?.role !== 'member'
 
@@ -80,6 +87,11 @@ export default function InventoryPage() {
     queryFn: () => apiClient.get('/api/components/categories').then((r) => r.data),
   })
 
+  const { data: locations } = useQuery<Location[]>({
+    queryKey: ['locations'],
+    queryFn: () => apiClient.get('/api/locations').then((r) => r.data),
+  })
+
   const { data: history } = useQuery<InventoryLog[]>({
     queryKey: ['inventory', 'history'],
     queryFn: () => apiClient.get('/api/inventory/history').then((r) => r.data),
@@ -87,29 +99,47 @@ export default function InventoryPage() {
   })
 
   const addMutation = useMutation({
-    mutationFn: ({ componentId, quantity }: { componentId: number; quantity: number }) =>
-      apiClient.post(`/api/inventory/${componentId}/add?quantity=${quantity}`),
+    mutationFn: ({ componentId, quantity, locationId }: { componentId: number; quantity: number; locationId?: number | null }) => {
+      let url = `/api/inventory/${componentId}/add?quantity=${quantity}`
+      if (locationId) url += `&location_id=${locationId}`
+      return apiClient.post(url)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
     },
   })
 
   const removeMutation = useMutation({
-    mutationFn: ({ componentId, quantity }: { componentId: number; quantity: number }) =>
-      apiClient.post(`/api/inventory/${componentId}/remove?quantity=${quantity}`),
+    mutationFn: ({ componentId, quantity, locationId }: { componentId: number; quantity: number; locationId?: number | null }) => {
+      let url = `/api/inventory/${componentId}/remove?quantity=${quantity}`
+      if (locationId) url += `&location_id=${locationId}`
+      return apiClient.post(url)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
     },
   })
 
   const transferMutation = useMutation({
-    mutationFn: (data: { to_user_id: number; component_id: number; quantity: number }) =>
+    mutationFn: (data: { to_user_id: number; component_id: number; quantity: number; to_location_id?: number | null }) =>
       apiClient.post('/api/inventory/transfer', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
       setTransferModal(null)
       setTransferTo(null)
       setTransferAmount(1)
+      setTransferToLocation(null)
+    },
+  })
+
+  const bulkMoveMutation = useMutation({
+    mutationFn: (data: { from_location_id: number | null; to_location_id: number | null }) =>
+      apiClient.post('/api/inventory/bulk-move-location', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      setBulkMoveModal(false)
+      setBulkFromLocation(null)
+      setBulkToLocation(null)
     },
   })
 
@@ -120,7 +150,11 @@ export default function InventoryPage() {
       .includes(search.toLowerCase())
     const matchesCategory =
       !filterCategory || item.component.category === filterCategory
-    return matchesSearch && matchesCategory
+    const matchesLocation =
+      filterLocation === '' ||
+      (filterLocation === '0' && !item.location) ||
+      (filterLocation !== '0' && item.location?.id === parseInt(filterLocation))
+    return matchesSearch && matchesCategory && matchesLocation
   })
 
   // Inventar nach Benutzer gruppieren
@@ -153,6 +187,13 @@ export default function InventoryPage() {
             >
               <History size={20} />
               Historie
+            </button>
+            <button
+              onClick={() => setBulkMoveModal(true)}
+              className="btn btn-secondary flex items-center gap-2"
+            >
+              <ArrowRightLeft size={20} />
+              Alle verschieben
             </button>
             <button
               onClick={() => setAddModal(true)}
@@ -190,6 +231,19 @@ export default function InventoryPage() {
             {categories?.map((cat) => (
               <option key={cat} value={cat}>
                 {cat}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterLocation}
+            onChange={(e) => setFilterLocation(e.target.value)}
+            className="input md:w-48"
+          >
+            <option value="">Alle Standorte</option>
+            <option value="0">Ohne Standort</option>
+            {locations?.map((loc) => (
+              <option key={loc.id} value={loc.id}>
+                {loc.name}
               </option>
             ))}
           </select>
@@ -249,11 +303,17 @@ export default function InventoryPage() {
                 >
                   <div>
                     <p className="font-medium">{item.component.name}</p>
-                    {item.component.category && (
-                      <p className="text-sm text-gray-400">
-                        {item.component.category}
-                      </p>
-                    )}
+                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                      {item.component.category && (
+                        <span>{item.component.category}</span>
+                      )}
+                      {item.location && (
+                        <span className="flex items-center gap-1">
+                          <MapPin size={12} />
+                          {item.location.name}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
@@ -262,6 +322,7 @@ export default function InventoryPage() {
                           removeMutation.mutate({
                             componentId: item.component.id,
                             quantity: 1,
+                            locationId: item.location?.id,
                           })
                         }
                         disabled={item.quantity <= 0}
@@ -277,6 +338,7 @@ export default function InventoryPage() {
                           addMutation.mutate({
                             componentId: item.component.id,
                             quantity: 1,
+                            locationId: item.location?.id,
                           })
                         }
                         className="p-2 bg-gray-700 rounded-lg hover:bg-gray-600"
@@ -289,6 +351,7 @@ export default function InventoryPage() {
                         setTransferModal({
                           component: item.component,
                           quantity: item.quantity,
+                          locationId: item.location?.id ?? null,
                         })
                       }
                       className="p-2 bg-sc-blue/20 text-sc-blue rounded-lg hover:bg-sc-blue/30"
@@ -324,7 +387,11 @@ export default function InventoryPage() {
                   .includes(search.toLowerCase())
                 const matchesCategory =
                   !filterCategory || item.component.category === filterCategory
-                return matchesSearch && matchesCategory
+                const matchesLocation =
+                  filterLocation === '' ||
+                  (filterLocation === '0' && !item.location) ||
+                  (filterLocation !== '0' && item.location?.id === parseInt(filterLocation))
+                return matchesSearch && matchesCategory && matchesLocation
               })
               if (!items || items.length === 0) return null
               return (
@@ -349,7 +416,15 @@ export default function InventoryPage() {
                         className="p-3 bg-gray-800/50 rounded-lg"
                       >
                         <p className="font-medium truncate">{item.component.name}</p>
-                        <p className="text-sc-blue">{item.quantity}x</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-sc-blue">{item.quantity}x</p>
+                          {item.location && (
+                            <span className="flex items-center gap-1 text-xs text-gray-400">
+                              <MapPin size={10} />
+                              {item.location.name}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -393,6 +468,22 @@ export default function InventoryPage() {
               </div>
 
               <div>
+                <label className="label">Ziel-Standort (optional)</label>
+                <select
+                  value={transferToLocation ?? ''}
+                  onChange={(e) => setTransferToLocation(e.target.value ? Number(e.target.value) : null)}
+                  className="input"
+                >
+                  <option value="">Kein Standort</option>
+                  {locations?.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="label">Menge</label>
                 <input
                   type="number"
@@ -406,7 +497,10 @@ export default function InventoryPage() {
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => setTransferModal(null)}
+                  onClick={() => {
+                    setTransferModal(null)
+                    setTransferToLocation(null)
+                  }}
                   className="btn btn-secondary flex-1"
                 >
                   Abbrechen
@@ -418,6 +512,7 @@ export default function InventoryPage() {
                         to_user_id: transferTo,
                         component_id: transferModal.component.id,
                         quantity: transferAmount,
+                        to_location_id: transferToLocation,
                       })
                     }
                   }}
@@ -463,6 +558,22 @@ export default function InventoryPage() {
               </div>
 
               <div>
+                <label className="label">Standort (optional)</label>
+                <select
+                  value={addLocation ?? ''}
+                  onChange={(e) => setAddLocation(e.target.value ? Number(e.target.value) : null)}
+                  className="input"
+                >
+                  <option value="">Kein Standort</option>
+                  {locations?.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="label">Menge</label>
                 <input
                   type="number"
@@ -479,6 +590,7 @@ export default function InventoryPage() {
                     setAddModal(false)
                     setSelectedComponent(null)
                     setAddQuantity(1)
+                    setAddLocation(null)
                   }}
                   className="btn btn-secondary flex-1"
                 >
@@ -490,16 +602,96 @@ export default function InventoryPage() {
                       addMutation.mutate({
                         componentId: selectedComponent,
                         quantity: addQuantity,
+                        locationId: addLocation,
                       })
                       setAddModal(false)
                       setSelectedComponent(null)
                       setAddQuantity(1)
+                      setAddLocation(null)
                     }
                   }}
                   disabled={!selectedComponent || addMutation.isPending}
                   className="btn btn-primary flex-1"
                 >
                   {addMutation.isPending ? 'Wird hinzugefügt...' : 'Hinzufügen'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Move Modal */}
+      {bulkMoveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="card max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <ArrowRightLeft size={24} className="text-sc-blue" />
+              Alle Items verschieben
+            </h2>
+            <p className="text-gray-400 mb-4">
+              Verschiebt alle deine Items von einem Standort zu einem anderen.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="label">Von Standort</label>
+                <select
+                  value={bulkFromLocation === null ? 'null' : bulkFromLocation}
+                  onChange={(e) => setBulkFromLocation(e.target.value === 'null' ? null : Number(e.target.value))}
+                  className="input"
+                >
+                  <option value="null">Ohne Standort</option>
+                  {locations?.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-center">
+                <ArrowRight size={24} className="text-gray-400" />
+              </div>
+
+              <div>
+                <label className="label">Zu Standort</label>
+                <select
+                  value={bulkToLocation === null ? 'null' : bulkToLocation}
+                  onChange={(e) => setBulkToLocation(e.target.value === 'null' ? null : Number(e.target.value))}
+                  className="input"
+                >
+                  <option value="null">Ohne Standort</option>
+                  {locations?.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setBulkMoveModal(false)
+                    setBulkFromLocation(null)
+                    setBulkToLocation(null)
+                  }}
+                  className="btn btn-secondary flex-1"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => {
+                    bulkMoveMutation.mutate({
+                      from_location_id: bulkFromLocation,
+                      to_location_id: bulkToLocation,
+                    })
+                  }}
+                  disabled={bulkMoveMutation.isPending}
+                  className="btn btn-primary flex-1"
+                >
+                  {bulkMoveMutation.isPending ? 'Wird verschoben...' : 'Verschieben'}
                 </button>
               </div>
             </div>

@@ -21,11 +21,21 @@ export interface Component {
   created_at: string
 }
 
+// Standorte
+export interface Location {
+  id: number
+  name: string
+  description: string | null
+  created_by: User
+  created_at: string
+}
+
 // Inventar
 export interface InventoryItem {
   id: number
   user_id: number
   component: Component
+  location: Location | null
   quantity: number
 }
 

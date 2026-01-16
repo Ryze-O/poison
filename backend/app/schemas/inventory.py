@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 from app.schemas.component import ComponentResponse
@@ -7,10 +7,21 @@ from app.schemas.user import UserResponse
 from app.models.inventory_log import InventoryAction
 
 
+class LocationSimple(BaseModel):
+    """Einfache Location-Darstellung für Inventory."""
+    id: int
+    name: str
+    description: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
 class InventoryResponse(BaseModel):
     id: int
     user_id: int
     component: ComponentResponse
+    location: Optional[LocationSimple]
     quantity: int
 
     class Config:
@@ -25,7 +36,14 @@ class TransferCreate(BaseModel):
     to_user_id: int
     component_id: int
     quantity: int
+    to_location_id: Optional[int] = None
     notes: Optional[str] = None
+
+
+class BulkLocationTransfer(BaseModel):
+    """Alle Items von einem Ort zu einem anderen verschieben."""
+    from_location_id: Optional[int] = None  # None = kein Ort zugewiesen
+    to_location_id: Optional[int] = None    # None = kein Ort zugewiesen
 
 
 class TransferResponse(BaseModel):
@@ -33,6 +51,8 @@ class TransferResponse(BaseModel):
     from_user: UserResponse
     to_user: UserResponse
     component: ComponentResponse
+    from_location: Optional[LocationSimple]
+    to_location: Optional[LocationSimple]
     quantity: int
     notes: Optional[str]
     created_at: datetime

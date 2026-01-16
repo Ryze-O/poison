@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   Boxes,
+  MapPin,
 } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
@@ -21,6 +22,7 @@ const navItems = [
   { to: '/loot', icon: Gift, label: 'Loot' },
   { to: '/inventory', icon: Package, label: 'Lager' },
   { to: '/components', icon: Boxes, label: 'Komponenten' },
+  { to: '/locations', icon: MapPin, label: 'Standorte' },
   { to: '/treasury', icon: Wallet, label: 'Kasse' },
   { to: '/users', icon: Users, label: 'Benutzer' },
 ]
