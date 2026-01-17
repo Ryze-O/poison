@@ -43,7 +43,7 @@ def log_inventory_change(
     db.add(log)
 
 
-@router.get("/", response_model=List[InventoryResponse])
+@router.get("", response_model=List[InventoryResponse])
 async def get_all_inventory(
     user_id: Optional[int] = None,
     location_id: Optional[int] = None,

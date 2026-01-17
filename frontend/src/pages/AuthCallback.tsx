@@ -10,10 +10,17 @@ export default function AuthCallback() {
   useEffect(() => {
     const token = searchParams.get('token')
     if (token) {
+      // Token direkt im localStorage setzen und dann im Store
+      localStorage.setItem('token', token)
       setToken(token)
-      fetchUser().then(() => {
-        navigate('/')
-      })
+      // Kurze Verzögerung um sicherzustellen, dass der Token verfügbar ist
+      setTimeout(() => {
+        fetchUser().then(() => {
+          navigate('/')
+        }).catch(() => {
+          navigate('/login')
+        })
+      }, 100)
     } else {
       navigate('/login')
     }

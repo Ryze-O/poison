@@ -10,7 +10,19 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
-      '/auth': {
+      '/auth/login': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/auth/callback': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/auth/me': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/auth/logout': {
         target: 'http://localhost:8000',
         changeOrigin: true,
       },

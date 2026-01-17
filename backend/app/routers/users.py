@@ -11,7 +11,7 @@ from app.auth.dependencies import check_role
 router = APIRouter()
 
 
-@router.get("/", response_model=List[UserResponse])
+@router.get("", response_model=List[UserResponse])
 async def get_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

@@ -15,7 +15,7 @@ from app.auth.dependencies import check_role
 router = APIRouter()
 
 
-@router.get("/", response_model=List[LootSessionResponse])
+@router.get("", response_model=List[LootSessionResponse])
 async def get_loot_sessions(
     limit: int = 20,
     db: Session = Depends(get_db),
@@ -43,7 +43,7 @@ async def get_loot_session(
     return session
 
 
-@router.post("/", response_model=LootSessionResponse)
+@router.post("", response_model=LootSessionResponse)
 async def create_loot_session(
     session_data: LootSessionCreate,
     db: Session = Depends(get_db),

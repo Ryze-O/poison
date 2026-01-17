@@ -72,8 +72,8 @@ async def callback(code: str, state: str, db: Session = Depends(get_db)):
         user.avatar = discord_user.avatar_url
         db.commit()
 
-    # JWT Token erstellen
-    access_token = create_access_token(data={"sub": user.id})
+    # JWT Token erstellen (sub muss String sein)
+    access_token = create_access_token(data={"sub": str(user.id)})
 
     # Redirect zum Frontend mit Token
     frontend_url = f"{settings.frontend_url}/auth/success?token={access_token}"

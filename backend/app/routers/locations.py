@@ -13,7 +13,7 @@ from app.auth.dependencies import check_role
 router = APIRouter()
 
 
-@router.get("/", response_model=List[LocationResponse])
+@router.get("", response_model=List[LocationResponse])
 async def get_locations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -38,7 +38,7 @@ async def get_location(
     return location
 
 
-@router.post("/", response_model=LocationResponse)
+@router.post("", response_model=LocationResponse)
 async def create_location(
     location: LocationCreate,
     db: Session = Depends(get_db),

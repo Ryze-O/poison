@@ -12,7 +12,7 @@ from app.auth.dependencies import check_role
 router = APIRouter()
 
 
-@router.get("/", response_model=List[ComponentResponse])
+@router.get("", response_model=List[ComponentResponse])
 async def get_components(
     category: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -37,7 +37,7 @@ async def get_categories(
     return [c[0] for c in categories]
 
 
-@router.post("/", response_model=ComponentResponse)
+@router.post("", response_model=ComponentResponse)
 async def create_component(
     component: ComponentCreate,
     db: Session = Depends(get_db),

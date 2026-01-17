@@ -14,7 +14,7 @@ from app.ocr.scanner import extract_names_from_image
 router = APIRouter()
 
 
-@router.get("/", response_model=List[AttendanceSessionResponse])
+@router.get("", response_model=List[AttendanceSessionResponse])
 async def get_sessions(
     limit: int = 20,
     db: Session = Depends(get_db),
@@ -44,7 +44,7 @@ async def get_session(
     return session
 
 
-@router.post("/", response_model=AttendanceSessionResponse)
+@router.post("", response_model=AttendanceSessionResponse)
 async def create_session(
     session_data: AttendanceSessionCreate,
     db: Session = Depends(get_db),

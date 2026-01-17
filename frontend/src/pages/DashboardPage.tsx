@@ -15,7 +15,7 @@ export default function DashboardPage() {
   const { data: sessions } = useQuery<AttendanceSession[]>({
     queryKey: ['attendance', 'recent'],
     queryFn: () =>
-      apiClient.get('/api/attendance?limit=5').then((r) => r.data),
+      apiClient.get('/api/attendance/?limit=5').then((r) => r.data),
   })
 
   const { data: myInventory } = useQuery<InventoryItem[]>({

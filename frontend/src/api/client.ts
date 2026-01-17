@@ -18,13 +18,16 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
-// Bei 401 ausloggen
+// Bei 401 ausloggen (aber nicht während des Auth-Callbacks)
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      window.location.href = '/login'
+      // Nicht während des Auth-Flows umleiten
+      if (!window.location.pathname.includes('/auth/')) {
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }
