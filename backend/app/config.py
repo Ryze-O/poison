@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # CORS
     frontend_url: str = "http://localhost:5173"
 
+    # Admin Discord ID (wird automatisch Admin bei erstem Login)
+    admin_discord_id: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

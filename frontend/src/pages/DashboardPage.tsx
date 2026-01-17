@@ -28,16 +28,20 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-8">
-        Willkommen, {user?.display_name || user?.username}!
-      </h1>
+      {/* Header mit Begrüßung */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">
+          Willkommen, {user?.display_name || user?.username}!
+        </h1>
+        <div className="h-px bg-gradient-to-r from-krt-orange via-krt-orange/50 to-transparent max-w-md" />
+      </div>
 
       {/* Statistik-Karten */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="card">
+        <div className="card border-l-4 border-l-krt-orange">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-sc-blue/20 rounded-lg">
-              <Wallet className="text-sc-blue" size={24} />
+            <div className="p-3 bg-krt-orange/20 rounded-lg">
+              <Wallet className="text-krt-orange" size={24} />
             </div>
             <div>
               <p className="text-gray-400 text-sm">Kassenstand</p>
@@ -48,10 +52,10 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card border-l-4 border-l-emerald-500">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-sc-green/20 rounded-lg">
-              <ClipboardList className="text-sc-green" size={24} />
+            <div className="p-3 bg-emerald-500/20 rounded-lg">
+              <ClipboardList className="text-emerald-500" size={24} />
             </div>
             <div>
               <p className="text-gray-400 text-sm">Letzte Session</p>
@@ -64,10 +68,10 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card border-l-4 border-l-amber-500">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-sc-gold/20 rounded-lg">
-              <Users className="text-sc-gold" size={24} />
+            <div className="p-3 bg-amber-500/20 rounded-lg">
+              <Users className="text-amber-500" size={24} />
             </div>
             <div>
               <p className="text-gray-400 text-sm">Letzte Teilnehmer</p>
@@ -79,7 +83,7 @@ export default function DashboardPage() {
         </div>
 
         {canManage && (
-          <div className="card">
+          <div className="card border-l-4 border-l-purple-500">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-purple-500/20 rounded-lg">
                 <Package className="text-purple-400" size={24} />
@@ -99,13 +103,16 @@ export default function DashboardPage() {
 
       {/* Letzte Sessions */}
       <div className="card">
-        <h2 className="text-xl font-bold mb-4">Letzte Staffelabende</h2>
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="text-xl font-bold">Letzte Staffelabende</h2>
+          <div className="flex-1 h-px bg-gradient-to-r from-gray-700 to-transparent" />
+        </div>
         {sessions && sessions.length > 0 ? (
           <div className="space-y-3">
             {sessions.map((session) => (
               <div
                 key={session.id}
-                className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg"
+                className="flex items-center justify-between p-4 bg-gray-800/30 rounded-lg border border-gray-700/30 hover:border-krt-orange/30 transition-colors"
               >
                 <div>
                   <p className="font-medium">
@@ -120,7 +127,7 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <div className="text-right">
-                  <p className="font-medium">{session.records.length} Teilnehmer</p>
+                  <p className="font-medium text-krt-orange">{session.records.length} Teilnehmer</p>
                   <p className="text-sm text-gray-400">
                     von {session.created_by.display_name || session.created_by.username}
                   </p>

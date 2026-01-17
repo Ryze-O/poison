@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.config import get_settings
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.user import UserResponse
 from app.auth.discord import get_oauth_url, exchange_code, get_discord_user
 from app.auth.jwt import create_access_token, get_current_user
@@ -55,12 +55,20 @@ async def callback(code: str, state: str, db: Session = Depends(get_db)):
 
     # Benutzer in DB suchen oder anlegen
     user = db.query(User).filter(User.discord_id == discord_user.id).first()
-    if not user:
+    is_new_user = user is None
+
+    if is_new_user:
+        # Prüfen ob dies der Admin ist
+        is_admin = (
+            settings.admin_discord_id
+            and discord_user.id == settings.admin_discord_id
+        )
         user = User(
             discord_id=discord_user.id,
             username=discord_user.username,
             display_name=discord_user.global_name,
             avatar=discord_user.avatar_url,
+            role=UserRole.ADMIN if is_admin else UserRole.MEMBER,
         )
         db.add(user)
         db.commit()
@@ -70,6 +78,15 @@ async def callback(code: str, state: str, db: Session = Depends(get_db)):
         user.username = discord_user.username
         user.display_name = discord_user.global_name or user.display_name
         user.avatar = discord_user.avatar_url
+
+        # Falls Admin-ID gesetzt und User noch kein Admin, upgraden
+        if (
+            settings.admin_discord_id
+            and discord_user.id == settings.admin_discord_id
+            and user.role != UserRole.ADMIN
+        ):
+            user.role = UserRole.ADMIN
+
         db.commit()
 
     # JWT Token erstellen (sub muss String sein)

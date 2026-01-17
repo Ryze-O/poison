@@ -4,21 +4,28 @@
 
 @layer base {
   body {
-    @apply bg-sc-darker text-gray-100 min-h-screen;
+    @apply bg-krt-darkest text-gray-100 min-h-screen;
+    background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+    background-attachment: fixed;
+  }
+
+  /* Kartell Orange-Akzent für Selection */
+  ::selection {
+    @apply bg-krt-orange/30 text-white;
   }
 }
 
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200;
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
   }
 
   .btn-primary {
-    @apply bg-sc-blue hover:bg-sc-blue-dark text-white;
+    @apply bg-krt-orange hover:bg-krt-orange-dark text-white shadow-lg shadow-krt-orange/20;
   }
 
   .btn-secondary {
-    @apply bg-gray-700 hover:bg-gray-600 text-white;
+    @apply bg-gray-700/80 hover:bg-gray-600 text-white border border-gray-600;
   }
 
   .btn-danger {
@@ -30,15 +37,31 @@
   }
 
   .card {
-    @apply bg-sc-dark rounded-xl p-6 border border-gray-800;
+    @apply bg-gradient-to-br from-gray-800/50 to-gray-900/50 rounded-xl p-6
+           border border-gray-700/50 backdrop-blur-sm;
+  }
+
+  .card-highlight {
+    @apply card border-l-4 border-l-krt-orange;
   }
 
   .input {
-    @apply w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg
-           focus:outline-none focus:border-sc-blue transition-colors;
+    @apply w-full px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg
+           focus:outline-none focus:border-krt-orange focus:ring-1 focus:ring-krt-orange/50
+           transition-all placeholder-gray-500;
   }
 
   .label {
     @apply block text-sm font-medium text-gray-400 mb-1;
+  }
+
+  /* Orange Akzent-Linie (wie im Wallpaper) */
+  .accent-line {
+    @apply h-px bg-gradient-to-r from-transparent via-krt-orange to-transparent;
+  }
+
+  /* Glow-Effekt für wichtige Elemente */
+  .glow-orange {
+    box-shadow: 0 0 20px rgba(232, 90, 36, 0.3);
   }
 }

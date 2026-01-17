@@ -13,10 +13,34 @@ export default function LoginPage() {
   }, [isAuthenticated, navigate])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-sc-darker">
-      <div className="card max-w-md w-full mx-4 text-center">
-        <h1 className="text-4xl font-bold text-sc-blue mb-2">POISON</h1>
-        <p className="text-gray-400 mb-8">Staffel-Verwaltung für Star Citizen</p>
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+      {/* Kartell Logo als subtiler Hintergrund */}
+      <div
+        className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none"
+        aria-hidden="true"
+      >
+        <img
+          src="/assets/krt_logo.svg"
+          alt=""
+          className="w-[800px] h-[800px] object-contain"
+          style={{ filter: 'brightness(0)' }}
+        />
+      </div>
+
+      <div className="card max-w-md w-full mx-4 text-center relative overflow-hidden">
+        {/* Orange Akzent-Linie oben */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-krt-orange to-transparent" />
+
+        {/* Logo */}
+        <img
+          src="/assets/Staffel-Viper-RWK 2019-750px.png"
+          alt="Staffel Viper"
+          className="w-24 h-24 mx-auto mb-4 object-contain"
+        />
+
+        <h1 className="text-3xl font-bold text-white mb-1 tracking-wide">STAFFEL VIPER</h1>
+        <p className="text-krt-orange text-sm tracking-widest mb-2">DAS KARTELL</p>
+        <p className="text-gray-400 mb-8 text-sm">Staffel-Verwaltung für Star Citizen</p>
 
         <button
           onClick={login}
@@ -31,6 +55,9 @@ export default function LoginPage() {
         <p className="mt-6 text-sm text-gray-500">
           Du benötigst einen Discord-Account, um dich anzumelden.
         </p>
+
+        {/* Orange Akzent-Linie unten */}
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-krt-orange to-transparent" />
       </div>
     </div>
   )

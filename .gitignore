@@ -52,4 +52,3 @@ htmlcov/
 # Local env files
 .env.local
 .env.*.local
-CLAUDE.md

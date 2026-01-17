@@ -14,9 +14,9 @@ const roleLabels: Record<UserRole, string> = {
 
 const roleColors: Record<UserRole, string> = {
   member: 'bg-gray-600',
-  officer: 'bg-sc-blue',
-  treasurer: 'bg-sc-gold',
-  admin: 'bg-sc-red',
+  officer: 'bg-krt-orange',
+  treasurer: 'bg-krt-gold',
+  admin: 'bg-red-600',
 }
 
 export default function UsersPage() {
