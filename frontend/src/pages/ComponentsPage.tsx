@@ -11,6 +11,7 @@ export default function ComponentsPage() {
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('')
+  const [filterManufacturer, setFilterManufacturer] = useState<string>('')
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -27,6 +28,11 @@ export default function ComponentsPage() {
   const { data: categories } = useQuery<string[]>({
     queryKey: ['components', 'categories'],
     queryFn: () => apiClient.get('/api/components/categories').then((r) => r.data),
+  })
+
+  const { data: manufacturers } = useQuery<string[]>({
+    queryKey: ['components', 'manufacturers'],
+    queryFn: () => apiClient.get('/api/components/manufacturers').then((r) => r.data),
   })
 
   const createMutation = useMutation({
@@ -56,9 +62,11 @@ export default function ComponentsPage() {
 
   // Filtern
   const filteredComponents = components?.filter((c) => {
-    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase())
+    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.manufacturer?.toLowerCase().includes(search.toLowerCase())
     const matchesCategory = !filterCategory || c.category === filterCategory
-    return matchesSearch && matchesCategory
+    const matchesManufacturer = !filterManufacturer || c.manufacturer === filterManufacturer
+    return matchesSearch && matchesCategory && matchesManufacturer
   })
 
   // Nach Kategorie gruppieren
@@ -157,7 +165,7 @@ export default function ComponentsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Komponente suchen..."
+              placeholder="Komponente oder Hersteller suchen..."
               className="input pl-10"
             />
           </div>
@@ -173,7 +181,24 @@ export default function ComponentsPage() {
               </option>
             ))}
           </select>
+          <select
+            value={filterManufacturer}
+            onChange={(e) => setFilterManufacturer(e.target.value)}
+            className="input md:w-48"
+          >
+            <option value="">Alle Hersteller</option>
+            {manufacturers?.map((manu) => (
+              <option key={manu} value={manu}>
+                {manu}
+              </option>
+            ))}
+          </select>
         </div>
+        {(filterCategory || filterManufacturer) && (
+          <p className="mt-3 text-sm text-gray-400">
+            {filteredComponents?.length || 0} Komponenten gefunden
+          </p>
+        )}
       </div>
 
       {/* Komponenten-Liste */}
@@ -183,7 +208,7 @@ export default function ComponentsPage() {
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([category, comps]) => (
               <div key={category} className="card">
-                <h3 className="text-lg font-bold mb-4 text-sc-blue">
+                <h3 className="text-lg font-bold mb-4 text-krt-orange">
                   {category}
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -192,13 +217,17 @@ export default function ComponentsPage() {
                       key={comp.id}
                       className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg"
                     >
-                      <div>
-                        <p className="font-medium">{comp.name}</p>
-                        {comp.is_predefined && (
-                          <span className="text-xs text-gray-500">
-                            Vordefiniert
-                          </span>
-                        )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{comp.name}</p>
+                        <p className="text-xs text-gray-400 truncate">
+                          {[
+                            comp.manufacturer,
+                            comp.size && `Size ${comp.size}`,
+                            comp.grade && `Grade ${comp.grade}`,
+                          ]
+                            .filter(Boolean)
+                            .join(' • ') || (comp.is_predefined ? 'Vordefiniert' : '')}
+                        </p>
                       </div>
                       {canDelete && !comp.is_predefined && (
                         <button
@@ -207,7 +236,7 @@ export default function ComponentsPage() {
                               deleteMutation.mutate(comp.id)
                             }
                           }}
-                          className="p-2 text-gray-400 hover:text-sc-red rounded-lg"
+                          className="p-2 text-gray-400 hover:text-sc-red rounded-lg flex-shrink-0"
                         >
                           <Trash2 size={18} />
                         </button>
@@ -221,7 +250,7 @@ export default function ComponentsPage() {
       ) : (
         <div className="card text-center py-12">
           <p className="text-gray-400">
-            {search || filterCategory
+            {search || filterCategory || filterManufacturer
               ? 'Keine Komponenten gefunden.'
               : 'Noch keine Komponenten vorhanden.'}
           </p>

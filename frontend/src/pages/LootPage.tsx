@@ -26,9 +26,9 @@ export default function LootPage() {
       </div>
 
       {/* Info */}
-      <div className="card mb-8 bg-sc-blue/10 border-sc-blue/30">
+      <div className="card mb-8 bg-krt-orange/10 border-krt-orange/30">
         <div className="flex items-start gap-4">
-          <Gift className="text-sc-blue mt-1" size={24} />
+          <Gift className="text-krt-orange mt-1" size={24} />
           <div>
             <h3 className="font-bold mb-1">So funktioniert die Loot-Verteilung</h3>
             <ol className="text-gray-300 space-y-1 text-sm list-decimal list-inside">

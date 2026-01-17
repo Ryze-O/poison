@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { MapPin, Plus, Edit2, Trash2, Package } from 'lucide-react'
-import type { Location, InventoryItem, User } from '../api/types'
+import { MapPin, Plus, Edit2, Trash2, Package, Search, Globe, Building } from 'lucide-react'
+import type { Location, InventoryItem } from '../api/types'
 
 export default function LocationsPage() {
   const { user } = useAuthStore()
@@ -14,12 +14,36 @@ export default function LocationsPage() {
   const [selectedLocation, setSelectedLocation] = useState<number | null>(null)
   const [formData, setFormData] = useState({ name: '', description: '' })
 
+  // Filter
+  const [search, setSearch] = useState('')
+  const [filterSystem, setFilterSystem] = useState('')
+  const [filterPlanet, setFilterPlanet] = useState('')
+  const [filterType, setFilterType] = useState('')
+
   const canManage = user?.role !== 'member'
   const isAdmin = user?.role === 'admin'
 
   const { data: locations } = useQuery<Location[]>({
     queryKey: ['locations'],
     queryFn: () => apiClient.get('/api/locations').then((r) => r.data),
+  })
+
+  const { data: systems } = useQuery<string[]>({
+    queryKey: ['locations', 'systems'],
+    queryFn: () => apiClient.get('/api/locations/systems').then((r) => r.data),
+  })
+
+  const { data: planets } = useQuery<string[]>({
+    queryKey: ['locations', 'planets', filterSystem],
+    queryFn: () =>
+      apiClient
+        .get('/api/locations/planets', { params: filterSystem ? { system_name: filterSystem } : {} })
+        .then((r) => r.data),
+  })
+
+  const { data: locationTypes } = useQuery<string[]>({
+    queryKey: ['locations', 'types'],
+    queryFn: () => apiClient.get('/api/locations/types').then((r) => r.data),
   })
 
   const { data: locationInventory } = useQuery<{
@@ -75,6 +99,44 @@ export default function LocationsPage() {
     setCreateModal(true)
   }
 
+  // Filtern
+  const filteredLocations = locations?.filter((loc) => {
+    const matchesSearch =
+      !search ||
+      loc.name.toLowerCase().includes(search.toLowerCase()) ||
+      loc.planet_name?.toLowerCase().includes(search.toLowerCase())
+    const matchesSystem = !filterSystem || loc.system_name === filterSystem
+    const matchesPlanet = !filterPlanet || loc.planet_name === filterPlanet
+    const matchesType = !filterType || loc.location_type === filterType
+    return matchesSearch && matchesSystem && matchesPlanet && matchesType
+  })
+
+  // Nach System und Planet gruppieren
+  const groupedLocations = filteredLocations?.reduce(
+    (acc, loc) => {
+      const system = loc.system_name || 'Andere'
+      const planet = loc.planet_name || 'Unbekannt'
+      const key = `${system}|${planet}`
+      if (!acc[key]) {
+        acc[key] = { system, planet, locations: [] }
+      }
+      acc[key].locations.push(loc)
+      return acc
+    },
+    {} as Record<string, { system: string; planet: string; locations: Location[] }>
+  )
+
+  const getTypeIcon = (type: string | null) => {
+    switch (type) {
+      case 'City':
+        return <Building size={16} className="text-sc-gold" />
+      case 'Station':
+        return <Globe size={16} className="text-krt-orange" />
+      default:
+        return <MapPin size={16} className="text-gray-400" />
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
@@ -82,80 +144,145 @@ export default function LocationsPage() {
         {canManage && (
           <button onClick={openCreateModal} className="btn btn-primary flex items-center gap-2">
             <Plus size={20} />
-            Neuer Standort
+            Eigener Standort
           </button>
+        )}
+      </div>
+
+      {/* Filter */}
+      <div className="card mb-6">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Standort suchen..."
+              className="input pl-10"
+            />
+          </div>
+          <select
+            value={filterSystem}
+            onChange={(e) => {
+              setFilterSystem(e.target.value)
+              setFilterPlanet('')
+            }}
+            className="input md:w-40"
+          >
+            <option value="">Alle Systeme</option>
+            {systems?.map((sys) => (
+              <option key={sys} value={sys}>
+                {sys}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterPlanet}
+            onChange={(e) => setFilterPlanet(e.target.value)}
+            className="input md:w-40"
+          >
+            <option value="">Alle Planeten</option>
+            {planets?.map((planet) => (
+              <option key={planet} value={planet}>
+                {planet}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="input md:w-40"
+          >
+            <option value="">Alle Typen</option>
+            {locationTypes?.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </div>
+        {(filterSystem || filterPlanet || filterType) && (
+          <p className="mt-3 text-sm text-gray-400">
+            {filteredLocations?.length || 0} Standorte gefunden
+          </p>
         )}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Standort-Liste */}
-        <div className="lg:col-span-1">
-          <div className="card">
-            <h2 className="text-xl font-bold mb-4">Alle Standorte</h2>
-            {locations && locations.length > 0 ? (
-              <div className="space-y-2">
-                {locations.map((location) => (
-                  <div
-                    key={location.id}
-                    onClick={() => setSelectedLocation(location.id)}
-                    className={`p-4 rounded-lg cursor-pointer transition-colors ${
-                      selectedLocation === location.id
-                        ? 'bg-sc-blue/20 border border-sc-blue'
-                        : 'bg-gray-800/50 hover:bg-gray-800'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <MapPin
-                          size={20}
-                          className={
-                            selectedLocation === location.id ? 'text-sc-blue' : 'text-gray-400'
-                          }
-                        />
-                        <div>
-                          <p className="font-medium">{location.name}</p>
-                          {location.description && (
-                            <p className="text-sm text-gray-400 truncate max-w-[150px]">
-                              {location.description}
-                            </p>
+        <div className="lg:col-span-1 space-y-4">
+          {groupedLocations && Object.keys(groupedLocations).length > 0 ? (
+            Object.entries(groupedLocations)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([key, group]) => (
+                <div key={key} className="card">
+                  <h3 className="text-sm font-bold mb-3 text-gray-400 flex items-center gap-2">
+                    <Globe size={14} />
+                    {group.system} / {group.planet}
+                  </h3>
+                  <div className="space-y-2">
+                    {group.locations.map((location) => (
+                      <div
+                        key={location.id}
+                        onClick={() => setSelectedLocation(location.id)}
+                        className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                          selectedLocation === location.id
+                            ? 'bg-sc-orange/20 border border-sc-orange'
+                            : 'bg-gray-800/50 hover:bg-gray-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {getTypeIcon(location.location_type)}
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{location.name}</p>
+                              <p className="text-xs text-gray-500">
+                                {location.location_type || 'Custom'}
+                                {location.is_predefined && ' • SC'}
+                              </p>
+                            </div>
+                          </div>
+                          {canManage && !location.is_predefined && (
+                            <div className="flex gap-1 flex-shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openEditModal(location)
+                                }}
+                                className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              {isAdmin && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setDeleteConfirm(location)
+                                  }}
+                                  className="p-1 text-gray-400 hover:text-sc-red hover:bg-gray-700 rounded"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
-                      {canManage && (
-                        <div className="flex gap-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              openEditModal(location)
-                            }}
-                            className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          {isAdmin && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setDeleteConfirm(location)
-                              }}
-                              className="p-2 text-gray-400 hover:text-sc-red hover:bg-gray-700 rounded"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <MapPin className="mx-auto text-gray-600 mb-2" size={48} />
-                <p className="text-gray-400">Noch keine Standorte erstellt.</p>
-              </div>
-            )}
-          </div>
+                </div>
+              ))
+          ) : (
+            <div className="card text-center py-8">
+              <MapPin className="mx-auto text-gray-600 mb-2" size={48} />
+              <p className="text-gray-400">
+                {search || filterSystem || filterPlanet || filterType
+                  ? 'Keine Standorte gefunden.'
+                  : 'Noch keine Standorte erstellt.'}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Standort-Details */}
@@ -164,13 +291,22 @@ export default function LocationsPage() {
             {selectedLocation && locationInventory ? (
               <>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold flex items-center gap-2">
-                    <MapPin size={24} className="text-sc-blue" />
-                    {locationInventory.location.name}
-                  </h2>
-                  <span className="text-gray-400">
-                    {locationInventory.total_items} Items gesamt
-                  </span>
+                  <div>
+                    <h2 className="text-xl font-bold flex items-center gap-2">
+                      {getTypeIcon(locationInventory.location.location_type)}
+                      {locationInventory.location.name}
+                    </h2>
+                    <p className="text-sm text-gray-400">
+                      {[
+                        locationInventory.location.system_name,
+                        locationInventory.location.planet_name,
+                        locationInventory.location.location_type,
+                      ]
+                        .filter(Boolean)
+                        .join(' / ')}
+                    </p>
+                  </div>
+                  <span className="text-gray-400">{locationInventory.total_items} Items</span>
                 </div>
                 {locationInventory.location.description && (
                   <p className="text-gray-400 mb-4">{locationInventory.location.description}</p>
@@ -190,7 +326,7 @@ export default function LocationsPage() {
                           )}
                         </div>
                         <div className="text-right">
-                          <p className="text-sc-blue font-bold">{item.quantity}x</p>
+                          <p className="text-sc-orange font-bold">{item.quantity}x</p>
                         </div>
                       </div>
                     ))}
@@ -218,7 +354,10 @@ export default function LocationsPage() {
       {createModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="card max-w-md w-full mx-4">
-            <h2 className="text-xl font-bold mb-4">Neuer Standort</h2>
+            <h2 className="text-xl font-bold mb-4">Eigener Standort</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Erstelle einen eigenen Standort (z.B. dein Schiff oder eine persönliche Basis).
+            </p>
             <div className="space-y-4">
               <div>
                 <label className="label">Name</label>
@@ -226,7 +365,7 @@ export default function LocationsPage() {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="z.B. Carrack Alpha"
+                  placeholder="z.B. Meine Carrack"
                   className="input"
                 />
               </div>
@@ -235,7 +374,7 @@ export default function LocationsPage() {
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="z.B. Hauptschiff der Staffel"
+                  placeholder="z.B. Hauptschiff für Org-Ops"
                   className="input"
                   rows={3}
                 />

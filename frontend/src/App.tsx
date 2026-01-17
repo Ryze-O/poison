@@ -11,6 +11,7 @@ import ComponentsPage from './pages/ComponentsPage'
 import LocationsPage from './pages/LocationsPage'
 import TreasuryPage from './pages/TreasuryPage'
 import UsersPage from './pages/UsersPage'
+import AdminPage from './pages/AdminPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuthStore()
@@ -18,7 +19,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-sc-blue">Laden...</div>
+        <div className="text-krt-orange">Laden...</div>
       </div>
     )
   }
@@ -52,6 +53,7 @@ function App() {
         <Route path="locations" element={<LocationsPage />} />
         <Route path="treasury" element={<TreasuryPage />} />
         <Route path="users" element={<UsersPage />} />
+        <Route path="admin" element={<AdminPage />} />
       </Route>
     </Routes>
   )

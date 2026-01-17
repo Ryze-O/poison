@@ -122,7 +122,7 @@ export default function AttendancePage() {
             {/* Screenshot Upload */}
             <div>
               <label className="label">Screenshot hochladen (OCR)</label>
-              <label className="flex items-center justify-center gap-3 p-8 border-2 border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-sc-blue transition-colors">
+              <label className="flex items-center justify-center gap-3 p-8 border-2 border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-krt-orange transition-colors">
                 <Upload size={24} className="text-gray-400" />
                 <span className="text-gray-400">
                   TeamSpeak/Discord Screenshot auswählen
@@ -135,7 +135,7 @@ export default function AttendancePage() {
                 />
               </label>
               {scanMutation.isPending && (
-                <p className="mt-2 text-sc-blue">Bild wird analysiert...</p>
+                <p className="mt-2 text-krt-orange">Bild wird analysiert...</p>
               )}
             </div>
 
@@ -164,7 +164,7 @@ export default function AttendancePage() {
                     onClick={() => toggleUser(u.id)}
                     className={`flex items-center gap-2 p-3 rounded-lg transition-colors ${
                       selectedUsers.includes(u.id)
-                        ? 'bg-sc-blue text-white'
+                        ? 'bg-krt-orange text-white'
                         : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                     }`}
                   >

@@ -17,7 +17,13 @@ export interface Component {
   id: number
   name: string
   category: string | null
+  sub_category: string | null
   is_predefined: boolean
+  sc_uuid: string | null
+  manufacturer: string | null
+  size: number | null
+  grade: string | null
+  sc_type: string | null
   created_at: string
 }
 
@@ -26,7 +32,11 @@ export interface Location {
   id: number
   name: string
   description: string | null
-  created_by: User
+  system_name: string | null
+  planet_name: string | null
+  location_type: string | null
+  is_predefined: boolean
+  created_by: User | null
   created_at: string
 }
 

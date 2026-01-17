@@ -37,6 +37,18 @@ async def get_categories(
     return [c[0] for c in categories]
 
 
+@router.get("/manufacturers")
+async def get_manufacturers(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt alle verfügbaren Hersteller zurück."""
+    manufacturers = db.query(Component.manufacturer).distinct().filter(
+        Component.manufacturer.isnot(None)
+    ).order_by(Component.manufacturer).all()
+    return [m[0] for m in manufacturers]
+
+
 @router.post("", response_model=ComponentResponse)
 async def create_component(
     component: ComponentCreate,

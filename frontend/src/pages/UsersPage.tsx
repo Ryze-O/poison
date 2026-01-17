@@ -146,7 +146,7 @@ export default function UsersPage() {
                     onClick={() => setNewRole(role)}
                     className={`w-full p-4 rounded-lg border-2 text-left transition-colors ${
                       newRole === role
-                        ? 'border-sc-blue bg-sc-blue/20'
+                        ? 'border-krt-orange bg-krt-orange/20'
                         : 'border-gray-700 hover:border-gray-600'
                     }`}
                   >

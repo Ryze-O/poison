@@ -147,3 +147,24 @@ Set `ADMIN_DISCORD_ID` in backend `.env` to auto-assign admin role:
 - First login with matching Discord ID → automatic admin
 - Existing users upgraded to admin if ID matches
 - Admins can then promote other users via User Management page
+
+## Star Citizen Data Import
+
+The app can import ship components, weapons, and locations from the star-citizen.wiki API.
+
+### API Endpoints
+- `POST /api/sc/sync` - Triggers full import (Admin only)
+- `GET /api/sc/stats` - Shows import statistics
+- `GET /api/sc/locations` - Lists imported SC locations
+- `GET /api/sc/locations/systems` - Lists available star systems
+
+### Imported Data
+- **Ship Components:** Coolers, Power Plants, Quantum Drives, Shields, Radar, etc.
+- **Weapons:** Ship weapons, turrets, missiles, FPS weapons, attachments
+- **Locations:** Stations, landing zones, outposts with shops
+
+### Import Service
+- Located at `app/services/sc_import.py`
+- Uses star-citizen.wiki API (no authentication required)
+- Tracks SC version for each import
+- Updates existing items by UUID, adds new ones

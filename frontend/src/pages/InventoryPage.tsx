@@ -32,7 +32,7 @@ const actionColors: Record<InventoryAction, string> = {
   add: 'text-sc-green',
   remove: 'text-sc-red',
   loot: 'text-sc-gold',
-  transfer_in: 'text-sc-blue',
+  transfer_in: 'text-krt-orange',
   transfer_out: 'text-purple-400',
 }
 
@@ -85,6 +85,11 @@ export default function InventoryPage() {
   const { data: categories } = useQuery<string[]>({
     queryKey: ['components', 'categories'],
     queryFn: () => apiClient.get('/api/components/categories').then((r) => r.data),
+  })
+
+  const { data: manufacturers } = useQuery<string[]>({
+    queryKey: ['components', 'manufacturers'],
+    queryFn: () => apiClient.get('/api/components/manufacturers').then((r) => r.data),
   })
 
   const { data: locations } = useQuery<Location[]>({
@@ -354,7 +359,7 @@ export default function InventoryPage() {
                           locationId: item.location?.id ?? null,
                         })
                       }
-                      className="p-2 bg-sc-blue/20 text-sc-blue rounded-lg hover:bg-sc-blue/30"
+                      className="p-2 bg-krt-orange/20 text-krt-orange rounded-lg hover:bg-krt-orange/30"
                     >
                       <ArrowRight size={16} />
                     </button>
@@ -417,7 +422,7 @@ export default function InventoryPage() {
                       >
                         <p className="font-medium truncate">{item.component.name}</p>
                         <div className="flex items-center justify-between">
-                          <p className="text-sc-blue">{item.quantity}x</p>
+                          <p className="text-krt-orange">{item.quantity}x</p>
                           {item.location && (
                             <span className="flex items-center gap-1 text-xs text-gray-400">
                               <MapPin size={10} />
@@ -529,96 +534,23 @@ export default function InventoryPage() {
 
       {/* Komponente hinzufügen Modal */}
       {addModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="card max-w-md w-full mx-4">
-            <h2 className="text-xl font-bold mb-4">Komponente hinzufügen</h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="label">Komponente</label>
-                <select
-                  value={selectedComponent ?? ''}
-                  onChange={(e) => setSelectedComponent(Number(e.target.value))}
-                  className="input"
-                >
-                  <option value="">Komponente wählen...</option>
-                  {componentsNotInInventory?.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} {c.category && `(${c.category})`}
-                    </option>
-                  ))}
-                  <optgroup label="Bereits im Lager">
-                    {myInventory?.map((item) => (
-                      <option key={item.component.id} value={item.component.id}>
-                        {item.component.name} (aktuell: {item.quantity})
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
-              </div>
-
-              <div>
-                <label className="label">Standort (optional)</label>
-                <select
-                  value={addLocation ?? ''}
-                  onChange={(e) => setAddLocation(e.target.value ? Number(e.target.value) : null)}
-                  className="input"
-                >
-                  <option value="">Kein Standort</option>
-                  {locations?.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="label">Menge</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={addQuantity}
-                  onChange={(e) => setAddQuantity(Number(e.target.value))}
-                  className="input"
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setAddModal(false)
-                    setSelectedComponent(null)
-                    setAddQuantity(1)
-                    setAddLocation(null)
-                  }}
-                  className="btn btn-secondary flex-1"
-                >
-                  Abbrechen
-                </button>
-                <button
-                  onClick={() => {
-                    if (selectedComponent) {
-                      addMutation.mutate({
-                        componentId: selectedComponent,
-                        quantity: addQuantity,
-                        locationId: addLocation,
-                      })
-                      setAddModal(false)
-                      setSelectedComponent(null)
-                      setAddQuantity(1)
-                      setAddLocation(null)
-                    }
-                  }}
-                  disabled={!selectedComponent || addMutation.isPending}
-                  className="btn btn-primary flex-1"
-                >
-                  {addMutation.isPending ? 'Wird hinzugefügt...' : 'Hinzufügen'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ComponentSelectModal
+          components={components || []}
+          myInventory={myInventory || []}
+          categories={categories || []}
+          manufacturers={manufacturers || []}
+          locations={locations || []}
+          onSelect={(componentId, quantity, locationId) => {
+            addMutation.mutate({ componentId, quantity, locationId })
+          }}
+          onClose={() => {
+            setAddModal(false)
+            setSelectedComponent(null)
+            setAddQuantity(1)
+            setAddLocation(null)
+          }}
+          isPending={addMutation.isPending}
+        />
       )}
 
       {/* Bulk Move Modal */}
@@ -626,7 +558,7 @@ export default function InventoryPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="card max-w-md w-full mx-4">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <ArrowRightLeft size={24} className="text-sc-blue" />
+              <ArrowRightLeft size={24} className="text-krt-orange" />
               Alle Items verschieben
             </h2>
             <p className="text-gray-400 mb-4">
@@ -698,6 +630,200 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Eigene Komponente für das Komponentenauswahl-Modal mit Filter
+interface ComponentSelectModalProps {
+  components: Component[]
+  myInventory: InventoryItem[]
+  categories: string[]
+  manufacturers: string[]
+  locations: Location[]
+  onSelect: (componentId: number, quantity: number, locationId: number | null) => void
+  onClose: () => void
+  isPending: boolean
+}
+
+function ComponentSelectModal({
+  components,
+  myInventory,
+  categories,
+  manufacturers,
+  locations,
+  onSelect,
+  onClose,
+  isPending,
+}: ComponentSelectModalProps) {
+  const [modalSearch, setModalSearch] = useState('')
+  const [modalCategory, setModalCategory] = useState('')
+  const [modalManufacturer, setModalManufacturer] = useState('')
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [quantity, setQuantity] = useState(1)
+  const [locationId, setLocationId] = useState<number | null>(null)
+
+  // Komponenten filtern
+  const filteredComponents = components.filter(c => {
+    const matchesSearch = !modalSearch ||
+      c.name.toLowerCase().includes(modalSearch.toLowerCase()) ||
+      (c.manufacturer?.toLowerCase().includes(modalSearch.toLowerCase()))
+    const matchesCategory = !modalCategory || c.category === modalCategory
+    const matchesManufacturer = !modalManufacturer || c.manufacturer === modalManufacturer
+    return matchesSearch && matchesCategory && matchesManufacturer
+  }).slice(0, 100) // Limit auf 100 Ergebnisse
+
+  // Prüfen ob Komponente bereits im Inventar
+  const getInventoryQuantity = (componentId: number) => {
+    const item = myInventory.find(i => i.component.id === componentId)
+    return item?.quantity || 0
+  }
+
+  const selectedComponent = components.find(c => c.id === selectedId)
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="card max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        <h2 className="text-xl font-bold mb-4">Komponente hinzufügen</h2>
+
+        {/* Filter-Bereich */}
+        <div className="space-y-3 mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              value={modalSearch}
+              onChange={(e) => setModalSearch(e.target.value)}
+              placeholder="Komponente suchen..."
+              className="input pl-10"
+              autoFocus
+            />
+          </div>
+          <div className="flex gap-2">
+            <select
+              value={modalCategory}
+              onChange={(e) => setModalCategory(e.target.value)}
+              className="input flex-1"
+            >
+              <option value="">Alle Kategorien</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            <select
+              value={modalManufacturer}
+              onChange={(e) => setModalManufacturer(e.target.value)}
+              className="input flex-1"
+            >
+              <option value="">Alle Hersteller</option>
+              {manufacturers.sort().map((manu) => (
+                <option key={manu} value={manu}>{manu}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Komponenten-Liste */}
+        <div className="flex-1 overflow-y-auto mb-4 border border-gray-700 rounded-lg">
+          {filteredComponents.length > 0 ? (
+            <div className="divide-y divide-gray-700">
+              {filteredComponents.map((comp) => {
+                const inInventory = getInventoryQuantity(comp.id)
+                return (
+                  <button
+                    key={comp.id}
+                    onClick={() => setSelectedId(comp.id)}
+                    className={`w-full p-3 text-left hover:bg-gray-700/50 transition-colors ${
+                      selectedId === comp.id ? 'bg-sc-orange/20 border-l-2 border-sc-orange' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{comp.name}</p>
+                        <p className="text-sm text-gray-400">
+                          {[comp.category, comp.manufacturer, comp.size && `Size ${comp.size}`, comp.grade && `Grade ${comp.grade}`]
+                            .filter(Boolean)
+                            .join(' • ')}
+                        </p>
+                      </div>
+                      {inInventory > 0 && (
+                        <span className="text-xs bg-gray-600 px-2 py-1 rounded">
+                          {inInventory}x im Lager
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="p-8 text-center text-gray-400">
+              {modalSearch || modalCategory || modalManufacturer
+                ? 'Keine Komponenten gefunden.'
+                : 'Gib einen Suchbegriff ein oder wähle eine Kategorie.'}
+            </div>
+          )}
+          {filteredComponents.length === 100 && (
+            <p className="p-2 text-center text-sm text-gray-500">
+              Zeige erste 100 Ergebnisse. Verfeinere deine Suche für mehr.
+            </p>
+          )}
+        </div>
+
+        {/* Ausgewählte Komponente */}
+        {selectedComponent && (
+          <div className="p-3 bg-gray-800/50 rounded-lg mb-4">
+            <p className="text-sm text-gray-400 mb-1">Ausgewählt:</p>
+            <p className="font-bold text-sc-orange">{selectedComponent.name}</p>
+          </div>
+        )}
+
+        {/* Menge und Standort */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="label">Menge</label>
+            <input
+              type="number"
+              min={1}
+              value={quantity}
+              onChange={(e) => setQuantity(Number(e.target.value))}
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="label">Standort (optional)</label>
+            <select
+              value={locationId ?? ''}
+              onChange={(e) => setLocationId(e.target.value ? Number(e.target.value) : null)}
+              className="input"
+            >
+              <option value="">Kein Standort</option>
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>{loc.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex gap-3">
+          <button onClick={onClose} className="btn btn-secondary flex-1">
+            Abbrechen
+          </button>
+          <button
+            onClick={() => {
+              if (selectedId) {
+                onSelect(selectedId, quantity, locationId)
+                onClose()
+              }
+            }}
+            disabled={!selectedId || isPending}
+            className="btn btn-primary flex-1"
+          >
+            {isPending ? 'Wird hinzugefügt...' : 'Hinzufügen'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -12,6 +12,7 @@ import {
   X,
   Boxes,
   MapPin,
+  Settings,
 } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
@@ -25,7 +26,8 @@ const navItems = [
   { to: '/locations', icon: MapPin, label: 'Standorte' },
   { to: '/treasury', icon: Wallet, label: 'Kasse' },
   { to: '/users', icon: Users, label: 'Benutzer' },
-]
+  { to: '/admin', icon: Settings, label: 'Admin', adminOnly: true },
+] as const
 
 export default function Layout() {
   const { user, logout } = useAuthStore()
@@ -68,7 +70,9 @@ export default function Layout() {
 
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1">
-            {navItems.map((item) => (
+            {navItems
+              .filter((item) => !('adminOnly' in item && item.adminOnly) || user?.role === 'admin')
+              .map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}

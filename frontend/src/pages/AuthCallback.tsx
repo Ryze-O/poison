@@ -28,7 +28,7 @@ export default function AuthCallback() {
 
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="text-sc-blue">Anmeldung wird verarbeitet...</div>
+      <div className="text-krt-orange">Anmeldung wird verarbeitet...</div>
     </div>
   )
 }

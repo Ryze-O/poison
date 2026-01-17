@@ -8,6 +8,9 @@ from app.schemas.user import UserResponse
 class LocationBase(BaseModel):
     name: str
     description: Optional[str] = None
+    system_name: Optional[str] = None
+    planet_name: Optional[str] = None
+    location_type: Optional[str] = None
 
 
 class LocationCreate(LocationBase):
@@ -16,7 +19,8 @@ class LocationCreate(LocationBase):
 
 class LocationResponse(LocationBase):
     id: int
-    created_by: UserResponse
+    is_predefined: bool = False
+    created_by: Optional[UserResponse] = None
     created_at: datetime
 
     class Config:

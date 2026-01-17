@@ -1,6 +1,6 @@
 from app.models.user import User, UserRole
 from app.models.attendance import AttendanceSession, AttendanceRecord
-from app.models.component import Component
+from app.models.component import Component, SCLocation
 from app.models.location import Location
 from app.models.loot import LootSession, LootItem, LootDistribution
 from app.models.inventory import Inventory, InventoryTransfer
@@ -13,6 +13,7 @@ __all__ = [
     "AttendanceSession",
     "AttendanceRecord",
     "Component",
+    "SCLocation",
     "Location",
     "LootSession",
     "LootItem",
