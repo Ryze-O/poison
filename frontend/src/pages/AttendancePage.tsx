@@ -577,10 +577,10 @@ export default function AttendancePage() {
                       year: 'numeric',
                     })}
                     {session.is_confirmed && (
-                      <CheckCircle size={18} className="text-green-500" title="Bestätigt" />
+                      <span title="Bestätigt"><CheckCircle size={18} className="text-green-500" /></span>
                     )}
                     {session.has_loot_session && (
-                      <Package size={18} className="text-krt-orange" title="Hat Loot-Session" />
+                      <span title="Hat Loot-Session"><Package size={18} className="text-krt-orange" /></span>
                     )}
                   </h3>
                   {session.notes && <p className="text-gray-400">{session.notes}</p>}

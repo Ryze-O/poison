@@ -101,7 +101,13 @@ export default function LocationsPage() {
   })
 
   const openEditModal = (location: Location) => {
-    setFormData({ name: location.name, description: location.description || '' })
+    setFormData({
+      name: location.name,
+      description: location.description || '',
+      system_name: location.system_name || '',
+      planet_name: location.planet_name || '',
+      location_type: location.location_type || ''
+    })
     setEditModal(location)
   }
 
@@ -457,7 +463,7 @@ export default function LocationsPage() {
                   onClick={() =>
                     createMutation.mutate({
                       name: formData.name,
-                      description: formData.description || undefined,
+                      description: formData.description,
                       system_name: formData.system_name || undefined,
                       planet_name: formData.planet_name || undefined,
                       location_type: formData.location_type || undefined,
@@ -502,7 +508,7 @@ export default function LocationsPage() {
                 <button
                   onClick={() => {
                     setEditModal(null)
-                    setFormData({ name: '', description: '' })
+                    setFormData({ name: '', description: '', system_name: '', planet_name: '', location_type: '' })
                   }}
                   className="btn btn-secondary flex-1"
                 >

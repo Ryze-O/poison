@@ -52,9 +52,6 @@ export default function InventoryPage() {
   const [transferAmount, setTransferAmount] = useState(1)
   const [transferToLocation, setTransferToLocation] = useState<number | null>(null)
   const [addModal, setAddModal] = useState(false)
-  const [selectedComponent, setSelectedComponent] = useState<number | null>(null)
-  const [addQuantity, setAddQuantity] = useState(1)
-  const [addLocation, setAddLocation] = useState<number | null>(null)
   const [bulkMoveModal, setBulkMoveModal] = useState(false)
   const [bulkFromLocation, setBulkFromLocation] = useState<number | null>(null)
   const [bulkToLocation, setBulkToLocation] = useState<number | null>(null)
@@ -228,11 +225,6 @@ export default function InventoryPage() {
       return acc
     },
     {} as Record<number, InventoryItem[]>
-  )
-
-  // Komponenten die noch nicht im Inventar sind
-  const componentsNotInInventory = components?.filter(
-    (c) => !myInventory?.some((item) => item.component.id === c.id)
   )
 
   return (
