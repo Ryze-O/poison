@@ -22,7 +22,7 @@ app = FastAPI(
     description="Web-Anwendung zur Verwaltung einer Star Citizen Staffel",
     version="0.1.0",
     lifespan=lifespan,
-    redirect_slashes=False,
+    redirect_slashes=True,
 )
 
 # CORS für Frontend
