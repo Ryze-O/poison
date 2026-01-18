@@ -20,6 +20,14 @@ async def get_users(
     return db.query(User).all()
 
 
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt den aktuell eingeloggten Benutzer zurück."""
+    return current_user
+
+
 @router.get("/officers", response_model=List[UserResponse])
 async def get_officers(
     db: Session = Depends(get_db),
