@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { RefreshCw, Database, MapPin, Package, AlertCircle, CheckCircle } from 'lucide-react'
+import { RefreshCw, Database, MapPin, Package, AlertCircle, CheckCircle, Upload, FileSpreadsheet, Wallet, Users } from 'lucide-react'
 
 interface SCImportStats {
   components_added: number
@@ -20,10 +20,21 @@ interface SCStats {
   sc_version: string | null
 }
 
+interface CSVImportResult {
+  success: number
+  errors: string[]
+  warnings: string[]
+}
+
 export default function AdminPage() {
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const [lastImport, setLastImport] = useState<SCImportStats | null>(null)
+  const [csvResult, setCsvResult] = useState<CSVImportResult | null>(null)
+  const [csvType, setCsvType] = useState<'inventory' | 'treasury' | 'members' | null>(null)
+  const inventoryFileRef = useRef<HTMLInputElement>(null)
+  const treasuryFileRef = useRef<HTMLInputElement>(null)
+  const membersFileRef = useRef<HTMLInputElement>(null)
 
   const isAdmin = user?.role === 'admin'
 
@@ -41,6 +52,75 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ['components'] })
     },
   })
+
+  const inventoryImportMutation = useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      return apiClient.post('/api/import/inventory', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).then((r) => r.data)
+    },
+    onSuccess: (data: CSVImportResult) => {
+      setCsvResult(data)
+      setCsvType('inventory')
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+    },
+  })
+
+  const treasuryImportMutation = useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      return apiClient.post('/api/import/treasury', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).then((r) => r.data)
+    },
+    onSuccess: (data: CSVImportResult) => {
+      setCsvResult(data)
+      setCsvType('treasury')
+      queryClient.invalidateQueries({ queryKey: ['treasury'] })
+    },
+  })
+
+  const membersImportMutation = useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      return apiClient.post('/api/import/members', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).then((r) => r.data)
+    },
+    onSuccess: (data: CSVImportResult) => {
+      setCsvResult(data)
+      setCsvType('members')
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+  })
+
+  const handleInventoryFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      inventoryImportMutation.mutate(file)
+      e.target.value = ''
+    }
+  }
+
+  const handleTreasuryFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      treasuryImportMutation.mutate(file)
+      e.target.value = ''
+    }
+  }
+
+  const handleMembersFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      membersImportMutation.mutate(file)
+      e.target.value = ''
+    }
+  }
 
   if (!isAdmin) {
     return (
@@ -195,14 +275,191 @@ export default function AdminPage() {
         )}
       </div>
 
+      {/* CSV Import Section */}
+      <div className="card mb-8">
+        <div className="flex items-center gap-3 mb-6">
+          <FileSpreadsheet className="text-krt-orange" size={24} />
+          <h2 className="text-xl font-bold">CSV-Daten-Import</h2>
+        </div>
+
+        <p className="text-gray-400 mb-6">
+          Importiere Inventar-Bestände oder Kassen-Transaktionen aus einer CSV-Datei.
+          Exportiere deine Google Sheets als CSV und lade sie hier hoch.
+        </p>
+
+        <div className="grid md:grid-cols-3 gap-6">
+          {/* Mitglieder Import */}
+          <div className="bg-gray-800/50 rounded-lg p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Users className="text-krt-orange" size={20} />
+              <h3 className="font-medium">Mitglieder importieren</h3>
+            </div>
+            <p className="text-sm text-gray-400 mb-4">
+              CSV-Format: Username, DisplayName, Rolle
+            </p>
+            <input
+              ref={membersFileRef}
+              type="file"
+              accept=".csv"
+              onChange={handleMembersFile}
+              className="hidden"
+            />
+            <button
+              onClick={() => membersFileRef.current?.click()}
+              disabled={membersImportMutation.isPending}
+              className="btn btn-secondary flex items-center gap-2 w-full justify-center"
+            >
+              <Upload size={18} />
+              {membersImportMutation.isPending ? 'Importiere...' : 'CSV hochladen'}
+            </button>
+          </div>
+
+          {/* Inventar Import */}
+          <div className="bg-gray-800/50 rounded-lg p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Package className="text-emerald-500" size={20} />
+              <h3 className="font-medium">Inventar importieren</h3>
+            </div>
+            <p className="text-sm text-gray-400 mb-4">
+              CSV-Format: Username, Item, Menge, Standort
+            </p>
+            <input
+              ref={inventoryFileRef}
+              type="file"
+              accept=".csv"
+              onChange={handleInventoryFile}
+              className="hidden"
+            />
+            <button
+              onClick={() => inventoryFileRef.current?.click()}
+              disabled={inventoryImportMutation.isPending}
+              className="btn btn-secondary flex items-center gap-2 w-full justify-center"
+            >
+              <Upload size={18} />
+              {inventoryImportMutation.isPending ? 'Importiere...' : 'CSV hochladen'}
+            </button>
+          </div>
+
+          {/* Kassen Import */}
+          <div className="bg-gray-800/50 rounded-lg p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Wallet className="text-sc-gold" size={20} />
+              <h3 className="font-medium">Kasse importieren</h3>
+            </div>
+            <p className="text-sm text-gray-400 mb-4">
+              CSV-Format: Datum, Betrag, Typ, Beschreibung
+            </p>
+            <input
+              ref={treasuryFileRef}
+              type="file"
+              accept=".csv"
+              onChange={handleTreasuryFile}
+              className="hidden"
+            />
+            <button
+              onClick={() => treasuryFileRef.current?.click()}
+              disabled={treasuryImportMutation.isPending}
+              className="btn btn-secondary flex items-center gap-2 w-full justify-center"
+            >
+              <Upload size={18} />
+              {treasuryImportMutation.isPending ? 'Importiere...' : 'CSV hochladen'}
+            </button>
+          </div>
+        </div>
+
+        {/* CSV Import Results */}
+        {csvResult && (
+          <div className="mt-6 p-4 bg-gray-800/50 rounded-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle className="text-emerald-500" size={20} />
+              <span className="font-medium">
+                {csvType === 'inventory' ? 'Inventar' : csvType === 'treasury' ? 'Kassen' : 'Mitglieder'}-Import abgeschlossen
+              </span>
+            </div>
+
+            <div className="text-sm mb-3">
+              <span className="text-emerald-400">{csvResult.success}</span> Einträge erfolgreich importiert
+            </div>
+
+            {csvResult.warnings.length > 0 && (
+              <div className="mb-3">
+                <span className="text-yellow-400 text-sm">
+                  {csvResult.warnings.length} Warnungen
+                </span>
+                <ul className="mt-1 text-sm text-yellow-400 space-y-1">
+                  {csvResult.warnings.slice(0, 5).map((warning, i) => (
+                    <li key={i}>• {warning}</li>
+                  ))}
+                  {csvResult.warnings.length > 5 && (
+                    <li className="text-gray-500">... und {csvResult.warnings.length - 5} weitere</li>
+                  )}
+                </ul>
+              </div>
+            )}
+
+            {csvResult.errors.length > 0 && (
+              <div>
+                <span className="text-red-400 text-sm">
+                  {csvResult.errors.length} Fehler
+                </span>
+                <details className="mt-1">
+                  <summary className="text-gray-400 text-sm cursor-pointer hover:text-white">
+                    Details anzeigen
+                  </summary>
+                  <ul className="mt-2 text-sm text-red-400 space-y-1 max-h-40 overflow-y-auto">
+                    {csvResult.errors.map((error, i) => (
+                      <li key={i}>• {error}</li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CSV Format Info */}
+        <div className="mt-6 p-4 bg-gray-800/30 rounded-lg">
+          <h4 className="font-medium mb-2">CSV-Format Beispiele</h4>
+          <div className="grid md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <p className="text-gray-400 mb-1">Mitglieder:</p>
+              <code className="block bg-gray-900 p-2 rounded text-xs">
+                Username,DisplayName,Rolle<br/>
+                ryze,Ryze,officer<br/>
+                mando,Mando,member
+              </code>
+            </div>
+            <div>
+              <p className="text-gray-400 mb-1">Inventar:</p>
+              <code className="block bg-gray-900 p-2 rounded text-xs">
+                Username,Item,Menge,Standort<br/>
+                Ryze,Aegis Avenger,1,Lorville<br/>
+                Ryze,Behring Laser,4,Area18
+              </code>
+            </div>
+            <div>
+              <p className="text-gray-400 mb-1">Kasse:</p>
+              <code className="block bg-gray-900 p-2 rounded text-xs">
+                Datum,Betrag,Typ,Beschreibung<br/>
+                2024-01-15,50000,income,Beiträge<br/>
+                2024-01-20,-15000,expense,Versicherung
+              </code>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Info Box */}
       <div className="card border-l-4 border-l-krt-orange">
         <h3 className="font-bold mb-2">Hinweis zum Import</h3>
         <ul className="text-gray-400 text-sm space-y-1">
-          <li>• Der Import kann je nach API-Auslastung einige Minuten dauern</li>
+          <li>• Der SC-Import kann je nach API-Auslastung einige Minuten dauern</li>
           <li>• Bestehende Komponenten werden anhand der UUID aktualisiert</li>
           <li>• Manuell erstellte Komponenten bleiben erhalten</li>
           <li>• Importierte Komponenten sind als "vordefiniert" markiert</li>
+          <li>• CSV-Import: Für Inventar müssen User und Items bereits existieren</li>
+          <li>• Mitglieder-Import: Neue User werden ohne Discord-ID angelegt</li>
+          <li>• Bestehende User werden beim Mitglieder-Import aktualisiert (nach Username)</li>
         </ul>
       </div>
     </div>

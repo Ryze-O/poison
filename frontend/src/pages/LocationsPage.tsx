@@ -12,7 +12,13 @@ export default function LocationsPage() {
   const [createModal, setCreateModal] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<Location | null>(null)
   const [selectedLocation, setSelectedLocation] = useState<number | null>(null)
-  const [formData, setFormData] = useState({ name: '', description: '' })
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    system_name: '',
+    planet_name: '',
+    location_type: '',
+  })
 
   // Filter
   const [search, setSearch] = useState('')
@@ -58,12 +64,17 @@ export default function LocationsPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: { name: string; description: string }) =>
-      apiClient.post('/api/locations', data),
+    mutationFn: (data: {
+      name: string
+      description: string
+      system_name?: string
+      planet_name?: string
+      location_type?: string
+    }) => apiClient.post('/api/locations', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['locations'] })
       setCreateModal(false)
-      setFormData({ name: '', description: '' })
+      setFormData({ name: '', description: '', system_name: '', planet_name: '', location_type: '' })
     },
   })
 
@@ -73,7 +84,7 @@ export default function LocationsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['locations'] })
       setEditModal(null)
-      setFormData({ name: '', description: '' })
+      setFormData({ name: '', description: '', system_name: '', planet_name: '', location_type: '' })
     },
   })
 
@@ -95,7 +106,7 @@ export default function LocationsPage() {
   }
 
   const openCreateModal = () => {
-    setFormData({ name: '', description: '' })
+    setFormData({ name: '', description: '', system_name: '', planet_name: '', location_type: '' })
     setCreateModal(true)
   }
 
@@ -228,7 +239,7 @@ export default function LocationsPage() {
                         onClick={() => setSelectedLocation(location.id)}
                         className={`p-3 rounded-lg cursor-pointer transition-colors ${
                           selectedLocation === location.id
-                            ? 'bg-sc-orange/20 border border-sc-orange'
+                            ? 'bg-krt-orange/20 border border-krt-orange'
                             : 'bg-gray-800/50 hover:bg-gray-800'
                         }`}
                       >
@@ -326,7 +337,7 @@ export default function LocationsPage() {
                           )}
                         </div>
                         <div className="text-right">
-                          <p className="text-sc-orange font-bold">{item.quantity}x</p>
+                          <p className="text-krt-orange font-bold">{item.quantity}x</p>
                         </div>
                       </div>
                     ))}
@@ -353,14 +364,14 @@ export default function LocationsPage() {
       {/* Create Modal */}
       {createModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="card max-w-md w-full mx-4">
+          <div className="card max-w-lg w-full mx-4">
             <h2 className="text-xl font-bold mb-4">Eigener Standort</h2>
             <p className="text-sm text-gray-400 mb-4">
               Erstelle einen eigenen Standort (z.B. dein Schiff oder eine persönliche Basis).
             </p>
             <div className="space-y-4">
               <div>
-                <label className="label">Name</label>
+                <label className="label">Name *</label>
                 <input
                   type="text"
                   value={formData.name}
@@ -369,6 +380,58 @@ export default function LocationsPage() {
                   className="input"
                 />
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Sternensystem</label>
+                  <input
+                    type="text"
+                    value={formData.system_name}
+                    onChange={(e) => setFormData({ ...formData, system_name: e.target.value })}
+                    placeholder="z.B. Stanton, Pyro"
+                    className="input"
+                    list="systems-list"
+                  />
+                  <datalist id="systems-list">
+                    <option value="Stanton" />
+                    <option value="Pyro" />
+                    <option value="Nyx" />
+                  </datalist>
+                </div>
+                <div>
+                  <label className="label">Planet/Mond</label>
+                  <input
+                    type="text"
+                    value={formData.planet_name}
+                    onChange={(e) => setFormData({ ...formData, planet_name: e.target.value })}
+                    placeholder="z.B. Hurston, Crusader"
+                    className="input"
+                    list="planets-list"
+                  />
+                  <datalist id="planets-list">
+                    {planets?.map((p) => (
+                      <option key={p} value={p} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Typ</label>
+                <select
+                  value={formData.location_type}
+                  onChange={(e) => setFormData({ ...formData, location_type: e.target.value })}
+                  className="input"
+                >
+                  <option value="">-- Typ wählen --</option>
+                  <option value="Ship">Schiff</option>
+                  <option value="Station">Station</option>
+                  <option value="City">Stadt</option>
+                  <option value="Outpost">Außenposten</option>
+                  <option value="Custom">Sonstiges</option>
+                </select>
+              </div>
+
               <div>
                 <label className="label">Beschreibung (optional)</label>
                 <textarea
@@ -376,21 +439,30 @@ export default function LocationsPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="z.B. Hauptschiff für Org-Ops"
                   className="input"
-                  rows={3}
+                  rows={2}
                 />
               </div>
+
               <div className="flex gap-3">
                 <button
                   onClick={() => {
                     setCreateModal(false)
-                    setFormData({ name: '', description: '' })
+                    setFormData({ name: '', description: '', system_name: '', planet_name: '', location_type: '' })
                   }}
                   className="btn btn-secondary flex-1"
                 >
                   Abbrechen
                 </button>
                 <button
-                  onClick={() => createMutation.mutate(formData)}
+                  onClick={() =>
+                    createMutation.mutate({
+                      name: formData.name,
+                      description: formData.description || undefined,
+                      system_name: formData.system_name || undefined,
+                      planet_name: formData.planet_name || undefined,
+                      location_type: formData.location_type || undefined,
+                    })
+                  }
                   disabled={!formData.name.trim() || createMutation.isPending}
                   className="btn btn-primary flex-1"
                 >

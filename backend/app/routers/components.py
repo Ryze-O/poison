@@ -15,14 +15,19 @@ router = APIRouter()
 @router.get("", response_model=List[ComponentResponse])
 async def get_components(
     category: Optional[str] = None,
+    sub_category: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Gibt alle Komponenten zurück, optional gefiltert nach Kategorie."""
+    """Gibt alle Komponenten zurück, optional gefiltert nach Kategorie/Sub-Kategorie."""
     query = db.query(Component)
+    # PLACEHOLDER-Einträge ausfiltern (Fehler in SC-Wiki Daten)
+    query = query.filter(Component.name != "<= PLACEHOLDER =>")
     if category:
         query = query.filter(Component.category == category)
-    return query.order_by(Component.category, Component.name).all()
+    if sub_category:
+        query = query.filter(Component.sub_category == sub_category)
+    return query.order_by(Component.category, Component.sub_category, Component.name).all()
 
 
 @router.get("/categories")
@@ -47,6 +52,21 @@ async def get_manufacturers(
         Component.manufacturer.isnot(None)
     ).order_by(Component.manufacturer).all()
     return [m[0] for m in manufacturers]
+
+
+@router.get("/sub-categories")
+async def get_sub_categories(
+    category: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt alle verfügbaren Unterkategorien zurück, optional gefiltert nach Hauptkategorie."""
+    query = db.query(Component.sub_category).distinct().filter(
+        Component.sub_category.isnot(None)
+    )
+    if category:
+        query = query.filter(Component.category == category)
+    return [s[0] for s in query.order_by(Component.sub_category).all()]
 
 
 @router.post("", response_model=ComponentResponse)

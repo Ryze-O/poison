@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Enum, DateTime
+from sqlalchemy import Column, Integer, String, Enum, DateTime, ForeignKey, Text
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 import enum
@@ -17,11 +18,12 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    discord_id = Column(String(20), unique=True, nullable=False, index=True)
+    discord_id = Column(String(20), unique=True, nullable=True, index=True)  # Nullable für CSV-Import
     username = Column(String(100), nullable=False)
     display_name = Column(String(100), nullable=True)  # Nickname in der Staffel
     avatar = Column(String(255), nullable=True)  # Discord Avatar URL
     role = Column(Enum(UserRole), default=UserRole.MEMBER, nullable=False)
+    aliases = Column(String(500), nullable=True)  # Komma-separierte OCR-Aliase (z.B. "ry-ze,ry_ze")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -35,3 +37,21 @@ class User(Base):
             UserRole.ADMIN: 3,
         }
         return role_hierarchy[self.role] >= role_hierarchy[required_role]
+
+
+class UserRequest(Base):
+    """Antrag für neuen User (wenn nicht Admin)."""
+    __tablename__ = "user_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), nullable=False)
+    display_name = Column(String(100), nullable=True)
+    detected_name = Column(String(100), nullable=False)  # OCR-erkannter Name (wird als Alias gespeichert)
+    requested_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(String(20), default="pending")  # pending, approved, rejected
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    requested_by = relationship("User", foreign_keys=[requested_by_id])

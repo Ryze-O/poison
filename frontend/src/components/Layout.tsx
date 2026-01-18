@@ -22,7 +22,7 @@ const navItems = [
   { to: '/attendance', icon: ClipboardList, label: 'Anwesenheit' },
   { to: '/loot', icon: Gift, label: 'Loot' },
   { to: '/inventory', icon: Package, label: 'Lager' },
-  { to: '/components', icon: Boxes, label: 'Komponenten' },
+  { to: '/items', icon: Boxes, label: 'Items' },
   { to: '/locations', icon: MapPin, label: 'Standorte' },
   { to: '/treasury', icon: Wallet, label: 'Kasse' },
   { to: '/users', icon: Users, label: 'Benutzer' },
@@ -133,8 +133,21 @@ export default function Layout() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 p-6 lg:p-8 overflow-auto">
-        <Outlet />
+      <main className="flex-1 p-6 lg:p-8 overflow-auto relative">
+        {/* KRT Logo Watermark */}
+        <div
+          className="fixed right-8 top-1/2 -translate-y-1/2 w-96 h-96 opacity-[0.03] pointer-events-none z-0"
+          style={{
+            backgroundImage: 'url(/assets/krt_logo.svg)',
+            backgroundSize: 'contain',
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'center',
+            filter: 'invert(1) brightness(0)',
+          }}
+        />
+        <div className="relative z-10">
+          <Outlet />
+        </div>
       </main>
     </div>
   )

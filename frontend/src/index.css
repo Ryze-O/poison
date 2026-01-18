@@ -3,6 +3,17 @@
 @tailwind utilities;
 
 @layer base {
+  /* KRITISCH: Focus-Styles ZUERST definieren für maximale Browser-Kompatibilität */
+  *, *::before, *::after {
+    outline: none !important;
+    outline-color: transparent !important;
+  }
+
+  *:focus, *:focus-visible, *:focus-within {
+    outline: none !important;
+    outline-color: transparent !important;
+  }
+
   body {
     @apply bg-krt-darkest text-gray-100 min-h-screen;
     background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
@@ -38,7 +49,8 @@
 
   .card {
     @apply bg-gradient-to-br from-gray-800/50 to-gray-900/50 rounded-xl p-6
-           border border-gray-700/50 backdrop-blur-sm;
+           rounded-xl backdrop-blur-sm;
+    border: 1px solid rgba(55, 65, 81, 0.5); /* gray-700 mit 50% opacity - KEIN Blau! */
   }
 
   .card-highlight {
@@ -49,6 +61,26 @@
     @apply w-full px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg
            focus:outline-none focus:border-krt-orange focus:ring-1 focus:ring-krt-orange/50
            transition-all placeholder-gray-500;
+  }
+
+  /* Select-Elemente - Browser-Default überschreiben */
+  select.input,
+  select {
+    @apply appearance-none cursor-pointer bg-gray-800/50;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+  }
+
+  select:focus {
+    @apply border-krt-orange ring-1 ring-krt-orange/50 outline-none;
+  }
+
+  /* Option-Styling */
+  option {
+    @apply bg-gray-800 text-gray-100;
   }
 
   .label {
@@ -64,4 +96,134 @@
   .glow-orange {
     box-shadow: 0 0 20px rgba(232, 90, 36, 0.3);
   }
+}
+
+/* ============================================
+   WICHTIG: Globale Focus/Outline Overrides
+   Muss NACH @layer sein für höchste Spezifität
+   ============================================ */
+
+/* Alle Focus-Outlines komplett deaktivieren */
+*:focus {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-color: transparent !important;
+  box-shadow: none !important;
+}
+
+*:focus-visible {
+  outline: none !important;
+  outline-width: 0 !important;
+}
+
+/* Alle Elemente - kein blauer Ring */
+button, a, div, span, input, select, textarea,
+[role="button"], [tabindex] {
+  outline: none !important;
+}
+
+button:focus, button:focus-visible,
+a:focus, a:focus-visible,
+div:focus, div:focus-visible,
+[role="button"]:focus, [role="button"]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Input-Felder: Orange statt Blau */
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  border-color: #E85A24 !important;
+  box-shadow: 0 0 0 1px rgba(232, 90, 36, 0.5) !important;
+}
+
+/* Cards - EXPLIZIT graue Border, niemals blau */
+.card {
+  border: 1px solid rgba(55, 65, 81, 0.5) !important; /* gray-700/50 */
+  outline: none !important;
+}
+
+.card * {
+  outline: none !important;
+}
+
+.card:focus, .card:focus-within, .card:focus-visible,
+.card:active, .card:hover {
+  outline: none !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(55, 65, 81, 0.5) !important;
+}
+
+/* NUCLEAR OPTION: Alle blauen Farben global überschreiben */
+* {
+  --tw-ring-color: #E85A24 !important;
+  --tw-border-opacity: 1;
+}
+
+/* Browser-Default Focus Styles komplett entfernen */
+:focus {
+  outline: 0 !important;
+  outline-offset: 0 !important;
+}
+
+/* Webkit/Chrome spezifisch */
+::-webkit-focus-ring-color {
+  color: transparent !important;
+}
+
+input:focus, textarea:focus, select:focus, button:focus {
+  outline: none !important;
+  -webkit-appearance: none;
+}
+
+/* ============================================
+   CHROME-SPEZIFISCH: Focus-Ring Override
+   Chrome verwendet :focus-visible mit hartnäckigem blauem Ring
+   ============================================ */
+
+/* Chrome/Webkit: Deaktiviere den blauen Focus-Ring */
+*:focus-visible {
+  outline: none !important;
+  outline-color: transparent !important;
+  outline-style: none !important;
+  outline-width: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Chrome: Spezifische Elemente */
+div:focus-visible,
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: none !important;
+  outline-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Chrome Focus Ring auf Containern komplett deaktivieren */
+.card:has(:focus-visible),
+div:has(button:focus-visible),
+div:has(input:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Firefox-spezifisch */
+::-moz-focus-inner {
+  border: 0 !important;
+}
+
+*:-moz-focusring {
+  outline: none !important;
+}
+
+/* Alle interaktiven Elemente */
+button, [type="button"], [type="reset"], [type="submit"] {
+  -webkit-appearance: none;
+  outline: none !important;
+}
+
+button:focus, button:focus-visible, button:active {
+  outline: none !important;
+  box-shadow: none !important;
 }

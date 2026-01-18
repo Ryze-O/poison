@@ -21,9 +21,10 @@ class UserUpdate(BaseModel):
 
 class UserResponse(UserBase):
     id: int
-    discord_id: str
-    avatar: Optional[str]
+    discord_id: Optional[str] = None  # Nullable für CSV-importierte User ohne Discord-Login
+    avatar: Optional[str] = None
     role: UserRole
+    aliases: Optional[str] = None  # Komma-separierte OCR-Aliase
     created_at: datetime
 
     class Config:

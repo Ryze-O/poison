@@ -2,16 +2,129 @@
 OCR-Modul für die Erkennung von Namen aus TeamSpeak/Discord Screenshots.
 """
 
-from typing import List, BinaryIO
+from typing import List, BinaryIO, Tuple
 from io import BytesIO
 import re
 
 try:
     import pytesseract
-    from PIL import Image
+    from PIL import Image, ImageEnhance, ImageFilter
+    # Windows: Tesseract-Pfad explizit setzen falls nicht in PATH
+    import os
+    if os.name == 'nt':  # Windows
+        tesseract_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+        if os.path.exists(tesseract_path):
+            pytesseract.pytesseract.tesseract_cmd = tesseract_path
     OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False
+
+
+def preprocess_image(image: 'Image.Image') -> 'Image.Image':
+    """
+    Verbessert das Bild für bessere OCR-Erkennung.
+    Speziell optimiert für TeamSpeak/Discord dunkle Themes.
+    """
+    # In RGB konvertieren falls nötig
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+
+    # Größe verdoppeln für bessere OCR
+    width, height = image.size
+    image = image.resize((width * 2, height * 2), Image.Resampling.LANCZOS)
+
+    # Kontrast erhöhen
+    enhancer = ImageEnhance.Contrast(image)
+    image = enhancer.enhance(2.0)
+
+    # Helligkeit anpassen
+    enhancer = ImageEnhance.Brightness(image)
+    image = enhancer.enhance(1.3)
+
+    # In Graustufen
+    image = image.convert('L')
+
+    # Schärfen
+    image = image.filter(ImageFilter.SHARPEN)
+
+    return image
+
+
+def parse_teamspeak_line(line: str) -> List[str]:
+    """
+    Parst eine TeamSpeak-Zeile im Format: "Username | DisplayName | Tag"
+    und extrahiert nur den ersten Namen (Nickname).
+    """
+    names = []
+
+    # Pipe-getrennte Namen (TeamSpeak Format) - nur ersten Teil nehmen
+    if '|' in line:
+        parts = line.split('|')
+        if parts:
+            name = parts[0].strip()
+            # Sonderzeichen am Anfang entfernen
+            name = re.sub(r'^[\-\*\•\→\►\▶\s]+', '', name)
+            if len(name) >= 2:
+                names.append(name)
+    else:
+        # Einzelner Name ohne Pipe
+        name = line.strip()
+        if len(name) >= 2:
+            names.append(name)
+
+    return names
+
+
+# Bekannte Noise-Patterns (Ränge, Tags, Kanalnamen, etc.)
+NOISE_PATTERNS = [
+    # Exakte Matches (case-insensitive)
+    'KRT', 'VPR', 'GRA', 'STU', 'ERT',  # Staffel-Ränge/Tags
+    'AFK', 'DND', 'BRB',  # Status-Tags
+    'Kommunikationstraining',  # Bekannte Kanalnamen
+    # Regex-Patterns
+    r'^\d+$',  # Nur Zahlen
+    r'^\d{2}\s*\d{2}$',  # Zahlenpaare wie "18 19"
+    r'^.{1}$',  # Einzelne Zeichen
+    r'^[a-z]{1,2}\d*$',  # Kurze Buchstaben-Zahlen-Kombinationen wie "a8", "ox"
+]
+
+
+def is_noise(name: str) -> bool:
+    """Prüft ob ein Name als Noise gefiltert werden soll."""
+    name_stripped = name.strip()
+    name_upper = name_stripped.upper()
+
+    # Zu kurz
+    if len(name_stripped) < 2:
+        return True
+
+    # Exakte Noise-Matches
+    for pattern in NOISE_PATTERNS:
+        if not pattern.startswith(r'^'):
+            # Normaler String-Vergleich
+            if name_upper == pattern.upper():
+                return True
+        else:
+            # Regex-Pattern
+            if re.match(pattern, name_stripped, re.IGNORECASE):
+                return True
+
+    return False
+
+
+def clean_name(name: str) -> str:
+    """Bereinigt einen einzelnen Namen."""
+    # Typische TS/Discord Artefakte entfernen
+    name = re.sub(r'\[.*?\]', '', name)  # [AFK], [Away] etc.
+    name = re.sub(r'\(.*?\)', '', name)  # (Away), (1) etc.
+    name = re.sub(r'^[\-\*\•\→\►\▶\s]+', '', name)  # Führende Symbole
+    name = re.sub(r'[\-\*\•\→\►\▶\s]+$', '', name)  # Nachfolgende Symbole
+
+    # Nur alphanumerische Zeichen, Unterstriche, Bindestriche und Leerzeichen
+    # (typische Spielernamen-Zeichen)
+    name = re.sub(r'[^\w\s\-_äöüÄÖÜß]', '', name)
+
+    return name.strip()
 
 
 def extract_names_from_image(image_data: BinaryIO) -> List[str]:
@@ -31,46 +144,52 @@ def extract_names_from_image(image_data: BinaryIO) -> List[str]:
         # Bild öffnen
         image = Image.open(image_data)
 
-        # In Graustufen konvertieren für bessere OCR-Ergebnisse
-        image = image.convert('L')
+        # Bild vorverarbeiten
+        processed_image = preprocess_image(image)
 
-        # OCR durchführen
-        # Deutsch + Englisch für Umlaute und typische Spielernamen
-        text = pytesseract.image_to_string(
-            image,
-            lang='deu+eng',
-            config='--psm 6'  # Assume uniform block of text
-        )
+        # OCR mit verschiedenen PSM-Modi versuchen
+        all_names = []
 
-        # Text in Zeilen aufteilen und bereinigen
-        lines = text.strip().split('\n')
-        names = []
+        # PSM 6: Uniform block of text (Standard)
+        # PSM 4: Single column of text of variable sizes
+        # PSM 11: Sparse text - find as much text as possible
+        for psm in [6, 4, 11]:
+            try:
+                text = pytesseract.image_to_string(
+                    processed_image,
+                    lang='deu+eng',
+                    config=f'--psm {psm} --oem 3'
+                )
 
-        for line in lines:
-            # Zeile bereinigen
-            name = line.strip()
+                lines = text.strip().split('\n')
 
-            # Leere Zeilen und zu kurze Namen überspringen
-            if len(name) < 2:
+                for line in lines:
+                    line = line.strip()
+                    if len(line) < 2:
+                        continue
+
+                    # TeamSpeak-Format parsen (Name | DisplayName | Tag)
+                    parsed_names = parse_teamspeak_line(line)
+
+                    for name in parsed_names:
+                        cleaned = clean_name(name)
+                        if len(cleaned) >= 2 and not is_noise(cleaned):
+                            all_names.append(cleaned)
+
+            except Exception as e:
+                print(f"OCR Error with PSM {psm}: {e}")
                 continue
-
-            # Typische TS/Discord Artefakte entfernen
-            # z.B. "[AFK]", "(Away)", Symbole etc.
-            name = re.sub(r'\[.*?\]', '', name)
-            name = re.sub(r'\(.*?\)', '', name)
-            name = re.sub(r'^[\-\*\•\→\►\▶]', '', name)
-            name = name.strip()
-
-            # Nochmal Länge prüfen
-            if len(name) >= 2:
-                names.append(name)
 
         # Duplikate entfernen, Reihenfolge beibehalten
         seen = set()
         unique_names = []
-        for name in names:
-            if name.lower() not in seen:
-                seen.add(name.lower())
+        for name in all_names:
+            name_lower = name.lower()
+            # Ähnliche Namen zusammenfassen (z.B. "ryze" und "ry_ze")
+            simplified = re.sub(r'[_\-\s]', '', name_lower)
+            if simplified not in seen and name_lower not in seen:
+                seen.add(name_lower)
+                seen.add(simplified)
                 unique_names.append(name)
 
         return unique_names

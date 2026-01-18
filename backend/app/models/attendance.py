@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, LargeBinary, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -12,6 +12,11 @@ class AttendanceSession(Base):
     date = Column(DateTime(timezone=True), server_default=func.now())
     notes = Column(Text, nullable=True)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # OCR-Daten für nachträgliche Bearbeitung
+    screenshot_data = Column(LargeBinary, nullable=True)  # Temporär gespeicherter Screenshot
+    ocr_data = Column(Text, nullable=True)  # JSON mit matched/unmatched Namen
+    is_confirmed = Column(Boolean, default=False)  # Ob Session bestätigt wurde
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

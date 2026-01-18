@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.config import get_settings
 from app.database import engine, Base
-from app.routers import auth, users, components, inventory, treasury, attendance, loot, locations, sc_import
+from app.routers import auth, users, components, inventory, treasury, attendance, loot, locations, sc_import, data_import
 
 settings = get_settings()
 
@@ -37,13 +37,15 @@ app.add_middleware(
 # Router einbinden
 app.include_router(auth.router, prefix="/auth", tags=["Authentifizierung"])
 app.include_router(users.router, prefix="/api/users", tags=["Benutzer"])
-app.include_router(components.router, prefix="/api/components", tags=["Komponenten"])
+app.include_router(components.router, prefix="/api/items", tags=["Items"])
+app.include_router(components.router, prefix="/api/components", tags=["Items (Legacy)"])  # Alias für Kompatibilität
 app.include_router(inventory.router, prefix="/api/inventory", tags=["Lager"])
 app.include_router(treasury.router, prefix="/api/treasury", tags=["Kasse"])
 app.include_router(attendance.router, prefix="/api/attendance", tags=["Anwesenheit"])
 app.include_router(loot.router, prefix="/api/loot", tags=["Loot"])
 app.include_router(locations.router, prefix="/api/locations", tags=["Standorte"])
 app.include_router(sc_import.router, prefix="/api/sc", tags=["Star Citizen Import"])
+app.include_router(data_import.router, prefix="/api/import", tags=["Daten-Import"])
 
 
 @app.get("/")

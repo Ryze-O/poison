@@ -76,3 +76,108 @@ async def update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.post("/{user_id}/aliases")
+async def add_alias(
+    user_id: int,
+    alias: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Fügt einen OCR-Alias zu einem Benutzer hinzu.
+    Aliase werden für das automatische Matching bei der Anwesenheitserfassung verwendet.
+    Nur Offiziere+ können Aliase hinzufügen.
+    """
+    check_role(current_user, UserRole.OFFICER)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer nicht gefunden"
+        )
+
+    # Alias bereinigen
+    alias = alias.strip()
+    if not alias or len(alias) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Alias muss mindestens 2 Zeichen lang sein"
+        )
+
+    # Bestehende Aliase laden
+    existing = user.aliases.split(',') if user.aliases else []
+    existing = [a.strip() for a in existing if a.strip()]
+
+    # Prüfen ob Alias bereits existiert (case-insensitive)
+    if any(a.lower() == alias.lower() for a in existing):
+        return {"message": "Alias existiert bereits", "aliases": existing}
+
+    # Alias hinzufügen
+    existing.append(alias)
+    user.aliases = ','.join(existing)
+
+    db.commit()
+    return {"message": "Alias hinzugefügt", "aliases": existing}
+
+
+@router.delete("/{user_id}/aliases/{alias}")
+async def remove_alias(
+    user_id: int,
+    alias: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Entfernt einen OCR-Alias von einem Benutzer."""
+    check_role(current_user, UserRole.OFFICER)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer nicht gefunden"
+        )
+
+    if not user.aliases:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer hat keine Aliase"
+        )
+
+    # Alias entfernen (case-insensitive)
+    existing = user.aliases.split(',')
+    existing = [a.strip() for a in existing if a.strip()]
+    new_aliases = [a for a in existing if a.lower() != alias.lower()]
+
+    if len(new_aliases) == len(existing):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alias nicht gefunden"
+        )
+
+    user.aliases = ','.join(new_aliases) if new_aliases else None
+    db.commit()
+
+    return {"message": "Alias entfernt", "aliases": new_aliases}
+
+
+@router.get("/{user_id}/aliases")
+async def get_aliases(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt alle OCR-Aliase eines Benutzers zurück."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer nicht gefunden"
+        )
+
+    aliases = user.aliases.split(',') if user.aliases else []
+    aliases = [a.strip() for a in aliases if a.strip()]
+
+    return {"user_id": user_id, "aliases": aliases}

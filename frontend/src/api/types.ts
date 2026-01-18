@@ -91,6 +91,21 @@ export interface AttendanceSession {
   notes: string | null
   created_by: User
   records: AttendanceRecord[]
+  is_confirmed: boolean
+  has_screenshot: boolean
+  has_loot_session: boolean
+  loot_session_id: number | null
+  created_at: string
+}
+
+// User-Anträge (für neue User via OCR)
+export interface UserRequest {
+  id: number
+  username: string
+  display_name: string | null
+  detected_name: string
+  requested_by: User
+  status: 'pending' | 'approved' | 'rejected'
   created_at: string
 }
 
@@ -126,4 +141,21 @@ export interface ScanResult {
   }[]
   unmatched: string[]
   total_detected: number
+  screenshot_base64?: string
+}
+
+// OCR-Daten einer Session
+export interface OCRData {
+  matched: {
+    user_id: number
+    username: string
+    display_name: string | null
+    detected_name: string
+  }[]
+  unmatched: string[]
+  all_users: {
+    id: number
+    username: string
+    display_name: string | null
+  }[]
 }

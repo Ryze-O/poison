@@ -31,7 +31,25 @@ export default {
         'krt-gradient': 'linear-gradient(180deg, #2d2d2d 0%, #1a1a1a 50%, #0a0a0a 100%)',
         'krt-card': 'linear-gradient(145deg, #242424 0%, #1a1a1a 100%)',
       },
+      // Default Ring-Farbe auf Orange setzen
+      ringColor: {
+        DEFAULT: '#E85A24',
+      },
+      // Default Outline-Farbe auf Orange setzen
+      outlineColor: {
+        DEFAULT: '#E85A24',
+      },
+      // Alle blauen Farben überschreiben (falls irgendwo verwendet)
+      borderColor: {
+        DEFAULT: 'rgba(55, 65, 81, 0.5)', // gray-700/50 statt blau
+      },
     },
+  },
+  // Coreconfig: Focus-Ring deaktivieren
+  corePlugins: {
+    ringWidth: true,
+    ringColor: true,
+    ringOpacity: true,
   },
   plugins: [],
 }

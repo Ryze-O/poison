@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft } from 'lucide-react'
+import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft, ChevronDown, ChevronRight } from 'lucide-react'
 import type { InventoryItem, User, Component, Location } from '../api/types'
 
 type InventoryAction = 'add' | 'remove' | 'loot' | 'transfer_in' | 'transfer_out'
@@ -58,8 +58,22 @@ export default function InventoryPage() {
   const [bulkMoveModal, setBulkMoveModal] = useState(false)
   const [bulkFromLocation, setBulkFromLocation] = useState<number | null>(null)
   const [bulkToLocation, setBulkToLocation] = useState<number | null>(null)
+  const [filterSubCategory, setFilterSubCategory] = useState<string>('')
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
   const canManage = user?.role !== 'member'
+
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(category)) {
+        next.delete(category)
+      } else {
+        next.add(category)
+      }
+      return next
+    })
+  }
 
   const { data: myInventory } = useQuery<InventoryItem[]>({
     queryKey: ['inventory', 'my'],
@@ -85,6 +99,16 @@ export default function InventoryPage() {
   const { data: categories } = useQuery<string[]>({
     queryKey: ['components', 'categories'],
     queryFn: () => apiClient.get('/api/components/categories').then((r) => r.data),
+  })
+
+  const { data: subCategories } = useQuery<string[]>({
+    queryKey: ['components', 'sub-categories', filterCategory],
+    queryFn: () => {
+      const url = filterCategory
+        ? `/api/items/sub-categories?category=${encodeURIComponent(filterCategory)}`
+        : '/api/items/sub-categories'
+      return apiClient.get(url).then((r) => r.data)
+    },
   })
 
   const { data: manufacturers } = useQuery<string[]>({
@@ -155,12 +179,43 @@ export default function InventoryPage() {
       .includes(search.toLowerCase())
     const matchesCategory =
       !filterCategory || item.component.category === filterCategory
+    const matchesSubCategory =
+      !filterSubCategory || item.component.sub_category === filterSubCategory
     const matchesLocation =
       filterLocation === '' ||
       (filterLocation === '0' && !item.location) ||
       (filterLocation !== '0' && item.location?.id === parseInt(filterLocation))
-    return matchesSearch && matchesCategory && matchesLocation
+    return matchesSearch && matchesCategory && matchesSubCategory && matchesLocation
   })
+
+  // Gruppiere Inventar nach Kategorie und Unterkategorie
+  const groupedMyInventory = useMemo(() => {
+    if (!filteredMyInventory) return {}
+
+    const grouped: Record<string, Record<string, InventoryItem[]>> = {}
+
+    filteredMyInventory.forEach((item) => {
+      const category = item.component.category || 'Sonstige'
+      const subCategory = item.component.sub_category || 'Allgemein'
+
+      if (!grouped[category]) {
+        grouped[category] = {}
+      }
+      if (!grouped[category][subCategory]) {
+        grouped[category][subCategory] = []
+      }
+      grouped[category][subCategory].push(item)
+    })
+
+    // Sortiere Items innerhalb jeder Gruppe
+    Object.keys(grouped).forEach(cat => {
+      Object.keys(grouped[cat]).forEach(subCat => {
+        grouped[cat][subCat].sort((a, b) => a.component.name.localeCompare(b.component.name))
+      })
+    })
+
+    return grouped
+  }, [filteredMyInventory])
 
   // Inventar nach Benutzer gruppieren
   const inventoryByUser = allInventory?.reduce(
@@ -229,8 +284,11 @@ export default function InventoryPage() {
           </div>
           <select
             value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="input md:w-48"
+            onChange={(e) => {
+              setFilterCategory(e.target.value)
+              setFilterSubCategory('') // Reset Subkategorie bei Kategorie-Wechsel
+            }}
+            className="input md:w-40"
           >
             <option value="">Alle Kategorien</option>
             {categories?.map((cat) => (
@@ -239,10 +297,24 @@ export default function InventoryPage() {
               </option>
             ))}
           </select>
+          {subCategories && subCategories.length > 0 && (
+            <select
+              value={filterSubCategory}
+              onChange={(e) => setFilterSubCategory(e.target.value)}
+              className="input md:w-40"
+            >
+              <option value="">Alle Unterkategorien</option>
+              {subCategories.map((sub) => (
+                <option key={sub} value={sub}>
+                  {sub}
+                </option>
+              ))}
+            </select>
+          )}
           <select
             value={filterLocation}
             onChange={(e) => setFilterLocation(e.target.value)}
-            className="input md:w-48"
+            className="input md:w-40"
           >
             <option value="">Alle Standorte</option>
             <option value="0">Ohne Standort</option>
@@ -300,78 +372,124 @@ export default function InventoryPage() {
         <div className="card mb-8">
           <h2 className="text-xl font-bold mb-4">Mein Lager</h2>
           {filteredMyInventory && filteredMyInventory.length > 0 ? (
-            <div className="space-y-3">
-              {filteredMyInventory.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg"
-                >
-                  <div>
-                    <p className="font-medium">{item.component.name}</p>
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                      {item.component.category && (
-                        <span>{item.component.category}</span>
-                      )}
-                      {item.location && (
-                        <span className="flex items-center gap-1">
-                          <MapPin size={12} />
-                          {item.location.name}
+            <div className="space-y-4">
+              {Object.entries(groupedMyInventory)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([category, subCategories]) => {
+                  const isExpanded = expandedCategories.has(category)
+                  const totalInCategory = Object.values(subCategories).flat().reduce((sum, item) => sum + item.quantity, 0)
+
+                  return (
+                    <div key={category} className="border border-gray-700/50 rounded-lg overflow-hidden">
+                      {/* Kategorie-Header */}
+                      <button
+                        onClick={() => toggleCategory(category)}
+                        className="w-full flex items-center justify-between p-3 bg-gray-800/70 hover:bg-gray-800 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          {isExpanded ? (
+                            <ChevronDown size={18} className="text-krt-orange" />
+                          ) : (
+                            <ChevronRight size={18} className="text-gray-400" />
+                          )}
+                          <span className="font-medium">{category}</span>
+                        </div>
+                        <span className="text-sm text-gray-400">
+                          {totalInCategory} Items
                         </span>
+                      </button>
+
+                      {/* Unterkategorien und Items */}
+                      {isExpanded && (
+                        <div className="p-3 space-y-3">
+                          {Object.entries(subCategories)
+                            .sort(([a], [b]) => a.localeCompare(b))
+                            .map(([subCategory, items]) => (
+                              <div key={subCategory}>
+                                {/* Unterkategorie-Header */}
+                                <h4 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
+                                  {subCategory}
+                                  <span className="ml-2 text-xs text-gray-500">
+                                    ({items.reduce((sum, i) => sum + i.quantity, 0)})
+                                  </span>
+                                </h4>
+
+                                {/* Items */}
+                                <div className="space-y-2">
+                                  {items.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg"
+                                    >
+                                      <div>
+                                        <p className="font-medium text-sm">{item.component.name}</p>
+                                        {item.location && (
+                                          <span className="flex items-center gap-1 text-xs text-gray-500">
+                                            <MapPin size={10} />
+                                            {item.location.name}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() =>
+                                              removeMutation.mutate({
+                                                componentId: item.component.id,
+                                                quantity: 1,
+                                                locationId: item.location?.id,
+                                              })
+                                            }
+                                            disabled={item.quantity <= 0}
+                                            className="p-1.5 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+                                          >
+                                            <Minus size={14} />
+                                          </button>
+                                          <span className="w-10 text-center font-bold">
+                                            {item.quantity}
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              addMutation.mutate({
+                                                componentId: item.component.id,
+                                                quantity: 1,
+                                                locationId: item.location?.id,
+                                              })
+                                            }
+                                            className="p-1.5 bg-gray-700 rounded hover:bg-gray-600"
+                                          >
+                                            <Plus size={14} />
+                                          </button>
+                                        </div>
+                                        <button
+                                          onClick={() =>
+                                            setTransferModal({
+                                              component: item.component,
+                                              quantity: item.quantity,
+                                              locationId: item.location?.id ?? null,
+                                            })
+                                          }
+                                          className="p-1.5 bg-krt-orange/20 text-krt-orange rounded hover:bg-krt-orange/30"
+                                        >
+                                          <ArrowRight size={14} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
                       )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() =>
-                          removeMutation.mutate({
-                            componentId: item.component.id,
-                            quantity: 1,
-                            locationId: item.location?.id,
-                          })
-                        }
-                        disabled={item.quantity <= 0}
-                        className="p-2 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50"
-                      >
-                        <Minus size={16} />
-                      </button>
-                      <span className="w-12 text-center text-lg font-bold">
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() =>
-                          addMutation.mutate({
-                            componentId: item.component.id,
-                            quantity: 1,
-                            locationId: item.location?.id,
-                          })
-                        }
-                        className="p-2 bg-gray-700 rounded-lg hover:bg-gray-600"
-                      >
-                        <Plus size={16} />
-                      </button>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setTransferModal({
-                          component: item.component,
-                          quantity: item.quantity,
-                          locationId: item.location?.id ?? null,
-                        })
-                      }
-                      className="p-2 bg-krt-orange/20 text-krt-orange rounded-lg hover:bg-krt-orange/30"
-                    >
-                      <ArrowRight size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  )
+                })}
             </div>
           ) : (
             <div className="text-center py-8">
               <Package className="mx-auto text-gray-600 mb-2" size={48} />
               <p className="text-gray-400">
-                {search || filterCategory
+                {search || filterCategory || filterSubCategory
                   ? 'Keine Komponenten gefunden.'
                   : 'Dein Lager ist leer.'}
               </p>
@@ -734,7 +852,7 @@ function ComponentSelectModal({
                     key={comp.id}
                     onClick={() => setSelectedId(comp.id)}
                     className={`w-full p-3 text-left hover:bg-gray-700/50 transition-colors ${
-                      selectedId === comp.id ? 'bg-sc-orange/20 border-l-2 border-sc-orange' : ''
+                      selectedId === comp.id ? 'bg-krt-orange/20 border-l-2 border-krt-orange' : ''
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -774,7 +892,7 @@ function ComponentSelectModal({
         {selectedComponent && (
           <div className="p-3 bg-gray-800/50 rounded-lg mb-4">
             <p className="text-sm text-gray-400 mb-1">Ausgewählt:</p>
-            <p className="font-bold text-sc-orange">{selectedComponent.name}</p>
+            <p className="font-bold text-krt-orange">{selectedComponent.name}</p>
           </div>
         )}
 

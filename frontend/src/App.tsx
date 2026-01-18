@@ -7,7 +7,7 @@ import DashboardPage from './pages/DashboardPage'
 import AttendancePage from './pages/AttendancePage'
 import LootPage from './pages/LootPage'
 import InventoryPage from './pages/InventoryPage'
-import ComponentsPage from './pages/ComponentsPage'
+import ItemsPage from './pages/ItemsPage'
 import LocationsPage from './pages/LocationsPage'
 import TreasuryPage from './pages/TreasuryPage'
 import UsersPage from './pages/UsersPage'
@@ -49,7 +49,7 @@ function App() {
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="loot" element={<LootPage />} />
         <Route path="inventory" element={<InventoryPage />} />
-        <Route path="components" element={<ComponentsPage />} />
+        <Route path="items" element={<ItemsPage />} />
         <Route path="locations" element={<LocationsPage />} />
         <Route path="treasury" element={<TreasuryPage />} />
         <Route path="users" element={<UsersPage />} />

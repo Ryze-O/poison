@@ -1,9 +1,30 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Upload, Plus, X, Check } from 'lucide-react'
-import type { AttendanceSession, User, ScanResult } from '../api/types'
+import {
+  Upload,
+  Plus,
+  X,
+  Check,
+  Clipboard,
+  UserPlus,
+  Trash2,
+  Eye,
+  CheckCircle,
+  Package,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react'
+import type { AttendanceSession, User, ScanResult, OCRData, UserRequest } from '../api/types'
+
+interface UnmatchedAssignment {
+  name: string
+  userId: number | null
+  saveAsAlias: boolean
+  createNewUser: boolean
+  newUsername: string
+}
 
 export default function AttendancePage() {
   const { user } = useAuthStore()
@@ -12,8 +33,13 @@ export default function AttendancePage() {
   const [notes, setNotes] = useState('')
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [selectedUsers, setSelectedUsers] = useState<number[]>([])
+  const [unmatchedAssignments, setUnmatchedAssignments] = useState<UnmatchedAssignment[]>([])
+  const [expandedSession, setExpandedSession] = useState<number | null>(null)
+  const [showOCRModal, setShowOCRModal] = useState<number | null>(null)
+  const [ocrData, setOcrData] = useState<OCRData | null>(null)
 
   const canCreate = user?.role !== 'member'
+  const isAdmin = user?.role === 'admin'
 
   const { data: sessions } = useQuery<AttendanceSession[]>({
     queryKey: ['attendance'],
@@ -23,7 +49,14 @@ export default function AttendancePage() {
   const { data: allUsers } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: () => apiClient.get('/api/users').then((r) => r.data),
-    enabled: isCreating,
+    enabled: isCreating || showOCRModal !== null,
+  })
+
+  const { data: pendingRequests } = useQuery<UserRequest[]>({
+    queryKey: ['user-requests', 'pending'],
+    queryFn: () =>
+      apiClient.get('/api/attendance/user-requests?status_filter=pending').then((r) => r.data),
+    enabled: isAdmin,
   })
 
   const scanMutation = useMutation({
@@ -37,20 +70,88 @@ export default function AttendancePage() {
     onSuccess: (response) => {
       setScanResult(response.data)
       setSelectedUsers(response.data.matched.map((m: { user_id: number }) => m.user_id))
+      // Initialisiere unmatched assignments
+      setUnmatchedAssignments(
+        response.data.unmatched.map((name: string) => ({
+          name,
+          userId: null,
+          saveAsAlias: true,
+          createNewUser: false,
+          newUsername: name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+        }))
+      )
+    },
+  })
+
+  const addAliasMutation = useMutation({
+    mutationFn: ({ userId, alias }: { userId: number; alias: string }) =>
+      apiClient.post(`/api/users/${userId}/aliases?alias=${encodeURIComponent(alias)}`),
+  })
+
+  const createUserRequestMutation = useMutation({
+    mutationFn: (data: { username: string; display_name?: string; detected_name: string }) =>
+      apiClient.post('/api/attendance/user-requests', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-requests'] })
+    },
+  })
+
+  const approveRequestMutation = useMutation({
+    mutationFn: (requestId: number) =>
+      apiClient.post(`/api/attendance/user-requests/${requestId}/approve`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+  })
+
+  const rejectRequestMutation = useMutation({
+    mutationFn: (requestId: number) =>
+      apiClient.post(`/api/attendance/user-requests/${requestId}/reject`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-requests'] })
     },
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: { notes: string; records: { user_id: number }[] }) =>
-      apiClient.post('/api/attendance', data),
+    mutationFn: (data: {
+      notes: string
+      records: { user_id: number; detected_name?: string }[]
+      screenshot_base64?: string
+      ocr_data?: { matched: unknown[]; unmatched: string[] }
+    }) => apiClient.post('/api/attendance', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance'] })
       setIsCreating(false)
       setNotes('')
       setScanResult(null)
       setSelectedUsers([])
+      setUnmatchedAssignments([])
     },
   })
+
+  const confirmMutation = useMutation({
+    mutationFn: (sessionId: number) =>
+      apiClient.patch(`/api/attendance/${sessionId}`, { is_confirmed: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance'] })
+    },
+  })
+
+  const createLootSessionMutation = useMutation({
+    mutationFn: (attendanceSessionId: number) =>
+      apiClient.post('/api/loot', { attendance_session_id: attendanceSessionId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance'] })
+      queryClient.invalidateQueries({ queryKey: ['loot'] })
+    },
+  })
+
+  const fetchOCRData = async (sessionId: number) => {
+    const response = await apiClient.get(`/api/attendance/${sessionId}/ocr-data`)
+    setOcrData(response.data)
+    setShowOCRModal(sessionId)
+  }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -59,18 +160,81 @@ export default function AttendancePage() {
     }
   }
 
+  // Paste-Handler für Strg+V
+  const handlePaste = useCallback(
+    (e: ClipboardEvent) => {
+      if (!isCreating) return
+
+      const items = e.clipboardData?.items
+      if (!items) return
+
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (file) {
+            e.preventDefault()
+            scanMutation.mutate(file)
+            break
+          }
+        }
+      }
+    },
+    [isCreating, scanMutation]
+  )
+
+  // Event-Listener für Paste registrieren
+  useEffect(() => {
+    if (isCreating) {
+      document.addEventListener('paste', handlePaste)
+      return () => document.removeEventListener('paste', handlePaste)
+    }
+  }, [isCreating, handlePaste])
+
   const toggleUser = (userId: number) => {
     setSelectedUsers((prev) =>
-      prev.includes(userId)
-        ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     )
   }
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
+    // Zuerst Aliase speichern für zugewiesene Namen mit aktivierter Checkbox
+    const aliasPromises = unmatchedAssignments
+      .filter((item) => item.userId && item.saveAsAlias && !item.createNewUser)
+      .map((item) =>
+        addAliasMutation.mutateAsync({
+          userId: item.userId!,
+          alias: item.name,
+        })
+      )
+
+    // User-Requests für neue User erstellen
+    const userRequestPromises = unmatchedAssignments
+      .filter((item) => item.createNewUser && item.newUsername.trim().length >= 2)
+      .map((item) =>
+        createUserRequestMutation.mutateAsync({
+          username: item.newUsername.trim(),
+          display_name: item.name,
+          detected_name: item.name,
+        })
+      )
+
+    try {
+      await Promise.all([...aliasPromises, ...userRequestPromises])
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error)
+    }
+
+    // Session erstellen mit Screenshot und OCR-Daten
     createMutation.mutate({
       notes,
       records: selectedUsers.map((user_id) => ({ user_id })),
+      screenshot_base64: scanResult?.screenshot_base64,
+      ocr_data: scanResult
+        ? {
+            matched: scanResult.matched,
+            unmatched: scanResult.unmatched,
+          }
+        : undefined,
     })
   }
 
@@ -89,6 +253,51 @@ export default function AttendancePage() {
         )}
       </div>
 
+      {/* Pending User Requests (nur für Admins) */}
+      {isAdmin && pendingRequests && pendingRequests.length > 0 && (
+        <div className="card mb-8 border-2 border-yellow-600">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-yellow-500">
+            <UserPlus size={24} />
+            Offene User-Anträge ({pendingRequests.length})
+          </h2>
+          <div className="space-y-3">
+            {pendingRequests.map((request) => (
+              <div
+                key={request.id}
+                className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg"
+              >
+                <div>
+                  <span className="font-medium">{request.username}</span>
+                  {request.display_name && (
+                    <span className="text-gray-400 ml-2">({request.display_name})</span>
+                  )}
+                  <span className="text-sm text-gray-500 ml-3">
+                    OCR: "{request.detected_name}" - von{' '}
+                    {request.requested_by.display_name || request.requested_by.username}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => approveRequestMutation.mutate(request.id)}
+                    disabled={approveRequestMutation.isPending}
+                    className="btn btn-primary text-sm py-1 px-3"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button
+                    onClick={() => rejectRequestMutation.mutate(request.id)}
+                    disabled={rejectRequestMutation.isPending}
+                    className="btn bg-red-600 hover:bg-red-700 text-sm py-1 px-3"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Neue Session erstellen */}
       {isCreating && (
         <div className="card mb-8">
@@ -99,6 +308,7 @@ export default function AttendancePage() {
                 setIsCreating(false)
                 setScanResult(null)
                 setSelectedUsers([])
+                setUnmatchedAssignments([])
               }}
               className="text-gray-400 hover:text-white"
             >
@@ -119,14 +329,22 @@ export default function AttendancePage() {
               />
             </div>
 
-            {/* Screenshot Upload */}
+            {/* Screenshot Upload / Paste */}
             <div>
               <label className="label">Screenshot hochladen (OCR)</label>
-              <label className="flex items-center justify-center gap-3 p-8 border-2 border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-krt-orange transition-colors">
-                <Upload size={24} className="text-gray-400" />
-                <span className="text-gray-400">
-                  TeamSpeak/Discord Screenshot auswählen
-                </span>
+              <label className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-krt-orange transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <Upload size={24} />
+                    <span>Datei auswählen</span>
+                  </div>
+                  <span className="text-gray-600">oder</span>
+                  <div className="flex items-center gap-2 text-krt-orange">
+                    <Clipboard size={24} />
+                    <span>Strg+V zum Einfügen</span>
+                  </div>
+                </div>
+                <span className="text-sm text-gray-500">TeamSpeak/Discord Screenshot</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -135,21 +353,164 @@ export default function AttendancePage() {
                 />
               </label>
               {scanMutation.isPending && (
-                <p className="mt-2 text-krt-orange">Bild wird analysiert...</p>
+                <p className="mt-2 text-krt-orange animate-pulse">Bild wird analysiert...</p>
+              )}
+              {scanMutation.isError && (
+                <p className="mt-2 text-red-500">
+                  Fehler beim Analysieren:{' '}
+                  {(scanMutation.error as Error)?.message || 'Unbekannter Fehler'}
+                </p>
               )}
             </div>
 
             {/* Scan Ergebnis */}
             {scanResult && (
-              <div>
-                <p className="text-sm text-gray-400 mb-2">
-                  {scanResult.total_detected} Namen erkannt,{' '}
-                  {scanResult.matched.length} zugeordnet
+              <div className="space-y-4">
+                <p className="text-sm text-gray-400">
+                  {scanResult.total_detected} Namen erkannt, {scanResult.matched.length} zugeordnet
                 </p>
-                {scanResult.unmatched.length > 0 && (
-                  <p className="text-sm text-yellow-500 mb-2">
-                    Nicht zugeordnet: {scanResult.unmatched.join(', ')}
-                  </p>
+
+                {/* Zugeordnete Namen */}
+                {scanResult.matched.length > 0 && (
+                  <div>
+                    <p className="text-sm text-green-500 mb-2 flex items-center gap-2">
+                      <Check size={16} />
+                      Automatisch zugeordnet:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {scanResult.matched.map((m: { user_id: number; detected_name: string }) => {
+                        const matchedUser = allUsers?.find((u) => u.id === m.user_id)
+                        return (
+                          <span
+                            key={m.user_id}
+                            className="px-3 py-1 bg-green-900/30 border border-green-700 rounded-full text-sm text-green-300"
+                          >
+                            {matchedUser?.display_name || matchedUser?.username || m.detected_name}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Nicht zugeordnete Namen - Manuelle Zuordnung */}
+                {unmatchedAssignments.length > 0 && (
+                  <div>
+                    <p className="text-sm text-yellow-500 mb-3 flex items-center gap-2">
+                      <UserPlus size={16} />
+                      Nicht zugeordnet - Bitte manuell zuweisen:
+                    </p>
+                    <div className="space-y-2">
+                      {unmatchedAssignments.map((item, index) => (
+                        <div
+                          key={item.name}
+                          className="flex flex-col gap-2 p-3 bg-gray-800/50 rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-yellow-400 font-mono min-w-32">{item.name}</span>
+
+                            {!item.createNewUser ? (
+                              <>
+                                <select
+                                  value={item.userId || ''}
+                                  onChange={(e) => {
+                                    const newAssignments = [...unmatchedAssignments]
+                                    newAssignments[index].userId = e.target.value
+                                      ? parseInt(e.target.value)
+                                      : null
+                                    setUnmatchedAssignments(newAssignments)
+                                    if (e.target.value) {
+                                      const userId = parseInt(e.target.value)
+                                      if (!selectedUsers.includes(userId)) {
+                                        setSelectedUsers((prev) => [...prev, userId])
+                                      }
+                                    }
+                                  }}
+                                  className="input flex-1"
+                                >
+                                  <option value="">-- Ignorieren --</option>
+                                  {allUsers
+                                    ?.filter(
+                                      (u) => !selectedUsers.includes(u.id) || u.id === item.userId
+                                    )
+                                    .map((u) => (
+                                      <option key={u.id} value={u.id}>
+                                        {u.display_name || u.username}
+                                      </option>
+                                    ))}
+                                </select>
+
+                                {item.userId && (
+                                  <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer whitespace-nowrap">
+                                    <input
+                                      type="checkbox"
+                                      checked={item.saveAsAlias}
+                                      onChange={(e) => {
+                                        const newAssignments = [...unmatchedAssignments]
+                                        newAssignments[index].saveAsAlias = e.target.checked
+                                        setUnmatchedAssignments(newAssignments)
+                                      }}
+                                      className="w-4 h-4 rounded border-gray-600 text-krt-orange focus:ring-krt-orange"
+                                    />
+                                    Als Alias speichern
+                                  </label>
+                                )}
+                              </>
+                            ) : (
+                              <input
+                                type="text"
+                                value={item.newUsername}
+                                onChange={(e) => {
+                                  const newAssignments = [...unmatchedAssignments]
+                                  newAssignments[index].newUsername = e.target.value
+                                  setUnmatchedAssignments(newAssignments)
+                                }}
+                                placeholder="Benutzername für neuen User"
+                                className="input flex-1"
+                              />
+                            )}
+
+                            <button
+                              onClick={() => {
+                                const newAssignments = [...unmatchedAssignments]
+                                newAssignments[index].createNewUser = !item.createNewUser
+                                newAssignments[index].userId = null
+                                setUnmatchedAssignments(newAssignments)
+                              }}
+                              className={`btn text-sm py-1 px-3 ${
+                                item.createNewUser ? 'btn-primary' : 'bg-gray-700 hover:bg-gray-600'
+                              }`}
+                              title={
+                                item.createNewUser ? 'Abbrechen' : 'Neuen User anlegen/beantragen'
+                              }
+                            >
+                              <UserPlus size={16} />
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setUnmatchedAssignments((prev) =>
+                                  prev.filter((_, i) => i !== index)
+                                )
+                              }}
+                              className="text-gray-500 hover:text-red-400 p-1"
+                              title="Ignorieren"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+
+                          {item.createNewUser && (
+                            <p className="text-xs text-gray-500 ml-32">
+                              {isAdmin
+                                ? 'User wird direkt angelegt'
+                                : 'Antrag wird an Admin gesendet'}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             )}
@@ -169,9 +530,7 @@ export default function AttendancePage() {
                     }`}
                   >
                     {selectedUsers.includes(u.id) && <Check size={16} />}
-                    <span className="truncate">
-                      {u.display_name || u.username}
-                    </span>
+                    <span className="truncate">{u.display_name || u.username}</span>
                   </button>
                 ))}
               </div>
@@ -196,38 +555,186 @@ export default function AttendancePage() {
         {sessions?.map((session) => (
           <div key={session.id} className="card">
             <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-bold">
-                  {new Date(session.date).toLocaleDateString('de-DE', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  })}
-                </h3>
-                {session.notes && (
-                  <p className="text-gray-400">{session.notes}</p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() =>
+                    setExpandedSession(expandedSession === session.id ? null : session.id)
+                  }
+                  className="text-gray-400 hover:text-white"
+                >
+                  {expandedSession === session.id ? (
+                    <ChevronUp size={20} />
+                  ) : (
+                    <ChevronDown size={20} />
+                  )}
+                </button>
+                <div>
+                  <h3 className="text-lg font-bold flex items-center gap-2">
+                    {new Date(session.date).toLocaleDateString('de-DE', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })}
+                    {session.is_confirmed && (
+                      <CheckCircle size={18} className="text-green-500" title="Bestätigt" />
+                    )}
+                    {session.has_loot_session && (
+                      <Package size={18} className="text-krt-orange" title="Hat Loot-Session" />
+                    )}
+                  </h3>
+                  {session.notes && <p className="text-gray-400">{session.notes}</p>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">
+                  von {session.created_by.display_name || session.created_by.username}
+                </span>
+                <span className="text-sm bg-gray-700 px-2 py-1 rounded">
+                  {session.records.length} Teilnehmer
+                </span>
+              </div>
+            </div>
+
+            {/* Expanded Content */}
+            {expandedSession === session.id && (
+              <div className="mt-4 pt-4 border-t border-gray-700">
+                {/* Teilnehmer */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {session.records.map((record) => (
+                    <span key={record.id} className="px-3 py-1 bg-gray-800 rounded-full text-sm">
+                      {record.user?.display_name || record.user?.username || record.detected_name}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Actions für Offiziere */}
+                {canCreate && (
+                  <div className="flex flex-wrap gap-2">
+                    {/* OCR-Daten anzeigen */}
+                    {session.has_screenshot && !session.is_confirmed && (
+                      <button
+                        onClick={() => fetchOCRData(session.id)}
+                        className="btn bg-gray-700 hover:bg-gray-600 text-sm flex items-center gap-2"
+                      >
+                        <Eye size={16} />
+                        OCR-Auswahl anzeigen
+                      </button>
+                    )}
+
+                    {/* Bestätigen */}
+                    {!session.is_confirmed && (
+                      <button
+                        onClick={() => confirmMutation.mutate(session.id)}
+                        disabled={confirmMutation.isPending}
+                        className="btn btn-primary text-sm flex items-center gap-2"
+                      >
+                        <CheckCircle size={16} />
+                        Session bestätigen
+                      </button>
+                    )}
+
+                    {/* Loot-Session erstellen */}
+                    {!session.has_loot_session && (
+                      <button
+                        onClick={() => createLootSessionMutation.mutate(session.id)}
+                        disabled={createLootSessionMutation.isPending}
+                        className="btn bg-krt-orange hover:bg-krt-orange/80 text-sm flex items-center gap-2"
+                      >
+                        <Package size={16} />
+                        Loot-Session erstellen
+                      </button>
+                    )}
+
+                    {/* Zur Loot-Session */}
+                    {session.has_loot_session && session.loot_session_id && (
+                      <a
+                        href={`/loot?session=${session.loot_session_id}`}
+                        className="btn bg-krt-orange hover:bg-krt-orange/80 text-sm flex items-center gap-2"
+                      >
+                        <Package size={16} />
+                        Zur Loot-Session
+                      </a>
+                    )}
+                  </div>
                 )}
               </div>
-              <span className="text-sm text-gray-500">
-                von {session.created_by.display_name || session.created_by.username}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {session.records.map((record) => (
-                <span
-                  key={record.id}
-                  className="px-3 py-1 bg-gray-800 rounded-full text-sm"
-                >
-                  {record.user?.display_name ||
-                    record.user?.username ||
-                    record.detected_name}
-                </span>
-              ))}
-            </div>
+            )}
           </div>
         ))}
       </div>
+
+      {/* OCR Modal */}
+      {showOCRModal && ocrData && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="card max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold">OCR-Daten der Session</h2>
+              <button
+                onClick={() => {
+                  setShowOCRModal(null)
+                  setOcrData(null)
+                }}
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Zugeordnete Namen */}
+            {ocrData.matched.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm text-green-500 mb-2 flex items-center gap-2">
+                  <Check size={16} />
+                  Automatisch zugeordnet:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {ocrData.matched.map((m) => (
+                    <span
+                      key={m.user_id}
+                      className="px-3 py-1 bg-green-900/30 border border-green-700 rounded-full text-sm text-green-300"
+                    >
+                      {m.display_name || m.username} ← "{m.detected_name}"
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Nicht zugeordnete Namen */}
+            {ocrData.unmatched.length > 0 && (
+              <div>
+                <p className="text-sm text-yellow-500 mb-2 flex items-center gap-2">
+                  <UserPlus size={16} />
+                  Nicht zugeordnet:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {ocrData.unmatched.map((name) => (
+                    <span
+                      key={name}
+                      className="px-3 py-1 bg-yellow-900/30 border border-yellow-700 rounded-full text-sm text-yellow-300"
+                    >
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowOCRModal(null)
+                  setOcrData(null)
+                }}
+                className="btn bg-gray-700 hover:bg-gray-600"
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
