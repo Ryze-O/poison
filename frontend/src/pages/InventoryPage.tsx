@@ -655,9 +655,6 @@ export default function InventoryPage() {
           }}
           onClose={() => {
             setAddModal(false)
-            setSelectedComponent(null)
-            setAddQuantity(1)
-            setAddLocation(null)
           }}
           isPending={addMutation.isPending}
         />
