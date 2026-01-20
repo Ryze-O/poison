@@ -20,13 +20,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Add OCR fields to attendance_sessions for screenshot storage and confirmation."""
-    with op.batch_alter_table('attendance_sessions', schema=None) as batch_op:
-        # Screenshot als BLOB (temporär bis zur Bestätigung)
-        batch_op.add_column(sa.Column('screenshot_data', sa.LargeBinary(), nullable=True))
-        # OCR-Daten als JSON-String (matched/unmatched Namen)
-        batch_op.add_column(sa.Column('ocr_data', sa.Text(), nullable=True))
-        # Flag ob Session bestätigt wurde
-        batch_op.add_column(sa.Column('is_confirmed', sa.Boolean(), server_default='0', nullable=True))
+    # Prüfen welche Spalten bereits existieren
+    conn = op.get_bind()
+    result = conn.execute(sa.text("PRAGMA table_info(attendance_sessions)"))
+    columns = [row[1] for row in result]
+
+    # Spalten einzeln hinzufügen (nur wenn nicht vorhanden)
+    if 'screenshot_data' not in columns:
+        op.add_column('attendance_sessions', sa.Column('screenshot_data', sa.LargeBinary(), nullable=True))
+    if 'ocr_data' not in columns:
+        op.add_column('attendance_sessions', sa.Column('ocr_data', sa.Text(), nullable=True))
+    if 'is_confirmed' not in columns:
+        op.add_column('attendance_sessions', sa.Column('is_confirmed', sa.Boolean(), server_default='0', nullable=True))
 
     # User-Requests Tabelle für Anträge von Nicht-Admins
     from sqlalchemy import inspect

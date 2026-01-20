@@ -20,8 +20,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Add is_stackable field to components table."""
-    with op.batch_alter_table('components', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('is_stackable', sa.Boolean(), server_default='0', nullable=False))
+    # Prüfen ob Spalte bereits existiert
+    conn = op.get_bind()
+    result = conn.execute(sa.text("PRAGMA table_info(components)"))
+    columns = [row[1] for row in result]
+
+    if 'is_stackable' not in columns:
+        op.add_column('components', sa.Column('is_stackable', sa.Boolean(), server_default='0', nullable=True))
 
     # Mark existing ore/raw material items as stackable
     op.execute("""

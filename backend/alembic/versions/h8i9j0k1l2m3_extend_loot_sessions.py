@@ -20,20 +20,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Add location, date, notes, is_completed to loot_sessions."""
-    with op.batch_alter_table('loot_sessions', schema=None) as batch_op:
-        # Standort wo gelootet wurde (ForeignKey wird im Model definiert)
-        batch_op.add_column(sa.Column('location_id', sa.Integer(), nullable=True))
-        # Eigenes Datum (falls anders als Erstellungsdatum)
-        batch_op.add_column(sa.Column('date', sa.DateTime(timezone=True), nullable=True))
-        # Notizen zur Session
-        batch_op.add_column(sa.Column('notes', sa.Text(), nullable=True))
-        # Session abgeschlossen?
-        batch_op.add_column(sa.Column('is_completed', sa.Boolean(), server_default='0', nullable=False))
+    # Prüfen welche Spalten bereits existieren
+    conn = op.get_bind()
+    result = conn.execute(sa.text("PRAGMA table_info(loot_sessions)"))
+    columns = [row[1] for row in result]
 
-    # attendance_session_id optional machen (für standalone Loot-Sessions)
-    # SQLite unterstützt kein ALTER COLUMN, daher über batch_alter_table
-    with op.batch_alter_table('loot_sessions', schema=None) as batch_op:
-        batch_op.alter_column('attendance_session_id', nullable=True)
+    # Spalten einzeln hinzufügen (nur wenn nicht vorhanden)
+    if 'location_id' not in columns:
+        op.add_column('loot_sessions', sa.Column('location_id', sa.Integer(), nullable=True))
+    if 'date' not in columns:
+        op.add_column('loot_sessions', sa.Column('date', sa.DateTime(timezone=True), nullable=True))
+    if 'notes' not in columns:
+        op.add_column('loot_sessions', sa.Column('notes', sa.Text(), nullable=True))
+    if 'is_completed' not in columns:
+        op.add_column('loot_sessions', sa.Column('is_completed', sa.Boolean(), server_default='0', nullable=True))
+
+    # attendance_session_id ist bereits nullable in der DB (SQLite erlaubt das)
 
 
 def downgrade() -> None:
