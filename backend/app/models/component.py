@@ -18,6 +18,7 @@ class Component(Base):
     manufacturer = Column(String(100), nullable=True)  # Hersteller
     size = Column(Integer, nullable=True)  # Größe (1-4 etc.)
     grade = Column(String(10), nullable=True)  # A, B, C, D
+    item_class = Column(String(50), nullable=True)  # Military, Industrial, Civilian, Stealth, Competition
     sc_type = Column(String(100), nullable=True)  # Original-Typ aus API
     sc_version = Column(String(20), nullable=True)  # SC Version bei Import
 

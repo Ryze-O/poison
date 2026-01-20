@@ -23,8 +23,56 @@ export interface Component {
   manufacturer: string | null
   size: number | null
   grade: string | null
+  item_class: string | null  // Military, Industrial, Civilian, Stealth, Competition
   sc_type: string | null
   created_at: string
+}
+
+// Detaillierte Komponenten-Daten (von SC Wiki API)
+export interface ShieldStats {
+  max_shield_health: number | null
+  max_shield_regen: number | null
+  decay_ratio: number | null
+  downed_delay: number | null
+  damage_delay: number | null
+}
+
+export interface PowerStats {
+  power_base: number | null
+  power_draw: number | null
+  em_min: number | null
+  em_max: number | null
+}
+
+export interface CoolerStats {
+  cooling_rate: number | null
+  suppression_ir_factor: number | null
+  suppression_heat_factor: number | null
+}
+
+export interface QuantumDriveStats {
+  quantum_speed: number | null
+  quantum_spool_time: number | null
+  quantum_cooldown_time: number | null
+  quantum_range: number | null
+  quantum_fuel_requirement: number | null
+}
+
+export interface ComponentDetail {
+  id: number
+  name: string
+  category: string | null
+  sub_category: string | null
+  manufacturer: string | null
+  size: number | null
+  grade: string | null
+  item_class: string | null
+  description: string | null
+  shield: ShieldStats | null
+  power: PowerStats | null
+  cooler: CoolerStats | null
+  quantum_drive: QuantumDriveStats | null
+  raw_stats: Record<string, unknown> | null
 }
 
 // Standorte
@@ -125,8 +173,12 @@ export interface LootItem {
 
 export interface LootSession {
   id: number
-  attendance_session_id: number
+  attendance_session_id: number | null
   created_by: User
+  location: Location | null
+  date: string | null
+  notes: string | null
+  is_completed: boolean
   items: LootItem[]
   created_at: string
 }

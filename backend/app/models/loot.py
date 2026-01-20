@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, DateTime, ForeignKey, Boolean, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -9,14 +9,21 @@ class LootSession(Base):
     __tablename__ = "loot_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
-    attendance_session_id = Column(Integer, ForeignKey("attendance_sessions.id"), nullable=False)
+    attendance_session_id = Column(Integer, ForeignKey("attendance_sessions.id"), nullable=True)  # Optional - kann auch standalone sein
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)  # Wo wurde gelootet
+
+    # Session-Details
+    date = Column(DateTime(timezone=True), nullable=True)  # Eigenes Datum (falls anders als created_at)
+    notes = Column(Text, nullable=True)  # Notizen zur Session
+    is_completed = Column(Boolean, server_default='0', nullable=False)  # Abgeschlossen?
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     attendance_session = relationship("AttendanceSession", back_populates="loot_session")
-    created_by = relationship("User")
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    location = relationship("Location")
     items = relationship("LootItem", back_populates="loot_session", cascade="all, delete-orphan")
 
 

@@ -10,11 +10,12 @@ import {
   Clipboard,
   UserPlus,
   Trash2,
-  Eye,
   CheckCircle,
   Package,
   ChevronDown,
   ChevronUp,
+  Edit3,
+  Image,
 } from 'lucide-react'
 import type { AttendanceSession, User, ScanResult, OCRData, UserRequest } from '../api/types'
 
@@ -35,8 +36,13 @@ export default function AttendancePage() {
   const [selectedUsers, setSelectedUsers] = useState<number[]>([])
   const [unmatchedAssignments, setUnmatchedAssignments] = useState<UnmatchedAssignment[]>([])
   const [expandedSession, setExpandedSession] = useState<number | null>(null)
-  const [showOCRModal, setShowOCRModal] = useState<number | null>(null)
-  const [ocrData, setOcrData] = useState<OCRData | null>(null)
+  // Kombiniertes Edit-Modal für Session-Bearbeitung (OCR + Teilnehmer + Bestätigen)
+  const [editingSession, setEditingSession] = useState<AttendanceSession | null>(null)
+  const [editScreenshotUrl, setEditScreenshotUrl] = useState<string | null>(null)
+  const [editOcrData, setEditOcrData] = useState<OCRData | null>(null)
+  const [editSelectedUsers, setEditSelectedUsers] = useState<number[]>([])
+  // OCR-Zuordnungen für nicht erkannte Namen
+  const [ocrAssignments, setOcrAssignments] = useState<Record<string, { userId: number | null; saveAsAlias: boolean }>>({})
 
   const canCreate = user?.role !== 'member'
   const isAdmin = user?.role === 'admin'
@@ -49,7 +55,7 @@ export default function AttendancePage() {
   const { data: allUsers } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: () => apiClient.get('/api/users').then((r) => r.data),
-    enabled: isCreating || showOCRModal !== null,
+    enabled: isCreating || editingSession !== null,
   })
 
   const { data: pendingRequests } = useQuery<UserRequest[]>({
@@ -81,11 +87,6 @@ export default function AttendancePage() {
         }))
       )
     },
-  })
-
-  const addAliasMutation = useMutation({
-    mutationFn: ({ userId, alias }: { userId: number; alias: string }) =>
-      apiClient.post(`/api/users/${userId}/aliases?alias=${encodeURIComponent(alias)}`),
   })
 
   const createUserRequestMutation = useMutation({
@@ -147,10 +148,160 @@ export default function AttendancePage() {
     },
   })
 
-  const fetchOCRData = async (sessionId: number) => {
-    const response = await apiClient.get(`/api/attendance/${sessionId}/ocr-data`)
-    setOcrData(response.data)
-    setShowOCRModal(sessionId)
+  // Session löschen (Admin only)
+  const deleteSessionMutation = useMutation({
+    mutationFn: (sessionId: number) => apiClient.delete(`/api/attendance/${sessionId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance'] })
+      closeEditModal()
+    },
+  })
+
+  // Session löschen mit Bestätigung
+  const handleDeleteSession = (sessionId: number) => {
+    if (window.confirm('Session wirklich löschen? Dies kann nicht rückgängig gemacht werden.')) {
+      deleteSessionMutation.mutate(sessionId)
+    }
+  }
+
+  // Kombiniertes Edit-Modal öffnen (lädt OCR-Daten und Screenshot)
+  const openEditModal = async (session: AttendanceSession) => {
+    setEditingSession(session)
+    setEditSelectedUsers(session.records.filter(r => r.user).map(r => r.user!.id))
+    setOcrAssignments({})
+
+    // OCR-Daten laden falls vorhanden
+    if (session.has_screenshot && !session.is_confirmed) {
+      try {
+        const ocrResponse = await apiClient.get(`/api/attendance/${session.id}/ocr-data`)
+        setEditOcrData(ocrResponse.data)
+      } catch {
+        setEditOcrData(null)
+      }
+
+      // Screenshot laden
+      try {
+        const screenshotResponse = await apiClient.get(`/api/attendance/${session.id}/screenshot`, {
+          responseType: 'blob',
+        })
+        const url = URL.createObjectURL(screenshotResponse.data)
+        setEditScreenshotUrl(url)
+      } catch {
+        setEditScreenshotUrl(null)
+      }
+    } else {
+      setEditOcrData(null)
+      setEditScreenshotUrl(null)
+    }
+  }
+
+  // Edit-Modal schließen und aufräumen
+  const closeEditModal = () => {
+    setEditingSession(null)
+    setEditSelectedUsers([])
+    setEditOcrData(null)
+    setOcrAssignments({})
+    if (editScreenshotUrl) {
+      URL.revokeObjectURL(editScreenshotUrl)
+      setEditScreenshotUrl(null)
+    }
+    queryClient.invalidateQueries({ queryKey: ['attendance'] })
+  }
+
+  // Session bearbeiten - User hinzufügen
+  const addRecordMutation = useMutation({
+    mutationFn: ({ sessionId, userId, detectedName }: { sessionId: number; userId: number; detectedName?: string }) =>
+      apiClient.post(`/api/attendance/${sessionId}/records`, { user_id: userId, detected_name: detectedName }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance'] })
+    },
+  })
+
+  // Session bearbeiten - User entfernen
+  const removeRecordMutation = useMutation({
+    mutationFn: ({ sessionId, recordId }: { sessionId: number; recordId: number }) =>
+      apiClient.delete(`/api/attendance/${sessionId}/records/${recordId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance'] })
+    },
+  })
+
+  // Alias zu User hinzufügen
+  const addAliasMutation = useMutation({
+    mutationFn: ({ userId, alias }: { userId: number; alias: string }) =>
+      apiClient.post(`/api/users/${userId}/aliases?alias=${encodeURIComponent(alias)}`),
+  })
+
+  // OCR-Zuordnungen speichern und zur Session hinzufügen
+  const saveOcrAssignments = async () => {
+    if (!editingSession) return
+
+    const sessionId = editingSession.id
+    const assignments = Object.entries(ocrAssignments).filter(([, v]) => v.userId !== null)
+
+    for (const [name, { userId, saveAsAlias }] of assignments) {
+      if (userId) {
+        // User zur Session hinzufügen
+        await addRecordMutation.mutateAsync({ sessionId, userId, detectedName: name })
+
+        // Optional: Als Alias speichern
+        if (saveAsAlias) {
+          await addAliasMutation.mutateAsync({ userId, alias: name })
+        }
+      }
+    }
+
+    // OCR-Zuordnungen zurücksetzen (Modal bleibt offen)
+    setOcrAssignments({})
+    // Session-Daten neu laden
+    const updatedSessions = await queryClient.fetchQuery<AttendanceSession[]>({
+      queryKey: ['attendance'],
+      queryFn: () => apiClient.get('/api/attendance').then((r) => r.data),
+    })
+    const updatedSession = updatedSessions?.find((s: AttendanceSession) => s.id === sessionId)
+    if (updatedSession) {
+      setEditingSession(updatedSession)
+      setEditSelectedUsers(updatedSession.records.filter((r) => r.user).map((r) => r.user!.id))
+    }
+  }
+
+  // User zur Session hinzufügen
+  const handleAddUserToSession = async (userId: number) => {
+    if (!editingSession) return
+    await addRecordMutation.mutateAsync({ sessionId: editingSession.id, userId })
+    setEditSelectedUsers(prev => [...prev, userId])
+    // Session-Daten aktualisieren
+    const updatedSessions = await queryClient.fetchQuery<AttendanceSession[]>({
+      queryKey: ['attendance'],
+      queryFn: () => apiClient.get('/api/attendance').then((r) => r.data),
+    })
+    const updatedSession = updatedSessions?.find((s: AttendanceSession) => s.id === editingSession.id)
+    if (updatedSession) {
+      setEditingSession(updatedSession)
+    }
+  }
+
+  // User aus Session entfernen
+  const handleRemoveUserFromSession = async (recordId: number, userId: number) => {
+    if (!editingSession) return
+    await removeRecordMutation.mutateAsync({ sessionId: editingSession.id, recordId })
+    setEditSelectedUsers(prev => prev.filter(id => id !== userId))
+    // Session-Daten aktualisieren
+    const updatedSessions = await queryClient.fetchQuery<AttendanceSession[]>({
+      queryKey: ['attendance'],
+      queryFn: () => apiClient.get('/api/attendance').then((r) => r.data),
+    })
+    const updatedSession = updatedSessions?.find((s: AttendanceSession) => s.id === editingSession.id)
+    if (updatedSession) {
+      setEditingSession(updatedSession)
+    }
+  }
+
+  // Session bestätigen (aus dem Edit-Modal heraus)
+  const handleConfirmSession = async () => {
+    if (!editingSession) return
+    await confirmMutation.mutateAsync(editingSession.id)
+    closeEditModal()
   }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -611,28 +762,14 @@ export default function AttendancePage() {
                 {/* Actions für Offiziere */}
                 {canCreate && (
                   <div className="flex flex-wrap gap-2">
-                    {/* OCR-Daten anzeigen */}
-                    {session.has_screenshot && !session.is_confirmed && (
-                      <button
-                        onClick={() => fetchOCRData(session.id)}
-                        className="btn bg-gray-700 hover:bg-gray-600 text-sm flex items-center gap-2"
-                      >
-                        <Eye size={16} />
-                        OCR-Auswahl anzeigen
-                      </button>
-                    )}
-
-                    {/* Bestätigen */}
-                    {!session.is_confirmed && (
-                      <button
-                        onClick={() => confirmMutation.mutate(session.id)}
-                        disabled={confirmMutation.isPending}
-                        className="btn btn-primary text-sm flex items-center gap-2"
-                      >
-                        <CheckCircle size={16} />
-                        Session bestätigen
-                      </button>
-                    )}
+                    {/* Bearbeiten (kombiniertes Modal) */}
+                    <button
+                      onClick={() => openEditModal(session)}
+                      className="btn bg-gray-700 hover:bg-gray-600 text-sm flex items-center gap-2"
+                    >
+                      <Edit3 size={16} />
+                      {session.is_confirmed ? 'Ansehen' : 'Bearbeiten'}
+                    </button>
 
                     {/* Loot-Session erstellen */}
                     {!session.has_loot_session && (
@@ -664,73 +801,251 @@ export default function AttendancePage() {
         ))}
       </div>
 
-      {/* OCR Modal */}
-      {showOCRModal && ocrData && (
+      {/* Kombiniertes Edit-Modal (OCR + Teilnehmer + Bestätigen) */}
+      {editingSession && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="card max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+          <div className="card max-w-6xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">OCR-Daten der Session</h2>
-              <button
-                onClick={() => {
-                  setShowOCRModal(null)
-                  setOcrData(null)
-                }}
-                className="text-gray-400 hover:text-white"
-              >
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Edit3 size={24} />
+                Session bearbeiten
+                {editingSession.is_confirmed && (
+                  <span className="text-sm font-normal text-green-500 flex items-center gap-1">
+                    <CheckCircle size={16} /> Bestätigt
+                  </span>
+                )}
+              </h2>
+              <button onClick={closeEditModal} className="text-gray-400 hover:text-white">
                 <X size={24} />
               </button>
             </div>
 
-            {/* Zugeordnete Namen */}
-            {ocrData.matched.length > 0 && (
-              <div className="mb-4">
-                <p className="text-sm text-green-500 mb-2 flex items-center gap-2">
-                  <Check size={16} />
-                  Automatisch zugeordnet:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {ocrData.matched.map((m) => (
-                    <span
-                      key={m.user_id}
-                      className="px-3 py-1 bg-green-900/30 border border-green-700 rounded-full text-sm text-green-300"
+            {/* Session-Info */}
+            <div className="mb-6 p-4 bg-gray-800/50 rounded-lg">
+              <p className="text-lg">
+                {new Date(editingSession.date).toLocaleDateString('de-DE', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                })}
+              </p>
+              {editingSession.notes && (
+                <p className="text-sm text-gray-400 mt-1">Notizen: {editingSession.notes}</p>
+              )}
+              <p className="text-sm text-gray-500 mt-1">
+                Erstellt von {editingSession.created_by.display_name || editingSession.created_by.username}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Linke Spalte: Screenshot + OCR */}
+              <div className="space-y-4">
+                {/* Screenshot */}
+                {editScreenshotUrl && (
+                  <div>
+                    <h3 className="text-sm text-gray-400 mb-2 flex items-center gap-2">
+                      <Image size={16} />
+                      Screenshot
+                    </h3>
+                    <img
+                      src={editScreenshotUrl}
+                      alt="Session Screenshot"
+                      className="w-full rounded-lg border border-gray-700"
+                    />
+                  </div>
+                )}
+
+                {/* OCR-Daten: Automatisch zugeordnet */}
+                {editOcrData && editOcrData.matched.length > 0 && (
+                  <div>
+                    <p className="text-sm text-green-500 mb-2 flex items-center gap-2">
+                      <Check size={16} />
+                      OCR automatisch zugeordnet ({editOcrData.matched.length}):
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {editOcrData.matched.map((m) => (
+                        <span
+                          key={m.user_id}
+                          className="px-3 py-1 bg-green-900/30 border border-green-700 rounded-full text-sm text-green-300"
+                        >
+                          {m.display_name || m.username} ← "{m.detected_name}"
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* OCR-Daten: Nicht zugeordnet - Interaktiv */}
+                {editOcrData && editOcrData.unmatched.length > 0 && (
+                  <div>
+                    <p className="text-sm text-yellow-500 mb-3 flex items-center gap-2">
+                      <UserPlus size={16} />
+                      OCR nicht zugeordnet ({editOcrData.unmatched.length}):
+                    </p>
+                    <div className="space-y-2">
+                      {editOcrData.unmatched.map((name) => (
+                        <div key={name} className="p-3 bg-gray-800 rounded-lg border border-gray-700">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-yellow-300 font-medium min-w-[100px] text-sm">"{name}"</span>
+                            <select
+                              value={ocrAssignments[name]?.userId || ''}
+                              onChange={(e) => {
+                                const userId = e.target.value ? parseInt(e.target.value) : null
+                                setOcrAssignments((prev) => ({
+                                  ...prev,
+                                  [name]: { userId, saveAsAlias: prev[name]?.saveAsAlias || false },
+                                }))
+                              }}
+                              className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                            >
+                              <option value="">-- Ignorieren --</option>
+                              {allUsers
+                                ?.filter((u) => !editSelectedUsers.includes(u.id))
+                                .map((u) => (
+                                  <option key={u.id} value={u.id}>
+                                    {u.display_name || u.username}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                          {ocrAssignments[name]?.userId && (
+                            <label className="flex items-center gap-2 text-sm text-gray-400 ml-[112px]">
+                              <input
+                                type="checkbox"
+                                checked={ocrAssignments[name]?.saveAsAlias || false}
+                                onChange={(e) => {
+                                  setOcrAssignments((prev) => ({
+                                    ...prev,
+                                    [name]: { ...prev[name], saveAsAlias: e.target.checked },
+                                  }))
+                                }}
+                                className="rounded bg-gray-700 border-gray-600"
+                              />
+                              Als Alias speichern
+                            </label>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {Object.values(ocrAssignments).some((v) => v.userId !== null) && (
+                      <button
+                        onClick={saveOcrAssignments}
+                        disabled={addRecordMutation.isPending || addAliasMutation.isPending}
+                        className="btn btn-primary mt-3 w-full flex items-center justify-center gap-2"
+                      >
+                        <Check size={16} />
+                        {addRecordMutation.isPending || addAliasMutation.isPending
+                          ? 'Speichern...'
+                          : 'OCR-Zuordnungen übernehmen'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Rechte Spalte: Teilnehmer verwalten */}
+              <div className="space-y-4">
+                {/* Aktuelle Teilnehmer */}
+                <div>
+                  <h3 className="text-sm text-gray-400 mb-2">
+                    Aktuelle Teilnehmer ({editingSession.records.length})
+                  </h3>
+                  <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-2 bg-gray-800/30 rounded-lg">
+                    {editingSession.records.length === 0 ? (
+                      <span className="text-gray-500 text-sm">Keine Teilnehmer</span>
+                    ) : (
+                      editingSession.records.map((record) => (
+                        <div
+                          key={record.id}
+                          className="flex items-center gap-2 px-3 py-1 bg-krt-orange/20 border border-krt-orange rounded-full text-sm"
+                        >
+                          <span>
+                            {record.user?.display_name || record.user?.username || record.detected_name}
+                          </span>
+                          {!editingSession.is_confirmed && (
+                            <button
+                              onClick={() => handleRemoveUserFromSession(record.id, record.user?.id || 0)}
+                              disabled={removeRecordMutation.isPending}
+                              className="text-red-400 hover:text-red-300"
+                              title="Entfernen"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* User hinzufügen */}
+                {!editingSession.is_confirmed && (
+                  <div>
+                    <h3 className="text-sm text-gray-400 mb-2">User hinzufügen</h3>
+                    <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto p-2 bg-gray-800/30 rounded-lg">
+                      {allUsers
+                        ?.filter((u) => !editSelectedUsers.includes(u.id))
+                        .map((u) => (
+                          <button
+                            key={u.id}
+                            onClick={() => handleAddUserToSession(u.id)}
+                            disabled={addRecordMutation.isPending}
+                            className="flex items-center gap-2 p-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors text-sm"
+                          >
+                            <Plus size={14} />
+                            <span className="truncate">{u.display_name || u.username}</span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer mit Actions */}
+            <div className="mt-6 pt-4 border-t border-gray-700">
+              {/* Bestätigungs-Warnung */}
+              {!editingSession.is_confirmed && editScreenshotUrl && (
+                <div className="p-3 bg-yellow-900/20 border border-yellow-700 rounded-lg mb-4">
+                  <p className="text-yellow-400 text-sm">
+                    <strong>Hinweis:</strong> Nach der Bestätigung wird der Screenshot gelöscht.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-between">
+                {/* Löschen-Button links (nur Admin) */}
+                <div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleDeleteSession(editingSession.id)}
+                      disabled={deleteSessionMutation.isPending}
+                      className="btn bg-red-600 hover:bg-red-700 flex items-center gap-2"
                     >
-                      {m.display_name || m.username} ← "{m.detected_name}"
-                    </span>
-                  ))}
+                      <Trash2 size={16} />
+                      {deleteSessionMutation.isPending ? 'Löschen...' : 'Session löschen'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Andere Buttons rechts */}
+                <div className="flex gap-3">
+                  <button onClick={closeEditModal} className="btn bg-gray-700 hover:bg-gray-600">
+                    Schließen
+                  </button>
+                  {!editingSession.is_confirmed && (
+                    <button
+                      onClick={handleConfirmSession}
+                      disabled={confirmMutation.isPending || editingSession.records.length === 0}
+                      className="btn btn-primary flex items-center gap-2"
+                    >
+                      <CheckCircle size={16} />
+                      {confirmMutation.isPending ? 'Wird bestätigt...' : 'Session bestätigen'}
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
-
-            {/* Nicht zugeordnete Namen */}
-            {ocrData.unmatched.length > 0 && (
-              <div>
-                <p className="text-sm text-yellow-500 mb-2 flex items-center gap-2">
-                  <UserPlus size={16} />
-                  Nicht zugeordnet:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {ocrData.unmatched.map((name) => (
-                    <span
-                      key={name}
-                      className="px-3 py-1 bg-yellow-900/30 border border-yellow-700 rounded-full text-sm text-yellow-300"
-                    >
-                      {name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => {
-                  setShowOCRModal(null)
-                  setOcrData(null)
-                }}
-                className="btn bg-gray-700 hover:bg-gray-600"
-              >
-                Schließen
-              </button>
             </div>
           </div>
         </div>

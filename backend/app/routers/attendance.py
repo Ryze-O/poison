@@ -103,6 +103,180 @@ async def get_sessions(
     return [session_to_response(s) for s in sessions]
 
 
+# ===== User-Requests (Anträge für neue User) =====
+# WICHTIG: Diese Routen MÜSSEN vor /{session_id} kommen, sonst werden sie als session_id gematcht
+
+@router.get("/user-requests", response_model=List[UserRequestResponse])
+async def get_user_requests(
+    status_filter: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt alle User-Anträge zurück. Admin sieht alle, andere nur eigene."""
+    query = db.query(UserRequest)
+
+    if current_user.role != UserRole.ADMIN:
+        query = query.filter(UserRequest.requested_by_id == current_user.id)
+
+    if status_filter:
+        query = query.filter(UserRequest.status == status_filter)
+
+    return query.order_by(UserRequest.created_at.desc()).all()
+
+
+@router.post("/user-requests", response_model=UserRequestResponse)
+async def create_user_request(
+    request_data: UserRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Erstellt einen Antrag für einen neuen User.
+    Admins können direkt User anlegen, andere erstellen Anträge.
+    """
+    check_role(current_user, UserRole.OFFICER)
+
+    # Admin kann direkt User anlegen
+    if current_user.role == UserRole.ADMIN:
+        # Prüfe ob Username bereits existiert
+        existing = db.query(User).filter(User.username == request_data.username).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"User '{request_data.username}' existiert bereits"
+            )
+
+        # User direkt anlegen
+        new_user = User(
+            username=request_data.username,
+            display_name=request_data.display_name,
+            role=UserRole.MEMBER,
+            aliases=request_data.detected_name  # OCR-Name als erster Alias
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+
+        # Dummy-Response mit "approved" Status
+        return {
+            "id": 0,
+            "username": new_user.username,
+            "display_name": new_user.display_name,
+            "detected_name": request_data.detected_name,
+            "requested_by": current_user,
+            "status": "approved",
+            "created_at": new_user.created_at
+        }
+
+    # Prüfe ob bereits ein Antrag für diesen Username existiert
+    existing_request = db.query(UserRequest).filter(
+        UserRequest.username == request_data.username,
+        UserRequest.status == "pending"
+    ).first()
+    if existing_request:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Es existiert bereits ein Antrag für '{request_data.username}'"
+        )
+
+    # Antrag erstellen
+    user_request = UserRequest(
+        username=request_data.username,
+        display_name=request_data.display_name,
+        detected_name=request_data.detected_name,
+        requested_by_id=current_user.id
+    )
+    db.add(user_request)
+    db.commit()
+    db.refresh(user_request)
+    return user_request
+
+
+@router.post("/user-requests/{request_id}/approve")
+async def approve_user_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Genehmigt einen User-Antrag und legt den User an. Nur Admins."""
+    check_role(current_user, UserRole.ADMIN)
+
+    user_request = db.query(UserRequest).filter(UserRequest.id == request_id).first()
+    if not user_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Antrag nicht gefunden"
+        )
+
+    if user_request.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Antrag wurde bereits bearbeitet (Status: {user_request.status})"
+        )
+
+    # Prüfe ob Username bereits existiert
+    existing = db.query(User).filter(User.username == user_request.username).first()
+    if existing:
+        user_request.status = "rejected"
+        user_request.notes = f"User '{user_request.username}' existiert bereits"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User '{user_request.username}' existiert bereits"
+        )
+
+    # User anlegen
+    new_user = User(
+        username=user_request.username,
+        display_name=user_request.display_name,
+        role=UserRole.MEMBER,
+        aliases=user_request.detected_name
+    )
+    db.add(new_user)
+
+    # Antrag als genehmigt markieren
+    user_request.status = "approved"
+    db.commit()
+    db.refresh(new_user)
+
+    return {
+        "message": f"User '{new_user.username}' wurde angelegt",
+        "user_id": new_user.id
+    }
+
+
+@router.post("/user-requests/{request_id}/reject")
+async def reject_user_request(
+    request_id: int,
+    reason: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Lehnt einen User-Antrag ab. Nur Admins."""
+    check_role(current_user, UserRole.ADMIN)
+
+    user_request = db.query(UserRequest).filter(UserRequest.id == request_id).first()
+    if not user_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Antrag nicht gefunden"
+        )
+
+    if user_request.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Antrag wurde bereits bearbeitet (Status: {user_request.status})"
+        )
+
+    user_request.status = "rejected"
+    user_request.notes = reason
+    db.commit()
+
+    return {"message": "Antrag abgelehnt"}
+
+
+# ===== Session-spezifische Routen =====
+
 @router.get("/{session_id}", response_model=AttendanceSessionResponse)
 async def get_session(
     session_id: int,
@@ -288,6 +462,35 @@ async def scan_screenshot(
     }
 
 
+@router.delete("/{session_id}")
+async def delete_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Löscht eine komplette Anwesenheits-Session. Nur Admins."""
+    check_role(current_user, UserRole.ADMIN)
+
+    session = db.query(AttendanceSession).filter(
+        AttendanceSession.id == session_id
+    ).first()
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session nicht gefunden"
+        )
+
+    # Zugehörige Loot-Session auch löschen falls vorhanden
+    if session.loot_session:
+        db.delete(session.loot_session)
+
+    # Session löschen (Records werden durch CASCADE gelöscht)
+    db.delete(session)
+    db.commit()
+
+    return {"message": "Session gelöscht"}
+
+
 @router.patch("/{session_id}", response_model=AttendanceSessionResponse)
 async def update_session(
     session_id: int,
@@ -391,174 +594,3 @@ async def get_session_ocr_data(
             for u in all_users
         ]
     }
-
-
-# ===== User-Requests (Anträge für neue User) =====
-
-@router.get("/user-requests", response_model=List[UserRequestResponse])
-async def get_user_requests(
-    status_filter: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Gibt alle User-Anträge zurück. Admin sieht alle, andere nur eigene."""
-    query = db.query(UserRequest)
-
-    if current_user.role != UserRole.ADMIN:
-        query = query.filter(UserRequest.requested_by_id == current_user.id)
-
-    if status_filter:
-        query = query.filter(UserRequest.status == status_filter)
-
-    return query.order_by(UserRequest.created_at.desc()).all()
-
-
-@router.post("/user-requests", response_model=UserRequestResponse)
-async def create_user_request(
-    request_data: UserRequestCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Erstellt einen Antrag für einen neuen User.
-    Admins können direkt User anlegen, andere erstellen Anträge.
-    """
-    check_role(current_user, UserRole.OFFICER)
-
-    # Admin kann direkt User anlegen
-    if current_user.role == UserRole.ADMIN:
-        # Prüfe ob Username bereits existiert
-        existing = db.query(User).filter(User.username == request_data.username).first()
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"User '{request_data.username}' existiert bereits"
-            )
-
-        # User direkt anlegen
-        new_user = User(
-            username=request_data.username,
-            display_name=request_data.display_name,
-            role=UserRole.MEMBER,
-            aliases=request_data.detected_name  # OCR-Name als erster Alias
-        )
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-
-        # Dummy-Response mit "approved" Status
-        return {
-            "id": 0,
-            "username": new_user.username,
-            "display_name": new_user.display_name,
-            "detected_name": request_data.detected_name,
-            "requested_by": current_user,
-            "status": "approved",
-            "created_at": new_user.created_at
-        }
-
-    # Prüfe ob bereits ein Antrag für diesen Username existiert
-    existing_request = db.query(UserRequest).filter(
-        UserRequest.username == request_data.username,
-        UserRequest.status == "pending"
-    ).first()
-    if existing_request:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Es existiert bereits ein Antrag für '{request_data.username}'"
-        )
-
-    # Antrag erstellen
-    user_request = UserRequest(
-        username=request_data.username,
-        display_name=request_data.display_name,
-        detected_name=request_data.detected_name,
-        requested_by_id=current_user.id
-    )
-    db.add(user_request)
-    db.commit()
-    db.refresh(user_request)
-    return user_request
-
-
-@router.post("/user-requests/{request_id}/approve")
-async def approve_user_request(
-    request_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Genehmigt einen User-Antrag und legt den User an. Nur Admins."""
-    check_role(current_user, UserRole.ADMIN)
-
-    user_request = db.query(UserRequest).filter(UserRequest.id == request_id).first()
-    if not user_request:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Antrag nicht gefunden"
-        )
-
-    if user_request.status != "pending":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Antrag wurde bereits bearbeitet (Status: {user_request.status})"
-        )
-
-    # Prüfe ob Username bereits existiert
-    existing = db.query(User).filter(User.username == user_request.username).first()
-    if existing:
-        user_request.status = "rejected"
-        user_request.notes = f"User '{user_request.username}' existiert bereits"
-        db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"User '{user_request.username}' existiert bereits"
-        )
-
-    # User anlegen
-    new_user = User(
-        username=user_request.username,
-        display_name=user_request.display_name,
-        role=UserRole.MEMBER,
-        aliases=user_request.detected_name
-    )
-    db.add(new_user)
-
-    # Antrag als genehmigt markieren
-    user_request.status = "approved"
-    db.commit()
-    db.refresh(new_user)
-
-    return {
-        "message": f"User '{new_user.username}' wurde angelegt",
-        "user_id": new_user.id
-    }
-
-
-@router.post("/user-requests/{request_id}/reject")
-async def reject_user_request(
-    request_id: int,
-    reason: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Lehnt einen User-Antrag ab. Nur Admins."""
-    check_role(current_user, UserRole.ADMIN)
-
-    user_request = db.query(UserRequest).filter(UserRequest.id == request_id).first()
-    if not user_request:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Antrag nicht gefunden"
-        )
-
-    if user_request.status != "pending":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Antrag wurde bereits bearbeitet (Status: {user_request.status})"
-        )
-
-    user_request.status = "rejected"
-    user_request.notes = reason
-    db.commit()
-
-    return {"message": "Antrag abgelehnt"}
