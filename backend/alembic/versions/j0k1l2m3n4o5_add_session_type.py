@@ -20,8 +20,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Add session_type field to attendance_sessions table."""
-    # Direkt add_column verwenden (ohne batch für simple add)
-    op.add_column('attendance_sessions', sa.Column('session_type', sa.String(20), server_default='staffelabend', nullable=True))
+    # Prüfen ob Spalte bereits existiert (für den Fall dass Migration teilweise lief)
+    conn = op.get_bind()
+    result = conn.execute(sa.text("PRAGMA table_info(attendance_sessions)"))
+    columns = [row[1] for row in result]
+
+    if 'session_type' not in columns:
+        op.add_column('attendance_sessions', sa.Column('session_type', sa.String(20), server_default='staffelabend', nullable=True))
 
     # Mark sessions with linked loot sessions as loot_run
     op.execute("""

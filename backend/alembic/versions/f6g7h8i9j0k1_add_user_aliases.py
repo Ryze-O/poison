@@ -20,8 +20,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Add aliases column to users table and make discord_id nullable."""
-    # Für SQLite: Spalte direkt hinzufügen (ohne batch_alter_table für simple add_column)
-    op.add_column('users', sa.Column('aliases', sa.String(500), nullable=True))
+    # Prüfen ob Spalte bereits existiert (für den Fall dass Migration teilweise lief)
+    conn = op.get_bind()
+    result = conn.execute(sa.text("PRAGMA table_info(users)"))
+    columns = [row[1] for row in result]
+
+    if 'aliases' not in columns:
+        op.add_column('users', sa.Column('aliases', sa.String(500), nullable=True))
 
     # discord_id nullable machen - SQLite ignoriert ALTER COLUMN, aber die Spalte
     # ist in der Praxis bereits nullable wenn sie NULL-Werte enthält
