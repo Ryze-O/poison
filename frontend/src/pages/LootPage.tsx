@@ -39,6 +39,9 @@ export default function LootPage() {
   const [newSessionNotes, setNewSessionNotes] = useState('')
   const [newSessionLocation, setNewSessionLocation] = useState<number | null>(null)
 
+  // Edit-Session: lokaler State für Notizen (um nicht bei jedem Tastendruck zu speichern)
+  const [editNotes, setEditNotes] = useState('')
+
   // Form states für Item hinzufügen
   const [addingItem, setAddingItem] = useState(false)
   const [selectedComponent, setSelectedComponent] = useState<number | null>(null)
@@ -142,7 +145,7 @@ export default function LootPage() {
 
   // Session erstellen (standalone)
   const createSessionMutation = useMutation({
-    mutationFn: (data: { date?: string; notes?: string; location_id?: number }) =>
+    mutationFn: (data: { date?: string; notes?: string; location_id?: number; items?: unknown[] }) =>
       apiClient.post('/api/loot', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loot'] })
@@ -150,6 +153,10 @@ export default function LootPage() {
       setNewSessionDate(new Date().toISOString().split('T')[0])
       setNewSessionNotes('')
       setNewSessionLocation(null)
+    },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      console.error('Fehler beim Erstellen:', error)
+      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -267,6 +274,7 @@ export default function LootPage() {
 
   const openEditModal = (session: LootSession) => {
     setEditingSession(session)
+    setEditNotes(session.notes || '')  // Lokalen State initialisieren
     setAddingItem(false)
     setDistributingItem(null)
   }
@@ -528,93 +536,6 @@ export default function LootPage() {
             </div>
           </div>
 
-          {/* Neuen Lootort erstellen Form */}
-          {showNewLocationForm && (
-            <div className="p-4 bg-gray-800 rounded-lg mb-6 border border-krt-orange">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-medium flex items-center gap-2">
-                  <MapPin size={16} className="text-krt-orange" />
-                  Neuen Lootort erstellen
-                </h4>
-                <button
-                  onClick={() => setShowNewLocationForm(false)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label className="label">Name *</label>
-                  <input
-                    type="text"
-                    value={newLocationName}
-                    onChange={(e) => setNewLocationName(e.target.value)}
-                    placeholder="z.B. Ruin Station, GrimHEX..."
-                    className="input"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="label">System</label>
-                  <select
-                    value={newLocationSystem}
-                    onChange={(e) => setNewLocationSystem(e.target.value)}
-                    className="input"
-                  >
-                    <option value="">-- System wählen --</option>
-                    <option value="Stanton">Stanton</option>
-                    <option value="Pyro">Pyro</option>
-                    <option value="Nyx">Nyx</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Planet/Mond</label>
-                  <input
-                    type="text"
-                    value={newLocationPlanet}
-                    onChange={(e) => setNewLocationPlanet(e.target.value)}
-                    placeholder="z.B. microTech, Pyro I..."
-                    className="input"
-                  />
-                </div>
-                <div>
-                  <label className="label">Typ</label>
-                  <select
-                    value={newLocationType}
-                    onChange={(e) => setNewLocationType(e.target.value)}
-                    className="input"
-                  >
-                    <option value="">-- Typ wählen --</option>
-                    <option value="Station">Station</option>
-                    <option value="Landing Zone">Landing Zone</option>
-                    <option value="Outpost">Outpost</option>
-                    <option value="Bunker">Bunker</option>
-                    <option value="Cave">Cave</option>
-                    <option value="Asteroid">Asteroid</option>
-                    <option value="Wreck">Wreck</option>
-                  </select>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  if (newLocationName.trim()) {
-                    createLocationMutation.mutate({
-                      name: newLocationName.trim(),
-                      system_name: newLocationSystem || undefined,
-                      planet_name: newLocationPlanet || undefined,
-                      location_type: newLocationType || undefined,
-                    })
-                  }
-                }}
-                disabled={!newLocationName.trim() || createLocationMutation.isPending}
-                className="btn btn-primary"
-              >
-                {createLocationMutation.isPending ? 'Erstellen...' : 'Lootort erstellen'}
-              </button>
-            </div>
-          )}
-
           <div className="mb-6">
             <label className="label">Notizen</label>
             <input
@@ -627,11 +548,15 @@ export default function LootPage() {
           </div>
 
           <button
-            onClick={() => createSessionMutation.mutate({
-              date: newSessionDate || undefined,
-              notes: newSessionNotes || undefined,
-              location_id: newSessionLocation || undefined,
-            })}
+            onClick={() => {
+              console.log('Creating session with:', { date: newSessionDate, notes: newSessionNotes, location_id: newSessionLocation })
+              createSessionMutation.mutate({
+                date: newSessionDate || undefined,
+                notes: newSessionNotes || undefined,
+                location_id: newSessionLocation || undefined,
+                items: [],
+              })
+            }}
             disabled={createSessionMutation.isPending}
             className="btn btn-primary"
           >
@@ -793,93 +718,6 @@ export default function LootPage() {
               </button>
             </div>
 
-            {/* Neuer Lootort Form (auch im Edit-Modal) */}
-            {showNewLocationForm && (
-              <div className="p-4 bg-gray-800 rounded-lg mb-6 border border-krt-orange">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <MapPin size={16} className="text-krt-orange" />
-                    Neuen Lootort erstellen
-                  </h4>
-                  <button
-                    onClick={() => setShowNewLocationForm(false)}
-                    className="text-gray-400 hover:text-white"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                  <div>
-                    <label className="label">Name *</label>
-                    <input
-                      type="text"
-                      value={newLocationName}
-                      onChange={(e) => setNewLocationName(e.target.value)}
-                      placeholder="z.B. Ruin Station, GrimHEX..."
-                      className="input"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="label">System</label>
-                    <select
-                      value={newLocationSystem}
-                      onChange={(e) => setNewLocationSystem(e.target.value)}
-                      className="input"
-                    >
-                      <option value="">-- System wählen --</option>
-                      <option value="Stanton">Stanton</option>
-                      <option value="Pyro">Pyro</option>
-                      <option value="Nyx">Nyx</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Planet/Mond</label>
-                    <input
-                      type="text"
-                      value={newLocationPlanet}
-                      onChange={(e) => setNewLocationPlanet(e.target.value)}
-                      placeholder="z.B. microTech, Pyro I..."
-                      className="input"
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Typ</label>
-                    <select
-                      value={newLocationType}
-                      onChange={(e) => setNewLocationType(e.target.value)}
-                      className="input"
-                    >
-                      <option value="">-- Typ wählen --</option>
-                      <option value="Station">Station</option>
-                      <option value="Landing Zone">Landing Zone</option>
-                      <option value="Outpost">Outpost</option>
-                      <option value="Bunker">Bunker</option>
-                      <option value="Cave">Cave</option>
-                      <option value="Asteroid">Asteroid</option>
-                      <option value="Wreck">Wreck</option>
-                    </select>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    if (newLocationName.trim()) {
-                      createLocationMutation.mutate({
-                        name: newLocationName.trim(),
-                        system_name: newLocationSystem || undefined,
-                        planet_name: newLocationPlanet || undefined,
-                        location_type: newLocationType || undefined,
-                      })
-                    }
-                  }}
-                  disabled={!newLocationName.trim() || createLocationMutation.isPending}
-                  className="btn btn-primary"
-                >
-                  {createLocationMutation.isPending ? 'Erstellen...' : 'Lootort erstellen'}
-                </button>
-              </div>
-            )}
-
             {/* Session Details */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg">
               <div>
@@ -936,11 +774,16 @@ export default function LootPage() {
                 <label className="label">Notizen</label>
                 <input
                   type="text"
-                  value={editingSession.notes || ''}
-                  onChange={(e) => updateSessionMutation.mutate({
-                    sessionId: editingSession.id,
-                    data: { notes: e.target.value }
-                  })}
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  onBlur={() => {
+                    if (editNotes !== (editingSession.notes || '')) {
+                      updateSessionMutation.mutate({
+                        sessionId: editingSession.id,
+                        data: { notes: editNotes }
+                      })
+                    }
+                  }}
                   disabled={editingSession.is_completed}
                   placeholder="z.B. Mining-Run..."
                   className="input"
@@ -1288,6 +1131,117 @@ export default function LootPage() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Neuer Lootort Popup-Modal */}
+      {showNewLocationForm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70] p-4">
+          <div className="card max-w-lg w-full">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <MapPin size={24} className="text-krt-orange" />
+                Neuen Lootort erstellen
+              </h2>
+              <button
+                onClick={() => {
+                  setShowNewLocationForm(false)
+                  setNewLocationName('')
+                  setNewLocationSystem('')
+                  setNewLocationPlanet('')
+                  setNewLocationType('')
+                }}
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="label">Name *</label>
+                <input
+                  type="text"
+                  value={newLocationName}
+                  onChange={(e) => setNewLocationName(e.target.value)}
+                  placeholder="z.B. Ruin Station, GrimHEX..."
+                  className="input"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="label">System</label>
+                <select
+                  value={newLocationSystem}
+                  onChange={(e) => setNewLocationSystem(e.target.value)}
+                  className="input"
+                >
+                  <option value="">-- System wählen --</option>
+                  <option value="Stanton">Stanton</option>
+                  <option value="Pyro">Pyro</option>
+                  <option value="Nyx">Nyx</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Planet/Mond</label>
+                <input
+                  type="text"
+                  value={newLocationPlanet}
+                  onChange={(e) => setNewLocationPlanet(e.target.value)}
+                  placeholder="z.B. microTech, Pyro I..."
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label">Typ</label>
+                <select
+                  value={newLocationType}
+                  onChange={(e) => setNewLocationType(e.target.value)}
+                  className="input"
+                >
+                  <option value="">-- Typ wählen --</option>
+                  <option value="Station">Station</option>
+                  <option value="Landing Zone">Landing Zone</option>
+                  <option value="Outpost">Outpost</option>
+                  <option value="Bunker">Bunker</option>
+                  <option value="Cave">Cave</option>
+                  <option value="Asteroid">Asteroid</option>
+                  <option value="Wreck">Wreck</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowNewLocationForm(false)
+                  setNewLocationName('')
+                  setNewLocationSystem('')
+                  setNewLocationPlanet('')
+                  setNewLocationType('')
+                }}
+                className="btn bg-gray-700 hover:bg-gray-600"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={() => {
+                  if (newLocationName.trim()) {
+                    createLocationMutation.mutate({
+                      name: newLocationName.trim(),
+                      system_name: newLocationSystem || undefined,
+                      planet_name: newLocationPlanet || undefined,
+                      location_type: newLocationType || undefined,
+                    })
+                  }
+                }}
+                disabled={!newLocationName.trim() || createLocationMutation.isPending}
+                className="btn btn-primary"
+              >
+                {createLocationMutation.isPending ? 'Erstellen...' : 'Lootort erstellen'}
+              </button>
             </div>
           </div>
         </div>
