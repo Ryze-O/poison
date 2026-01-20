@@ -11,7 +11,7 @@ from app.models.component import Component
 from app.models.location import Location
 from app.schemas.loot import LootSessionCreate, LootSessionResponse, LootItemCreate, LootDistributionCreate, LootSessionUpdate, BatchDistributionCreate
 from app.auth.jwt import get_current_user
-from app.auth.dependencies import check_role_or_pioneer
+from app.auth.dependencies import check_role, check_role_or_pioneer
 
 router = APIRouter()
 
