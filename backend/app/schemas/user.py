@@ -29,3 +29,31 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+
+# Gäste-Token Schemas
+class GuestTokenCreate(BaseModel):
+    name: str  # Anzeigename für den Gast
+    role: UserRole = UserRole.MEMBER
+    expires_in_days: Optional[int] = None  # Null = nie ablaufend
+
+
+class GuestTokenResponse(BaseModel):
+    id: int
+    token: str
+    name: str
+    role: UserRole
+    expires_at: Optional[datetime] = None
+    is_active: bool
+    last_used_at: Optional[datetime] = None
+    created_at: datetime
+    created_by_username: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class GuestLoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse

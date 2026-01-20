@@ -2,7 +2,8 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { RefreshCw, Database, MapPin, Package, AlertCircle, CheckCircle, Upload, FileSpreadsheet, Wallet, Users } from 'lucide-react'
+import { RefreshCw, Database, MapPin, Package, AlertCircle, CheckCircle, Upload, FileSpreadsheet, Wallet, Users, Link, Copy, Trash2, ToggleLeft, ToggleRight, Plus } from 'lucide-react'
+import type { GuestToken, UserRole } from '../api/types'
 
 interface SCImportStats {
   components_added: number
@@ -36,11 +37,25 @@ export default function AdminPage() {
   const treasuryFileRef = useRef<HTMLInputElement>(null)
   const membersFileRef = useRef<HTMLInputElement>(null)
 
+  // Gäste-Token States
+  const [showNewTokenForm, setShowNewTokenForm] = useState(false)
+  const [newTokenName, setNewTokenName] = useState('')
+  const [newTokenRole, setNewTokenRole] = useState<UserRole>('member')
+  const [newTokenExpiresDays, setNewTokenExpiresDays] = useState<number | null>(null)
+  const [copiedToken, setCopiedToken] = useState<string | null>(null)
+
   const isAdmin = user?.role === 'admin'
 
   const { data: stats, isLoading: statsLoading } = useQuery<SCStats>({
     queryKey: ['sc-stats'],
     queryFn: () => apiClient.get('/api/sc/stats').then((r) => r.data),
+    enabled: isAdmin,
+  })
+
+  // Gäste-Tokens
+  const { data: guestTokens } = useQuery<GuestToken[]>({
+    queryKey: ['guest-tokens'],
+    queryFn: () => apiClient.get('/api/auth/guest-tokens').then((r) => r.data),
     enabled: isAdmin,
   })
 
@@ -98,6 +113,35 @@ export default function AdminPage() {
     },
   })
 
+  // Gäste-Token Mutations
+  const createGuestTokenMutation = useMutation({
+    mutationFn: (data: { name: string; role: UserRole; expires_in_days: number | null }) =>
+      apiClient.post('/api/auth/guest-tokens', data).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['guest-tokens'] })
+      setShowNewTokenForm(false)
+      setNewTokenName('')
+      setNewTokenRole('member')
+      setNewTokenExpiresDays(null)
+    },
+  })
+
+  const toggleGuestTokenMutation = useMutation({
+    mutationFn: (tokenId: number) =>
+      apiClient.post(`/api/auth/guest-tokens/${tokenId}/toggle`).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['guest-tokens'] })
+    },
+  })
+
+  const deleteGuestTokenMutation = useMutation({
+    mutationFn: (tokenId: number) =>
+      apiClient.delete(`/api/auth/guest-tokens/${tokenId}`).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['guest-tokens'] })
+    },
+  })
+
   const handleInventoryFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -120,6 +164,24 @@ export default function AdminPage() {
       membersImportMutation.mutate(file)
       e.target.value = ''
     }
+  }
+
+  const copyGuestLink = (token: string) => {
+    const link = `${window.location.origin}/guest/${token}`
+    navigator.clipboard.writeText(link)
+    setCopiedToken(token)
+    setTimeout(() => setCopiedToken(null), 2000)
+  }
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return 'Nie'
+    return new Date(dateStr).toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
   }
 
   if (!isAdmin) {
@@ -447,6 +509,178 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Gäste-Token Section */}
+      <div className="card mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Link className="text-krt-orange" size={24} />
+            <h2 className="text-xl font-bold">Gäste-Links</h2>
+          </div>
+          <button
+            onClick={() => setShowNewTokenForm(true)}
+            className="btn btn-primary flex items-center gap-2"
+          >
+            <Plus size={18} />
+            Neuer Gäste-Link
+          </button>
+        </div>
+
+        <p className="text-gray-400 mb-6">
+          Erstelle Gäste-Links für Personen ohne Discord-Account. Sie können sich mit dem Link anmelden und die App nutzen.
+        </p>
+
+        {/* Neuen Token erstellen */}
+        {showNewTokenForm && (
+          <div className="bg-gray-800/50 rounded-lg p-4 mb-6 border border-krt-orange">
+            <h3 className="font-medium mb-4">Neuen Gäste-Link erstellen</h3>
+            <div className="grid md:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="label">Name des Gastes *</label>
+                <input
+                  type="text"
+                  value={newTokenName}
+                  onChange={(e) => setNewTokenName(e.target.value)}
+                  placeholder="z.B. Papa"
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label">Rolle</label>
+                <select
+                  value={newTokenRole}
+                  onChange={(e) => setNewTokenRole(e.target.value as UserRole)}
+                  className="input"
+                >
+                  <option value="member">Member (nur ansehen)</option>
+                  <option value="officer">Officer</option>
+                  <option value="treasurer">Treasurer</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Gültig für</label>
+                <select
+                  value={newTokenExpiresDays ?? ''}
+                  onChange={(e) => setNewTokenExpiresDays(e.target.value ? parseInt(e.target.value) : null)}
+                  className="input"
+                >
+                  <option value="">Unbegrenzt</option>
+                  <option value="1">1 Tag</option>
+                  <option value="7">7 Tage</option>
+                  <option value="30">30 Tage</option>
+                  <option value="90">90 Tage</option>
+                  <option value="365">1 Jahr</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (newTokenName.trim()) {
+                    createGuestTokenMutation.mutate({
+                      name: newTokenName.trim(),
+                      role: newTokenRole,
+                      expires_in_days: newTokenExpiresDays
+                    })
+                  }
+                }}
+                disabled={!newTokenName.trim() || createGuestTokenMutation.isPending}
+                className="btn btn-primary"
+              >
+                {createGuestTokenMutation.isPending ? 'Erstelle...' : 'Link erstellen'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowNewTokenForm(false)
+                  setNewTokenName('')
+                  setNewTokenRole('member')
+                  setNewTokenExpiresDays(null)
+                }}
+                className="btn bg-gray-700 hover:bg-gray-600"
+              >
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Token-Liste */}
+        {guestTokens && guestTokens.length > 0 ? (
+          <div className="space-y-3">
+            {guestTokens.map((token) => (
+              <div
+                key={token.id}
+                className={`bg-gray-800/50 rounded-lg p-4 border ${
+                  token.is_active ? 'border-gray-700' : 'border-red-900/50 opacity-60'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-medium">{token.name}</span>
+                      <span className={`px-2 py-0.5 rounded text-xs ${
+                        token.role === 'admin' ? 'bg-red-900/50 text-red-400' :
+                        token.role === 'treasurer' ? 'bg-yellow-900/50 text-yellow-400' :
+                        token.role === 'officer' ? 'bg-blue-900/50 text-blue-400' :
+                        'bg-gray-700 text-gray-400'
+                      }`}>
+                        {token.role}
+                      </span>
+                      {!token.is_active && (
+                        <span className="px-2 py-0.5 rounded text-xs bg-red-900/50 text-red-400">
+                          Deaktiviert
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-500 mt-1">
+                      Erstellt: {formatDate(token.created_at)}
+                      {token.expires_at && ` • Läuft ab: ${formatDate(token.expires_at)}`}
+                      {token.last_used_at && ` • Zuletzt genutzt: ${formatDate(token.last_used_at)}`}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => copyGuestLink(token.token)}
+                      className="btn bg-gray-700 hover:bg-gray-600 flex items-center gap-2"
+                      title="Link kopieren"
+                    >
+                      <Copy size={16} />
+                      {copiedToken === token.token ? 'Kopiert!' : 'Link kopieren'}
+                    </button>
+                    <button
+                      onClick={() => toggleGuestTokenMutation.mutate(token.id)}
+                      className={`btn flex items-center gap-2 ${
+                        token.is_active
+                          ? 'bg-gray-700 hover:bg-gray-600'
+                          : 'bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-400'
+                      }`}
+                      title={token.is_active ? 'Deaktivieren' : 'Aktivieren'}
+                    >
+                      {token.is_active ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Gäste-Link "${token.name}" wirklich deaktivieren?`)) {
+                          deleteGuestTokenMutation.mutate(token.id)
+                        }
+                      }}
+                      className="btn bg-red-900/50 hover:bg-red-800/50 text-red-400"
+                      title="Löschen"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            Noch keine Gäste-Links erstellt.
+          </div>
+        )}
       </div>
 
       {/* Info Box */}

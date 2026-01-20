@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Enum, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Enum, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -37,6 +37,24 @@ class User(Base):
             UserRole.ADMIN: 3,
         }
         return role_hierarchy[self.role] >= role_hierarchy[required_role]
+
+
+class GuestToken(Base):
+    """Gäste-Zugang mit Token-Link (ohne Discord-Login)."""
+    __tablename__ = "guest_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    name = Column(String(100), nullable=False)  # Anzeigename für den Gast
+    role = Column(Enum(UserRole), default=UserRole.MEMBER, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)  # Null = nie
+    is_active = Column(Boolean, default=True)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationship
+    created_by = relationship("User", foreign_keys=[created_by_id])
 
 
 class UserRequest(Base):

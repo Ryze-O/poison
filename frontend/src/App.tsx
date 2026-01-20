@@ -13,6 +13,7 @@ import LocationsPage from './pages/LocationsPage'
 import TreasuryPage from './pages/TreasuryPage'
 import UsersPage from './pages/UsersPage'
 import AdminPage from './pages/AdminPage'
+import GuestLoginPage from './pages/GuestLoginPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuthStore()
@@ -37,6 +38,7 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/success" element={<AuthCallback />} />
+      <Route path="/guest/:token" element={<GuestLoginPage />} />
 
       <Route
         path="/"

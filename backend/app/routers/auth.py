@@ -1,14 +1,17 @@
 import secrets
+from datetime import datetime, timedelta, timezone
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.config import get_settings
-from app.models.user import User, UserRole
-from app.schemas.user import UserResponse
+from app.models.user import User, UserRole, GuestToken
+from app.schemas.user import UserResponse, GuestTokenCreate, GuestTokenResponse, GuestLoginResponse
 from app.auth.discord import get_oauth_url, exchange_code, get_discord_user
 from app.auth.jwt import create_access_token, get_current_user
+from app.auth.dependencies import check_role
 
 router = APIRouter()
 settings = get_settings()
@@ -107,3 +110,169 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def logout(current_user: User = Depends(get_current_user)):
     """Logout - clientseitig wird der Token gelöscht."""
     return {"message": "Erfolgreich ausgeloggt"}
+
+
+# ==================== GÄSTE-TOKEN ENDPOINTS ====================
+
+@router.post("/guest-tokens", response_model=GuestTokenResponse)
+async def create_guest_token(
+    data: GuestTokenCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Erstellt einen neuen Gäste-Token. Nur Admins können das."""
+    check_role(current_user, UserRole.ADMIN)
+
+    # Token generieren
+    token = secrets.token_urlsafe(32)
+
+    # Ablaufdatum berechnen
+    expires_at = None
+    if data.expires_in_days:
+        expires_at = datetime.now(timezone.utc) + timedelta(days=data.expires_in_days)
+
+    guest_token = GuestToken(
+        token=token,
+        name=data.name,
+        role=data.role,
+        expires_at=expires_at,
+        created_by_id=current_user.id
+    )
+    db.add(guest_token)
+    db.commit()
+    db.refresh(guest_token)
+
+    return GuestTokenResponse(
+        id=guest_token.id,
+        token=guest_token.token,
+        name=guest_token.name,
+        role=guest_token.role,
+        expires_at=guest_token.expires_at,
+        is_active=guest_token.is_active,
+        last_used_at=guest_token.last_used_at,
+        created_at=guest_token.created_at,
+        created_by_username=current_user.username
+    )
+
+
+@router.get("/guest-tokens", response_model=List[GuestTokenResponse])
+async def list_guest_tokens(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Listet alle Gäste-Tokens. Nur Admins können das."""
+    check_role(current_user, UserRole.ADMIN)
+
+    tokens = db.query(GuestToken).order_by(GuestToken.created_at.desc()).all()
+
+    result = []
+    for t in tokens:
+        creator = db.query(User).filter(User.id == t.created_by_id).first()
+        result.append(GuestTokenResponse(
+            id=t.id,
+            token=t.token,
+            name=t.name,
+            role=t.role,
+            expires_at=t.expires_at,
+            is_active=t.is_active,
+            last_used_at=t.last_used_at,
+            created_at=t.created_at,
+            created_by_username=creator.username if creator else None
+        ))
+    return result
+
+
+@router.delete("/guest-tokens/{token_id}")
+async def delete_guest_token(
+    token_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Löscht/deaktiviert einen Gäste-Token. Nur Admins können das."""
+    check_role(current_user, UserRole.ADMIN)
+
+    guest_token = db.query(GuestToken).filter(GuestToken.id == token_id).first()
+    if not guest_token:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Token nicht gefunden"
+        )
+
+    guest_token.is_active = False
+    db.commit()
+    return {"message": "Token deaktiviert"}
+
+
+@router.post("/guest-tokens/{token_id}/toggle")
+async def toggle_guest_token(
+    token_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Aktiviert/Deaktiviert einen Gäste-Token. Nur Admins können das."""
+    check_role(current_user, UserRole.ADMIN)
+
+    guest_token = db.query(GuestToken).filter(GuestToken.id == token_id).first()
+    if not guest_token:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Token nicht gefunden"
+        )
+
+    guest_token.is_active = not guest_token.is_active
+    db.commit()
+    return {"is_active": guest_token.is_active}
+
+
+@router.get("/guest/{token}")
+async def guest_login(token: str, db: Session = Depends(get_db)):
+    """
+    Gäste-Login mit Token.
+    Erstellt einen temporären "Gast"-User und gibt JWT zurück.
+    """
+    guest_token = db.query(GuestToken).filter(GuestToken.token == token).first()
+
+    if not guest_token:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ungültiger Gäste-Link"
+        )
+
+    if not guest_token.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dieser Gäste-Link wurde deaktiviert"
+        )
+
+    if guest_token.expires_at and guest_token.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dieser Gäste-Link ist abgelaufen"
+        )
+
+    # Prüfen ob ein User für diesen Guest-Token existiert, sonst erstellen
+    guest_user = db.query(User).filter(
+        User.username == f"guest_{guest_token.id}"
+    ).first()
+
+    if not guest_user:
+        guest_user = User(
+            username=f"guest_{guest_token.id}",
+            display_name=guest_token.name,
+            role=guest_token.role,
+            discord_id=None  # Kein Discord
+        )
+        db.add(guest_user)
+        db.commit()
+        db.refresh(guest_user)
+
+    # Token-Nutzung aktualisieren
+    guest_token.last_used_at = datetime.now(timezone.utc)
+    db.commit()
+
+    # JWT Token erstellen
+    access_token = create_access_token(data={"sub": str(guest_user.id)})
+
+    # Redirect zum Frontend mit Token
+    frontend_url = f"{settings.frontend_url}/auth/success?token={access_token}"
+    return RedirectResponse(url=frontend_url)

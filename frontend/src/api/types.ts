@@ -211,3 +211,16 @@ export interface OCRData {
     display_name: string | null
   }[]
 }
+
+// Gäste-Token für Login ohne Discord
+export interface GuestToken {
+  id: number
+  token: string
+  name: string
+  role: UserRole
+  expires_at: string | null
+  is_active: boolean
+  last_used_at: string | null
+  created_at: string
+  created_by_username: string | null
+}
