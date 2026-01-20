@@ -10,7 +10,7 @@ from app.models.component import Component
 from app.models.location import Location
 from app.schemas.inventory import (
     InventoryResponse, InventoryUpdate, TransferCreate, TransferResponse,
-    InventoryLogResponse, BulkLocationTransfer
+    InventoryLogResponse, BulkLocationTransfer, BulkTransferToOfficer, PatchResetRequest
 )
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
@@ -331,6 +331,246 @@ async def bulk_move_location(
     return {
         "message": f"{moved_count} Item-Typen von '{from_name}' nach '{to_name}' verschoben",
         "moved_count": moved_count
+    }
+
+
+@router.post("/patch-reset")
+async def patch_reset(
+    request: PatchResetRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Nach einem Patch: Nicht mehr vorhandene Items entfernen,
+    verbliebene Items an neue Homelocation verschieben.
+    Nur Offiziere+.
+    """
+    check_role(current_user, UserRole.OFFICER)
+
+    # Neue Location prüfen
+    new_location = db.query(Location).filter(Location.id == request.new_location_id).first()
+    if not new_location:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Neue Location nicht gefunden"
+        )
+
+    # Alle eigenen Items laden
+    all_items = db.query(Inventory).filter(
+        Inventory.user_id == current_user.id,
+        Inventory.quantity > 0
+    ).all()
+
+    if not all_items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Keine Items im Inventar"
+        )
+
+    kept_ids = set(request.kept_item_ids)
+    removed_count = 0
+    moved_count = 0
+    total_kept = 0
+
+    for item in all_items:
+        if item.id in kept_ids:
+            # Item behalten und an neue Location verschieben
+            quantity = item.quantity
+            total_kept += quantity
+
+            # Prüfen ob am Ziel bereits ein Eintrag existiert
+            existing = db.query(Inventory).filter(
+                Inventory.user_id == current_user.id,
+                Inventory.component_id == item.component_id,
+                Inventory.location_id == request.new_location_id
+            ).first()
+
+            if existing and existing.id != item.id:
+                # Zusammenführen
+                existing.quantity += item.quantity
+                item.quantity = 0
+            else:
+                # Verschieben
+                item.location_id = request.new_location_id
+
+            moved_count += 1
+
+            # Log: Patch-Move
+            log_inventory_change(
+                db=db,
+                user_id=current_user.id,
+                component_id=item.component_id,
+                action=InventoryAction.ADD,  # Als "Add" loggen mit Note
+                quantity=0,
+                quantity_before=quantity,
+                quantity_after=quantity,
+                notes=f"Patch-Reset: Verschoben nach {new_location.name}"
+            )
+        else:
+            # Item verloren (Patch-Wipe)
+            quantity_before = item.quantity
+
+            # Log: Patch-Verlust
+            log_inventory_change(
+                db=db,
+                user_id=current_user.id,
+                component_id=item.component_id,
+                action=InventoryAction.REMOVE,
+                quantity=-item.quantity,
+                quantity_before=quantity_before,
+                quantity_after=0,
+                notes="Patch-Reset: Item verloren"
+            )
+
+            item.quantity = 0
+            removed_count += 1
+
+    db.commit()
+
+    return {
+        "message": f"Patch-Reset abgeschlossen: {moved_count} Item-Typen ({total_kept} Stück) nach '{new_location.name}' verschoben, {removed_count} Item-Typen entfernt",
+        "kept_count": moved_count,
+        "kept_total": total_kept,
+        "removed_count": removed_count,
+        "new_location": new_location.name
+    }
+
+
+@router.post("/bulk-transfer-to-officer")
+async def bulk_transfer_to_officer(
+    transfer: BulkTransferToOfficer,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Überträgt alle eigenen Items an einem Standort an einen anderen Offizier. Nur Offiziere+."""
+    check_role(current_user, UserRole.OFFICER)
+
+    # Ziel-User prüfen (muss Offizier+ sein)
+    to_user = db.query(User).filter(User.id == transfer.to_user_id).first()
+    if not to_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ziel-Benutzer nicht gefunden"
+        )
+    if to_user.role == UserRole.MEMBER:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ziel-Benutzer muss mindestens Offizier sein"
+        )
+
+    # Ziel-Location prüfen (falls angegeben)
+    if transfer.to_location_id:
+        to_location = db.query(Location).filter(Location.id == transfer.to_location_id).first()
+        if not to_location:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Ziel-Standort nicht gefunden"
+            )
+
+    # Alle Items am Quell-Standort finden
+    query = db.query(Inventory).filter(
+        Inventory.user_id == current_user.id,
+        Inventory.quantity > 0
+    )
+
+    if transfer.from_location_id is None:
+        query = query.filter(Inventory.location_id.is_(None))
+    else:
+        query = query.filter(Inventory.location_id == transfer.from_location_id)
+
+    items = query.all()
+
+    if not items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Keine Items am Quell-Standort gefunden"
+        )
+
+    transferred_count = 0
+    total_items = 0
+
+    for item in items:
+        quantity = item.quantity
+        total_items += quantity
+
+        # Prüfen ob beim Empfänger bereits ein Eintrag existiert
+        to_inventory = db.query(Inventory).filter(
+            Inventory.user_id == transfer.to_user_id,
+            Inventory.component_id == item.component_id,
+            Inventory.location_id == transfer.to_location_id
+        ).first()
+
+        to_quantity_before = to_inventory.quantity if to_inventory else 0
+
+        if to_inventory:
+            to_inventory.quantity += quantity
+        else:
+            to_inventory = Inventory(
+                user_id=transfer.to_user_id,
+                component_id=item.component_id,
+                location_id=transfer.to_location_id,
+                quantity=quantity
+            )
+            db.add(to_inventory)
+            db.flush()
+
+        # Transfer protokollieren
+        transfer_record = InventoryTransfer(
+            from_user_id=current_user.id,
+            to_user_id=transfer.to_user_id,
+            component_id=item.component_id,
+            from_location_id=item.location_id,
+            to_location_id=transfer.to_location_id,
+            quantity=quantity,
+            notes="Bulk-Transfer"
+        )
+        db.add(transfer_record)
+
+        # Historie für Sender
+        log_inventory_change(
+            db=db,
+            user_id=current_user.id,
+            component_id=item.component_id,
+            action=InventoryAction.TRANSFER_OUT,
+            quantity=-quantity,
+            quantity_before=item.quantity,
+            quantity_after=0,
+            related_user_id=transfer.to_user_id,
+            notes="Bulk-Transfer"
+        )
+
+        # Historie für Empfänger
+        log_inventory_change(
+            db=db,
+            user_id=transfer.to_user_id,
+            component_id=item.component_id,
+            action=InventoryAction.TRANSFER_IN,
+            quantity=quantity,
+            quantity_before=to_quantity_before,
+            quantity_after=to_inventory.quantity,
+            related_user_id=current_user.id,
+            notes="Bulk-Transfer"
+        )
+
+        # Sender-Item auf 0 setzen
+        item.quantity = 0
+        transferred_count += 1
+
+    db.commit()
+
+    from_name = "Ohne Standort"
+    to_name = "Ohne Standort"
+    if transfer.from_location_id:
+        from_loc = db.query(Location).filter(Location.id == transfer.from_location_id).first()
+        from_name = from_loc.name if from_loc else "Unbekannt"
+    if transfer.to_location_id:
+        to_loc = db.query(Location).filter(Location.id == transfer.to_location_id).first()
+        to_name = to_loc.name if to_loc else "Unbekannt"
+
+    return {
+        "message": f"{transferred_count} Item-Typen ({total_items} Stück) von '{from_name}' an {to_user.display_name or to_user.username} ({to_name}) übertragen",
+        "transferred_types": transferred_count,
+        "total_items": total_items
     }
 
 

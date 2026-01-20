@@ -46,6 +46,19 @@ class BulkLocationTransfer(BaseModel):
     to_location_id: Optional[int] = None    # None = kein Ort zugewiesen
 
 
+class BulkTransferToOfficer(BaseModel):
+    """Alle Items an einem Standort an einen anderen Offizier übertragen."""
+    from_location_id: Optional[int] = None  # None = kein Ort zugewiesen
+    to_user_id: int                          # Ziel-Offizier
+    to_location_id: Optional[int] = None     # Ziel-Standort (optional)
+
+
+class PatchResetRequest(BaseModel):
+    """Nach einem Patch: Items die noch vorhanden sind an neue Location verschieben."""
+    new_location_id: int                    # Neue Homelocation
+    kept_item_ids: List[int]                # IDs der Inventory-Items die noch da sind
+
+
 class TransferResponse(BaseModel):
     id: int
     from_user: UserResponse

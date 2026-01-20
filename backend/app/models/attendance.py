@@ -10,6 +10,7 @@ class AttendanceSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     date = Column(DateTime(timezone=True), server_default=func.now())
+    session_type = Column(String(20), default="staffelabend", nullable=False)  # staffelabend, loot_run, freeplay
     notes = Column(Text, nullable=True)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 

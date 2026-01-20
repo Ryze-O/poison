@@ -127,6 +127,8 @@ export interface Transaction {
 }
 
 // Anwesenheit
+export type SessionType = 'staffelabend' | 'loot_run' | 'freeplay'
+
 export interface AttendanceRecord {
   id: number
   user: User | null
@@ -137,6 +139,7 @@ export interface AttendanceRecord {
 export interface AttendanceSession {
   id: number
   date: string
+  session_type: SessionType
   notes: string | null
   created_by: User
   records: AttendanceRecord[]

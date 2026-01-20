@@ -79,6 +79,7 @@ def session_to_response(session: AttendanceSession) -> dict:
     return {
         "id": session.id,
         "date": session.date,
+        "session_type": session.session_type or "staffelabend",
         "notes": session.notes,
         "created_by": session.created_by,
         "records": session.records,
@@ -318,6 +319,7 @@ async def create_session(
         ocr_json = json.dumps(session_data.ocr_data)
 
     session = AttendanceSession(
+        session_type=session_data.session_type,
         notes=session_data.notes,
         created_by_id=current_user.id,
         screenshot_data=screenshot_bytes,

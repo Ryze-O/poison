@@ -21,6 +21,7 @@ class AttendanceRecordResponse(BaseModel):
 
 
 class AttendanceSessionCreate(BaseModel):
+    session_type: str = "staffelabend"  # staffelabend, loot_run, freeplay
     notes: Optional[str] = None
     records: List[AttendanceRecordCreate] = []
     # OCR-Daten für nachträgliche Bearbeitung
@@ -37,6 +38,7 @@ class AttendanceSessionUpdate(BaseModel):
 class AttendanceSessionResponse(BaseModel):
     id: int
     date: datetime
+    session_type: str = "staffelabend"  # staffelabend, loot_run, freeplay
     notes: Optional[str]
     created_by: UserResponse
     records: List[AttendanceRecordResponse]

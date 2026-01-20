@@ -55,6 +55,10 @@ export default function InventoryPage() {
   const [bulkMoveModal, setBulkMoveModal] = useState(false)
   const [bulkFromLocation, setBulkFromLocation] = useState<number | null>(null)
   const [bulkToLocation, setBulkToLocation] = useState<number | null>(null)
+  // Patch-Reset Modal
+  const [patchModal, setPatchModal] = useState(false)
+  const [patchNewLocation, setPatchNewLocation] = useState<number | null>(null)
+  const [patchKeptItems, setPatchKeptItems] = useState<Set<number>>(new Set())
   const [filterSubCategory, setFilterSubCategory] = useState<string>('')
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
@@ -169,6 +173,17 @@ export default function InventoryPage() {
     },
   })
 
+  const patchResetMutation = useMutation({
+    mutationFn: (data: { new_location_id: number; kept_item_ids: number[] }) =>
+      apiClient.post('/api/inventory/patch-reset', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      setPatchModal(false)
+      setPatchNewLocation(null)
+      setPatchKeptItems(new Set())
+    },
+  })
+
   // Filtern von myInventory
   const filteredMyInventory = myInventory?.filter((item) => {
     const matchesSearch = item.component.name
@@ -241,11 +256,25 @@ export default function InventoryPage() {
               Historie
             </button>
             <button
+              onClick={() => {
+                // Alle Items vorauswählen
+                if (myInventory) {
+                  setPatchKeptItems(new Set(myInventory.map(i => i.id)))
+                }
+                setPatchModal(true)
+              }}
+              className="btn bg-amber-600 hover:bg-amber-500 flex items-center gap-2"
+              title="Nach einem Patch: Items abgleichen und neue Homelocation setzen"
+            >
+              <Package size={20} />
+              Patch
+            </button>
+            <button
               onClick={() => setBulkMoveModal(true)}
               className="btn btn-secondary flex items-center gap-2"
             >
               <ArrowRightLeft size={20} />
-              Alle verschieben
+              Standort wechseln
             </button>
             <button
               onClick={() => setAddModal(true)}
@@ -731,6 +760,191 @@ export default function InventoryPage() {
                   className="btn btn-primary flex-1"
                 >
                   {bulkMoveMutation.isPending ? 'Wird verschoben...' : 'Verschieben'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Patch-Reset Modal */}
+      {patchModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="card max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
+              <Package size={24} className="text-amber-500" />
+              Patch-Reset
+            </h2>
+            <p className="text-gray-400 mb-4">
+              Nach einem Patch: Wähle aus, welche Items du noch hast. Nicht ausgewählte werden aus dem Inventar entfernt.
+              Alle behaltenen Items werden an deine neue Homelocation verschoben.
+            </p>
+
+            <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+              {/* Neue Homelocation */}
+              <div>
+                <label className="label">Neue Homelocation</label>
+                <select
+                  value={patchNewLocation ?? ''}
+                  onChange={(e) => setPatchNewLocation(e.target.value ? Number(e.target.value) : null)}
+                  className="input"
+                >
+                  <option value="">Location wählen...</option>
+                  {locations?.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Quick-Actions */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (myInventory) {
+                      setPatchKeptItems(new Set(myInventory.map(i => i.id)))
+                    }
+                  }}
+                  className="btn btn-secondary text-sm"
+                >
+                  Alle auswählen
+                </button>
+                <button
+                  onClick={() => setPatchKeptItems(new Set())}
+                  className="btn btn-secondary text-sm"
+                >
+                  Alle abwählen
+                </button>
+                <span className="ml-auto text-sm text-gray-400 self-center">
+                  {patchKeptItems.size} von {myInventory?.length || 0} ausgewählt
+                </span>
+              </div>
+
+              {/* Items Liste mit Checkboxen */}
+              <div className="flex-1 overflow-y-auto border border-gray-700 rounded-lg">
+                {myInventory && myInventory.length > 0 ? (
+                  <div className="divide-y divide-gray-700">
+                    {/* Nach Standort gruppieren */}
+                    {(() => {
+                      const byLocation: Record<string, typeof myInventory> = {}
+                      myInventory.forEach(item => {
+                        const locName = item.location?.name || 'Ohne Standort'
+                        if (!byLocation[locName]) byLocation[locName] = []
+                        byLocation[locName].push(item)
+                      })
+                      return Object.entries(byLocation).map(([locName, items]) => (
+                        <div key={locName}>
+                          <div className="bg-gray-800/50 px-3 py-2 sticky top-0 flex items-center justify-between">
+                            <span className="font-medium flex items-center gap-2">
+                              <MapPin size={14} className="text-gray-400" />
+                              {locName}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  const itemIds = items.map(i => i.id)
+                                  const allSelected = itemIds.every(id => patchKeptItems.has(id))
+                                  const newSet = new Set(patchKeptItems)
+                                  if (allSelected) {
+                                    itemIds.forEach(id => newSet.delete(id))
+                                  } else {
+                                    itemIds.forEach(id => newSet.add(id))
+                                  }
+                                  setPatchKeptItems(newSet)
+                                }}
+                                className="text-xs text-krt-orange hover:text-krt-orange/80"
+                              >
+                                {items.every(i => patchKeptItems.has(i.id)) ? 'Alle abwählen' : 'Alle auswählen'}
+                              </button>
+                              <span className="text-xs text-gray-500">
+                                {items.filter(i => patchKeptItems.has(i.id)).length}/{items.length}
+                              </span>
+                            </div>
+                          </div>
+                          {items.map(item => (
+                            <label
+                              key={item.id}
+                              className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-800/30 transition-colors ${
+                                patchKeptItems.has(item.id) ? 'bg-green-900/20' : 'bg-red-900/10'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={patchKeptItems.has(item.id)}
+                                onChange={(e) => {
+                                  const newSet = new Set(patchKeptItems)
+                                  if (e.target.checked) {
+                                    newSet.add(item.id)
+                                  } else {
+                                    newSet.delete(item.id)
+                                  }
+                                  setPatchKeptItems(newSet)
+                                }}
+                                className="rounded"
+                              />
+                              <div className="flex-1">
+                                <p className={`font-medium ${patchKeptItems.has(item.id) ? 'text-white' : 'text-gray-500 line-through'}`}>
+                                  {item.component.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {item.component.category}
+                                  {item.component.manufacturer && ` • ${item.component.manufacturer}`}
+                                </p>
+                              </div>
+                              <span className={`font-bold ${patchKeptItems.has(item.id) ? 'text-krt-orange' : 'text-gray-600'}`}>
+                                {item.quantity}x
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      ))
+                    })()}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-gray-400">
+                    Keine Items im Inventar.
+                  </div>
+                )}
+              </div>
+
+              {/* Zusammenfassung */}
+              <div className="p-3 bg-gray-800/50 rounded-lg">
+                <div className="flex justify-between text-sm">
+                  <span className="text-green-400">
+                    Behalten: {patchKeptItems.size} Items ({myInventory?.filter(i => patchKeptItems.has(i.id)).reduce((s, i) => s + i.quantity, 0) || 0} Stück)
+                  </span>
+                  <span className="text-red-400">
+                    Entfernen: {(myInventory?.length || 0) - patchKeptItems.size} Items ({myInventory?.filter(i => !patchKeptItems.has(i.id)).reduce((s, i) => s + i.quantity, 0) || 0} Stück)
+                  </span>
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setPatchModal(false)
+                    setPatchNewLocation(null)
+                    setPatchKeptItems(new Set())
+                  }}
+                  className="btn btn-secondary flex-1"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => {
+                    if (patchNewLocation) {
+                      patchResetMutation.mutate({
+                        new_location_id: patchNewLocation,
+                        kept_item_ids: Array.from(patchKeptItems),
+                      })
+                    }
+                  }}
+                  disabled={!patchNewLocation || patchResetMutation.isPending}
+                  className="btn bg-amber-600 hover:bg-amber-500 flex-1"
+                >
+                  {patchResetMutation.isPending ? 'Wird verarbeitet...' : 'Patch-Reset durchführen'}
                 </button>
               </div>
             </div>

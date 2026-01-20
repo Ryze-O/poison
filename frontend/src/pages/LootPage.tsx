@@ -17,8 +17,9 @@ import {
   ChevronUp,
   Users,
   PlusCircle,
+  RotateCcw,
 } from 'lucide-react'
-import type { LootSession, LootItem, Component, Location, User } from '../api/types'
+import type { LootSession, LootItem, Component, Location, User, AttendanceSession } from '../api/types'
 
 // Fuzzy-Search: Normalisiert String für flexibleres Matching
 // "TS2" findet "TS-2", "ts_2", "TS 2" etc.
@@ -105,6 +106,31 @@ export default function LootPage() {
     queryFn: () => apiClient.get('/api/users').then((r) => r.data),
     enabled: distributingItem !== null || showDistributionDialog,
   })
+
+  // Attendance-Session laden (falls Loot-Session mit Attendance verknüpft)
+  const { data: attendanceSession } = useQuery<AttendanceSession>({
+    queryKey: ['attendance', editingSession?.attendance_session_id],
+    queryFn: () => apiClient.get(`/api/attendance/${editingSession?.attendance_session_id}`).then((r) => r.data),
+    enabled: !!editingSession?.attendance_session_id && (distributingItem !== null || showDistributionDialog),
+  })
+
+  // Anwesende User-IDs extrahieren
+  const attendeeIds = useMemo(() => {
+    if (!attendanceSession) return new Set<number>()
+    return new Set(
+      attendanceSession.records
+        .filter(r => r.user)
+        .map(r => r.user!.id)
+    )
+  }, [attendanceSession])
+
+  // User sortiert: Anwesende zuerst, dann Rest
+  const sortedUsers = useMemo((): { attendees: User[]; nonAttendees: User[] } => {
+    if (!allUsers) return { attendees: [], nonAttendees: [] }
+    const attendees = allUsers.filter(u => attendeeIds.has(u.id))
+    const nonAttendees = allUsers.filter(u => !attendeeIds.has(u.id))
+    return { attendees, nonAttendees }
+  }, [allUsers, attendeeIds])
 
   // Locations für Verteilungs-Dialog laden
   const { data: distributionLocations } = useQuery<Location[]>({
@@ -1143,11 +1169,24 @@ export default function LootPage() {
                                 className="input flex-1"
                               >
                                 <option value="">-- User wählen --</option>
-                                {allUsers?.map((u) => (
-                                  <option key={u.id} value={u.id}>
-                                    {u.display_name || u.username}
-                                  </option>
-                                ))}
+                                {sortedUsers.attendees.length > 0 && (
+                                  <optgroup label="Anwesend">
+                                    {sortedUsers.attendees.map((u) => (
+                                      <option key={u.id} value={u.id}>
+                                        {u.display_name || u.username}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                {sortedUsers.nonAttendees.length > 0 && (
+                                  <optgroup label={sortedUsers.attendees.length > 0 ? "Nicht anwesend" : "Alle User"}>
+                                    {sortedUsers.nonAttendees.map((u) => (
+                                      <option key={u.id} value={u.id}>
+                                        {u.display_name || u.username}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
                               </select>
                               <input
                                 type="number"
@@ -1224,7 +1263,19 @@ export default function LootPage() {
                   <button onClick={closeEditModal} className="btn bg-gray-700 hover:bg-gray-600">
                     Schließen
                   </button>
-                  {!editingSession.is_completed && (
+                  {editingSession.is_completed ? (
+                    <button
+                      onClick={() => updateSessionMutation.mutate({
+                        sessionId: editingSession.id,
+                        data: { is_completed: false }
+                      })}
+                      disabled={updateSessionMutation.isPending}
+                      className="btn bg-yellow-600 hover:bg-yellow-700 flex items-center gap-2"
+                    >
+                      <RotateCcw size={16} />
+                      Session wieder öffnen
+                    </button>
+                  ) : (
                     <button
                       onClick={openDistributionDialog}
                       disabled={updateSessionMutation.isPending}
@@ -1329,30 +1380,65 @@ export default function LootPage() {
                         </p>
                       </div>
 
-                      {/* Teilnehmer-Checkboxen */}
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-3">
-                        {allUsers?.map((u) => (
-                          <label
-                            key={u.id}
-                            className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
-                              wantsLoot[u.id] ? 'bg-green-900/30 border border-green-700' : 'bg-gray-700/50 border border-gray-600'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={wantsLoot[u.id] || false}
-                              onChange={(e) => setWantsLoot({ ...wantsLoot, [u.id]: e.target.checked })}
-                              className="rounded"
-                            />
-                            <span className={wantsLoot[u.id] ? 'text-green-400' : 'text-gray-400'}>
-                              {u.display_name || u.username}
-                            </span>
-                            {wantsLoot[u.id] && perPerson > 0 && (
-                              <span className="ml-auto text-green-500 text-sm">→{perPerson}x</span>
-                            )}
-                          </label>
-                        ))}
-                      </div>
+                      {/* Teilnehmer-Checkboxen - Anwesende zuerst */}
+                      {sortedUsers.attendees.length > 0 && (
+                        <div className="mb-2">
+                          <p className="text-xs text-emerald-500 font-medium mb-1">Anwesend:</p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                            {sortedUsers.attendees.map((u) => (
+                              <label
+                                key={u.id}
+                                className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                                  wantsLoot[u.id] ? 'bg-green-900/30 border border-green-700' : 'bg-gray-700/50 border border-gray-600'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={wantsLoot[u.id] || false}
+                                  onChange={(e) => setWantsLoot({ ...wantsLoot, [u.id]: e.target.checked })}
+                                  className="rounded"
+                                />
+                                <span className={wantsLoot[u.id] ? 'text-green-400' : 'text-gray-400'}>
+                                  {u.display_name || u.username}
+                                </span>
+                                {wantsLoot[u.id] && perPerson > 0 && (
+                                  <span className="ml-auto text-green-500 text-sm">→{perPerson}x</span>
+                                )}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {sortedUsers.nonAttendees.length > 0 && (
+                        <div className="mb-3">
+                          <p className="text-xs text-gray-500 font-medium mb-1">
+                            {sortedUsers.attendees.length > 0 ? 'Nicht anwesend:' : 'Alle User:'}
+                          </p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                            {sortedUsers.nonAttendees.map((u) => (
+                              <label
+                                key={u.id}
+                                className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                                  wantsLoot[u.id] ? 'bg-green-900/30 border border-green-700' : 'bg-gray-700/50 border border-gray-600'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={wantsLoot[u.id] || false}
+                                  onChange={(e) => setWantsLoot({ ...wantsLoot, [u.id]: e.target.checked })}
+                                  className="rounded"
+                                />
+                                <span className={wantsLoot[u.id] ? 'text-green-400' : 'text-gray-400'}>
+                                  {u.display_name || u.username}
+                                </span>
+                                {wantsLoot[u.id] && perPerson > 0 && (
+                                  <span className="ml-auto text-green-500 text-sm">→{perPerson}x</span>
+                                )}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       <button
                         onClick={() => distributeItem(item)}
@@ -1388,7 +1474,7 @@ export default function LootPage() {
                         </p>
                       </div>
 
-                      {/* Pioneer-Auswahl (nur Offiziere+) */}
+                      {/* Pioneer-Auswahl (nur Offiziere+) - Anwesende zuerst */}
                       <div className="mb-3">
                         <label className="label">Pioneer auswählen (Offizier+)</label>
                         <select
@@ -1400,11 +1486,32 @@ export default function LootPage() {
                           className="input"
                         >
                           <option value="">-- Pioneer wählen --</option>
-                          {officers.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.display_name || u.username} ({u.role})
-                            </option>
-                          ))}
+                          {(() => {
+                            const attendingOfficers = officers.filter(u => attendeeIds.has(u.id))
+                            const nonAttendingOfficers = officers.filter(u => !attendeeIds.has(u.id))
+                            return (
+                              <>
+                                {attendingOfficers.length > 0 && (
+                                  <optgroup label="Anwesend">
+                                    {attendingOfficers.map((u) => (
+                                      <option key={u.id} value={u.id}>
+                                        {u.display_name || u.username} ({u.role})
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                {nonAttendingOfficers.length > 0 && (
+                                  <optgroup label={attendingOfficers.length > 0 ? "Nicht anwesend" : "Alle Offiziere"}>
+                                    {nonAttendingOfficers.map((u) => (
+                                      <option key={u.id} value={u.id}>
+                                        {u.display_name || u.username} ({u.role})
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                              </>
+                            )
+                          })()}
                         </select>
                       </div>
 

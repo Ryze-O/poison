@@ -17,7 +17,7 @@ import {
   Edit3,
   Image,
 } from 'lucide-react'
-import type { AttendanceSession, User, ScanResult, OCRData, UserRequest } from '../api/types'
+import type { AttendanceSession, User, ScanResult, OCRData, UserRequest, SessionType } from '../api/types'
 
 interface UnmatchedAssignment {
   name: string
@@ -27,10 +27,17 @@ interface UnmatchedAssignment {
   newUsername: string
 }
 
+const SESSION_TYPE_LABELS: Record<SessionType, string> = {
+  staffelabend: 'Staffelabend',
+  loot_run: 'Loot-Run',
+  freeplay: 'Freeplay',
+}
+
 export default function AttendancePage() {
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const [isCreating, setIsCreating] = useState(false)
+  const [sessionType, setSessionType] = useState<SessionType>('staffelabend')
   const [notes, setNotes] = useState('')
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [selectedUsers, setSelectedUsers] = useState<number[]>([])
@@ -116,6 +123,7 @@ export default function AttendancePage() {
 
   const createMutation = useMutation({
     mutationFn: (data: {
+      session_type: SessionType
       notes: string
       records: { user_id: number; detected_name?: string }[]
       screenshot_base64?: string
@@ -124,6 +132,7 @@ export default function AttendancePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance'] })
       setIsCreating(false)
+      setSessionType('staffelabend')
       setNotes('')
       setScanResult(null)
       setSelectedUsers([])
@@ -377,6 +386,7 @@ export default function AttendancePage() {
 
     // Session erstellen mit Screenshot und OCR-Daten
     createMutation.mutate({
+      session_type: sessionType,
       notes,
       records: selectedUsers.map((user_id) => ({ user_id })),
       screenshot_base64: scanResult?.screenshot_base64,
@@ -457,6 +467,7 @@ export default function AttendancePage() {
             <button
               onClick={() => {
                 setIsCreating(false)
+                setSessionType('staffelabend')
                 setScanResult(null)
                 setSelectedUsers([])
                 setUnmatchedAssignments([])
@@ -468,6 +479,27 @@ export default function AttendancePage() {
           </div>
 
           <div className="space-y-6">
+            {/* Session-Typ */}
+            <div>
+              <label className="label">Session-Typ</label>
+              <div className="flex gap-3">
+                {(Object.keys(SESSION_TYPE_LABELS) as SessionType[]).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setSessionType(type)}
+                    className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors ${
+                      sessionType === type
+                        ? 'bg-krt-orange text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    {SESSION_TYPE_LABELS[type]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Notizen */}
             <div>
               <label className="label">Notizen (optional)</label>
@@ -727,6 +759,13 @@ export default function AttendancePage() {
                       month: 'long',
                       year: 'numeric',
                     })}
+                    <span className={`text-sm font-normal px-2 py-0.5 rounded ${
+                      session.session_type === 'loot_run' ? 'bg-amber-600/30 text-amber-400' :
+                      session.session_type === 'freeplay' ? 'bg-blue-600/30 text-blue-400' :
+                      'bg-emerald-600/30 text-emerald-400'
+                    }`}>
+                      {SESSION_TYPE_LABELS[session.session_type] || 'Staffelabend'}
+                    </span>
                     {session.is_confirmed && (
                       <span title="Bestätigt"><CheckCircle size={18} className="text-green-500" /></span>
                     )}
