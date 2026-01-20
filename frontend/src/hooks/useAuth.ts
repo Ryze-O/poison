@@ -18,7 +18,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
 
   login: async () => {
-    const response = await apiClient.get('/auth/login')
+    const response = await apiClient.get('/api/auth/login')
     window.location.href = response.data.url
   },
 
