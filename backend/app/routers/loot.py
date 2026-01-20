@@ -11,7 +11,7 @@ from app.models.component import Component
 from app.models.location import Location
 from app.schemas.loot import LootSessionCreate, LootSessionResponse, LootItemCreate, LootDistributionCreate, LootSessionUpdate, BatchDistributionCreate
 from app.auth.jwt import get_current_user
-from app.auth.dependencies import check_role
+from app.auth.dependencies import check_role_or_pioneer
 
 router = APIRouter()
 
@@ -51,7 +51,7 @@ async def create_loot_session(
     current_user: User = Depends(get_current_user)
 ):
     """Erstellt eine neue Loot-Session. Nur Offiziere+."""
-    check_role(current_user, UserRole.OFFICER)
+    check_role_or_pioneer(current_user, UserRole.OFFICER)
 
     # Anwesenheits-Session prüfen (falls angegeben)
     if session_data.attendance_session_id:
@@ -122,7 +122,7 @@ async def update_loot_session(
     current_user: User = Depends(get_current_user)
 ):
     """Aktualisiert eine Loot-Session (Datum, Ort, Notizen, abschließen). Nur Offiziere+."""
-    check_role(current_user, UserRole.OFFICER)
+    check_role_or_pioneer(current_user, UserRole.OFFICER)
 
     session = db.query(LootSession).filter(LootSession.id == session_id).first()
     if not session:
@@ -188,7 +188,7 @@ async def add_loot_item(
     current_user: User = Depends(get_current_user)
 ):
     """Fügt ein Loot-Item zu einer Session hinzu. Nur Offiziere+."""
-    check_role(current_user, UserRole.OFFICER)
+    check_role_or_pioneer(current_user, UserRole.OFFICER)
 
     session = db.query(LootSession).filter(LootSession.id == session_id).first()
     if not session:
@@ -224,7 +224,7 @@ async def distribute_loot_item(
     current_user: User = Depends(get_current_user)
 ):
     """Verteilt ein Loot-Item an einen Spieler. Nur Offiziere+."""
-    check_role(current_user, UserRole.OFFICER)
+    check_role_or_pioneer(current_user, UserRole.OFFICER)
 
     item = db.query(LootItem).filter(
         LootItem.id == item_id,
@@ -287,7 +287,7 @@ async def distribute_loot_batch(
     current_user: User = Depends(get_current_user)
 ):
     """Verteilt ein Loot-Item gleichmäßig an mehrere User. Nur Offiziere+."""
-    check_role(current_user, UserRole.OFFICER)
+    check_role_or_pioneer(current_user, UserRole.OFFICER)
 
     item = db.query(LootItem).filter(
         LootItem.id == item_id,
@@ -362,7 +362,7 @@ async def remove_loot_item(
     current_user: User = Depends(get_current_user)
 ):
     """Entfernt ein Loot-Item. Nur wenn noch nicht verteilt. Nur Offiziere+."""
-    check_role(current_user, UserRole.OFFICER)
+    check_role_or_pioneer(current_user, UserRole.OFFICER)
 
     item = db.query(LootItem).filter(
         LootItem.id == item_id,

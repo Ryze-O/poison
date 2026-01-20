@@ -39,6 +39,15 @@ async def get_officers(
     ).all()
 
 
+@router.get("/pioneers", response_model=List[UserResponse])
+async def get_pioneers(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt alle Pioneers zurück (für Loot-Verteilung)."""
+    return db.query(User).filter(User.is_pioneer == True).all()
+
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
@@ -80,6 +89,11 @@ async def update_user(
     if user_update.role is not None:
         check_role(current_user, UserRole.ADMIN)
         user.role = user_update.role
+
+    # Pioneer-Status darf nur Admin ändern
+    if user_update.is_pioneer is not None:
+        check_role(current_user, UserRole.ADMIN)
+        user.is_pioneer = user_update.is_pioneer
 
     db.commit()
     db.refresh(user)

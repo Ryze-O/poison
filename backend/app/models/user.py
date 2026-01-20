@@ -23,6 +23,7 @@ class User(Base):
     display_name = Column(String(100), nullable=True)  # Nickname in der Staffel
     avatar = Column(String(255), nullable=True)  # Discord Avatar URL
     role = Column(Enum(UserRole), default=UserRole.MEMBER, nullable=False)
+    is_pioneer = Column(Boolean, default=False, nullable=False)  # Pioneer: verantwortlich für Versorgung
     aliases = Column(String(500), nullable=True)  # Komma-separierte OCR-Aliase (z.B. "ry-ze,ry_ze")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

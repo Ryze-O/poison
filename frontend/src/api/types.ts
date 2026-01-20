@@ -9,6 +9,7 @@ export interface User {
   display_name: string | null
   avatar: string | null
   role: UserRole
+  is_pioneer: boolean  // Pioneer: verantwortlich für Versorgung
   created_at: string
 }
 

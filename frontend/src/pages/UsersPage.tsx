@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Shield, User as UserIcon } from 'lucide-react'
+import { Shield, User as UserIcon, Compass } from 'lucide-react'
 import type { User, UserRole } from '../api/types'
 
 const roleLabels: Record<UserRole, string> = {
@@ -32,7 +32,7 @@ export default function UsersPage() {
     queryFn: () => apiClient.get('/api/users').then((r) => r.data),
   })
 
-  const updateMutation = useMutation({
+  const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: number; role: UserRole }) =>
       apiClient.patch(`/api/users/${userId}`, { role }),
     onSuccess: () => {
@@ -42,10 +42,22 @@ export default function UsersPage() {
     },
   })
 
+  const togglePioneerMutation = useMutation({
+    mutationFn: ({ userId, is_pioneer }: { userId: number; is_pioneer: boolean }) =>
+      apiClient.patch(`/api/users/${userId}`, { is_pioneer }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+  })
+
   const handleSaveRole = () => {
     if (editingUser && newRole) {
-      updateMutation.mutate({ userId: editingUser.id, role: newRole })
+      updateRoleMutation.mutate({ userId: editingUser.id, role: newRole })
     }
+  }
+
+  const handleTogglePioneer = (u: User) => {
+    togglePioneerMutation.mutate({ userId: u.id, is_pioneer: !u.is_pioneer })
   }
 
   return (
@@ -55,7 +67,7 @@ export default function UsersPage() {
       {/* Rollen-Legende */}
       <div className="card mb-8">
         <h2 className="text-lg font-bold mb-4">Rollen-Übersicht</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="flex items-center gap-2">
             <span className={`w-3 h-3 rounded-full ${roleColors.member}`} />
             <span>Mitglied - Kann sehen</span>
@@ -71,6 +83,10 @@ export default function UsersPage() {
           <div className="flex items-center gap-2">
             <span className={`w-3 h-3 rounded-full ${roleColors.admin}`} />
             <span>Admin - Alles</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Compass size={14} className="text-emerald-500" />
+            <span>Pioneer - Versorgung</span>
           </div>
         </div>
       </div>
@@ -106,23 +122,44 @@ export default function UsersPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <span
                   className={`px-3 py-1 rounded-full text-sm text-white ${roleColors[u.role]}`}
                 >
                   {roleLabels[u.role]}
                 </span>
 
+                {u.is_pioneer && (
+                  <span className="px-3 py-1 rounded-full text-sm bg-emerald-600 text-white flex items-center gap-1">
+                    <Compass size={14} />
+                    Pioneer
+                  </span>
+                )}
+
                 {isAdmin && u.id !== currentUser?.id && (
-                  <button
-                    onClick={() => {
-                      setEditingUser(u)
-                      setNewRole(u.role)
-                    }}
-                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg"
-                  >
-                    <Shield size={20} />
-                  </button>
+                  <>
+                    <button
+                      onClick={() => handleTogglePioneer(u)}
+                      className={`p-2 rounded-lg transition-colors ${
+                        u.is_pioneer
+                          ? 'text-emerald-500 bg-emerald-500/20 hover:bg-emerald-500/30'
+                          : 'text-gray-400 hover:text-emerald-500 hover:bg-gray-700'
+                      }`}
+                      title={u.is_pioneer ? 'Pioneer-Status entfernen' : 'Als Pioneer markieren'}
+                    >
+                      <Compass size={20} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingUser(u)
+                        setNewRole(u.role)
+                      }}
+                      className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg"
+                      title="Rolle ändern"
+                    >
+                      <Shield size={20} />
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -176,11 +213,11 @@ export default function UsersPage() {
                 disabled={
                   !newRole ||
                   newRole === editingUser.role ||
-                  updateMutation.isPending
+                  updateRoleMutation.isPending
                 }
                 className="btn btn-primary flex-1"
               >
-                {updateMutation.isPending ? 'Wird gespeichert...' : 'Speichern'}
+                {updateRoleMutation.isPending ? 'Wird gespeichert...' : 'Speichern'}
               </button>
             </div>
           </div>

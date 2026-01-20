@@ -34,8 +34,8 @@ export default function LootPage() {
   const [editingSession, setEditingSession] = useState<LootSession | null>(null)
   const [isCreating, setIsCreating] = useState(false)
 
-  // Form states für neue Session
-  const [newSessionDate, setNewSessionDate] = useState('')
+  // Form states für neue Session - Datum mit aktuellem Wert vorbelegen
+  const [newSessionDate, setNewSessionDate] = useState(() => new Date().toISOString().split('T')[0])
   const [newSessionNotes, setNewSessionNotes] = useState('')
   const [newSessionLocation, setNewSessionLocation] = useState<number | null>(null)
 
@@ -65,7 +65,8 @@ export default function LootPage() {
   const [selectedPioneers, setSelectedPioneers] = useState<Record<number, number | null>>({})
   const [distributionLocation, setDistributionLocation] = useState<number | null>(null)
 
-  const canCreate = user?.role !== 'member'
+  // Offiziere, Treasurer, Admins und Pioneers dürfen Loot verwalten
+  const canCreate = user?.role !== 'member' || user?.is_pioneer
   const isAdmin = user?.role === 'admin'
 
   const { data: sessions } = useQuery<LootSession[]>({
@@ -146,7 +147,7 @@ export default function LootPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loot'] })
       setIsCreating(false)
-      setNewSessionDate('')
+      setNewSessionDate(new Date().toISOString().split('T')[0])
       setNewSessionNotes('')
       setNewSessionLocation(null)
     },
@@ -501,14 +502,14 @@ export default function LootPage() {
               />
             </div>
             <div>
-              <label className="label">Standort</label>
+              <label className="label">Lootort</label>
               <div className="flex gap-2">
                 <select
                   value={newSessionLocation || ''}
                   onChange={(e) => setNewSessionLocation(e.target.value ? parseInt(e.target.value) : null)}
                   className="input flex-1"
                 >
-                  <option value="">-- Kein Standort --</option>
+                  <option value="">-- Kein Lootort --</option>
                   {locations?.map((loc) => (
                     <option key={loc.id} value={loc.id}>
                       {loc.name} {loc.system_name && `(${loc.system_name})`}
@@ -519,7 +520,7 @@ export default function LootPage() {
                   type="button"
                   onClick={() => setShowNewLocationForm(true)}
                   className="btn bg-gray-700 hover:bg-gray-600 flex items-center gap-1"
-                  title="Neuen Standort hinzufügen"
+                  title="Neuen Lootort hinzufügen"
                 >
                   <PlusCircle size={18} />
                 </button>
@@ -527,13 +528,13 @@ export default function LootPage() {
             </div>
           </div>
 
-          {/* Neuen Standort erstellen Form */}
+          {/* Neuen Lootort erstellen Form */}
           {showNewLocationForm && (
             <div className="p-4 bg-gray-800 rounded-lg mb-6 border border-krt-orange">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-medium flex items-center gap-2">
                   <MapPin size={16} className="text-krt-orange" />
-                  Neuen Standort erstellen
+                  Neuen Lootort erstellen
                 </h4>
                 <button
                   onClick={() => setShowNewLocationForm(false)}
@@ -609,7 +610,7 @@ export default function LootPage() {
                 disabled={!newLocationName.trim() || createLocationMutation.isPending}
                 className="btn btn-primary"
               >
-                {createLocationMutation.isPending ? 'Erstellen...' : 'Standort erstellen'}
+                {createLocationMutation.isPending ? 'Erstellen...' : 'Lootort erstellen'}
               </button>
             </div>
           )}
@@ -792,13 +793,13 @@ export default function LootPage() {
               </button>
             </div>
 
-            {/* Neuer Standort Form (auch im Edit-Modal) */}
+            {/* Neuer Lootort Form (auch im Edit-Modal) */}
             {showNewLocationForm && (
               <div className="p-4 bg-gray-800 rounded-lg mb-6 border border-krt-orange">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-medium flex items-center gap-2">
                     <MapPin size={16} className="text-krt-orange" />
-                    Neuen Standort erstellen
+                    Neuen Lootort erstellen
                   </h4>
                   <button
                     onClick={() => setShowNewLocationForm(false)}
@@ -874,7 +875,7 @@ export default function LootPage() {
                   disabled={!newLocationName.trim() || createLocationMutation.isPending}
                   className="btn btn-primary"
                 >
-                  {createLocationMutation.isPending ? 'Erstellen...' : 'Standort erstellen'}
+                  {createLocationMutation.isPending ? 'Erstellen...' : 'Lootort erstellen'}
                 </button>
               </div>
             )}
@@ -900,7 +901,7 @@ export default function LootPage() {
               <div>
                 <label className="label flex items-center gap-1">
                   <MapPin size={14} />
-                  Standort
+                  Lootort
                 </label>
                 <div className="flex gap-2">
                   <select
@@ -912,7 +913,7 @@ export default function LootPage() {
                     disabled={editingSession.is_completed}
                     className="input flex-1"
                   >
-                    <option value="">-- Kein Standort --</option>
+                    <option value="">-- Kein Lootort --</option>
                     {locations?.map((loc) => (
                       <option key={loc.id} value={loc.id}>
                         {loc.name} {loc.system_name && `(${loc.system_name})`}
@@ -924,7 +925,7 @@ export default function LootPage() {
                       type="button"
                       onClick={() => setShowNewLocationForm(true)}
                       className="btn bg-gray-700 hover:bg-gray-600 flex items-center gap-1"
-                      title="Neuen Standort hinzufügen"
+                      title="Neuen Lootort hinzufügen"
                     >
                       <PlusCircle size={18} />
                     </button>

@@ -17,6 +17,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     display_name: Optional[str] = None
     role: Optional[UserRole] = None
+    is_pioneer: Optional[bool] = None
 
 
 class UserResponse(UserBase):
@@ -24,6 +25,7 @@ class UserResponse(UserBase):
     discord_id: Optional[str] = None  # Nullable für CSV-importierte User ohne Discord-Login
     avatar: Optional[str] = None
     role: UserRole
+    is_pioneer: bool = False  # Pioneer: verantwortlich für Versorgung
     aliases: Optional[str] = None  # Komma-separierte OCR-Aliase
     created_at: datetime
 
