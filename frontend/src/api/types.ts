@@ -123,8 +123,20 @@ export interface Transaction {
   transaction_type: TransactionType
   description: string
   category: string | null
+  // Erweiterte Felder aus dem Bank-Spreadsheet
+  sc_version: string | null
+  item_reference: string | null
+  beneficiary: string | null
+  verified_by: string | null
+  transaction_date: string | null
   created_by: User
   created_at: string
+}
+
+export interface CSVImportResponse {
+  imported: number
+  skipped: number
+  errors: string[]
 }
 
 // Anwesenheit

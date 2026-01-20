@@ -28,9 +28,16 @@ class TreasuryTransaction(Base):
     amount = Column(Float, nullable=False)  # Positiv = Eingang, Negativ = Ausgang
     transaction_type = Column(Enum(TransactionType), nullable=False)
     description = Column(Text, nullable=False)
-    category = Column(String(50), nullable=True)  # z.B. "Spende", "Ausrüstung"
-    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    category = Column(String(100), nullable=True)  # z.B. "Einzahlung", "Schiff Fitting", "Beschaffung Schiff"
 
+    # Erweiterte Felder aus dem Bank-Spreadsheet
+    sc_version = Column(String(20), nullable=True)  # z.B. "4.0", "4.0.1", "4.1"
+    item_reference = Column(String(100), nullable=True)  # Schiff/Ausrüstung: "Polaris", "Sabre", etc.
+    beneficiary = Column(String(100), nullable=True)  # Wer hat es bekommen/gegeben
+    verified_by = Column(String(100), nullable=True)  # Beglaubigt von
+    transaction_date = Column(DateTime(timezone=True), nullable=True)  # Ursprüngliches Datum aus CSV
+
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

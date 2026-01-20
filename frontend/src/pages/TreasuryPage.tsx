@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, ArrowUpCircle, ArrowDownCircle, Edit3, Trash2, X } from 'lucide-react'
-import type { Treasury, Transaction, TransactionType } from '../api/types'
+import { Plus, ArrowUpCircle, ArrowDownCircle, Edit3, Trash2, X, Upload, ChevronDown, ChevronUp } from 'lucide-react'
+import type { Treasury, Transaction, TransactionType, CSVImportResponse } from '../api/types'
 
 export default function TreasuryPage() {
   const { user } = useAuthStore()
@@ -19,6 +19,8 @@ export default function TreasuryPage() {
 
   const canManage = user?.role === 'treasurer' || user?.role === 'admin'
   const isAdmin = user?.role === 'admin'
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [expandedTx, setExpandedTx] = useState<number | null>(null)
 
   const { data: treasury } = useQuery<Treasury>({
     queryKey: ['treasury'],
@@ -75,6 +77,37 @@ export default function TreasuryPage() {
     },
   })
 
+  const importMutation = useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      return apiClient.post<CSVImportResponse>('/api/treasury/import-csv', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['treasury'] })
+      const result = response.data
+      alert(`Import abgeschlossen: ${result.imported} importiert, ${result.skipped} übersprungen${result.errors.length > 0 ? `, ${result.errors.length} Fehler` : ''}`)
+    },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      alert(`Import-Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (window.confirm(`CSV "${file.name}" importieren? Alle Zeilen werden als neue Transaktionen hinzugefügt.`)) {
+        importMutation.mutate(file)
+      }
+    }
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const resetForm = () => {
     setFormData({
       amount: '',
@@ -130,13 +163,34 @@ export default function TreasuryPage() {
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold">Staffelkasse</h1>
         {canManage && !showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="btn btn-primary flex items-center gap-2"
-          >
-            <Plus size={20} />
-            Transaktion
-          </button>
+          <div className="flex items-center gap-3">
+            {isAdmin && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importMutation.isPending}
+                  className="btn btn-secondary flex items-center gap-2"
+                >
+                  <Upload size={20} />
+                  {importMutation.isPending ? 'Importiere...' : 'CSV Import'}
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setShowForm(true)}
+              className="btn btn-primary flex items-center gap-2"
+            >
+              <Plus size={20} />
+              Transaktion
+            </button>
+          </div>
         )}
       </div>
 
@@ -258,57 +312,122 @@ export default function TreasuryPage() {
           <h2 className="text-xl font-bold mb-4">Transaktions-Historie</h2>
           {transactions && transactions.length > 0 ? (
             <div className="space-y-3">
-              {transactions.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg"
-                >
-                  <div className="flex items-center gap-4">
-                    {tx.transaction_type === 'income' ? (
-                      <ArrowUpCircle className="text-sc-green" size={24} />
-                    ) : (
-                      <ArrowDownCircle className="text-sc-red" size={24} />
-                    )}
-                    <div>
-                      <p className="font-medium">{tx.description}</p>
-                      <p className="text-sm text-gray-400">
-                        {tx.category && `${tx.category} • `}
-                        {new Date(tx.created_at).toLocaleDateString('de-DE')} •{' '}
-                        {tx.created_by.display_name || tx.created_by.username}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <p
-                      className={`font-bold ${
-                        tx.amount > 0 ? 'text-sc-green' : 'text-sc-red'
-                      }`}
-                    >
-                      {tx.amount > 0 ? '+' : ''}
-                      {tx.amount.toLocaleString('de-DE')} aUEC
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => openEditModal(tx)}
-                        className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
-                        title="Bearbeiten"
-                      >
-                        <Edit3 size={16} />
-                      </button>
-                      {isAdmin && (
-                        <button
-                          onClick={() => handleDelete(tx)}
-                          disabled={deleteMutation.isPending}
-                          className="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded transition-colors"
-                          title="Löschen (nur Admin)"
+              {transactions.map((tx) => {
+                const hasExtendedData = tx.sc_version || tx.item_reference || tx.beneficiary || tx.verified_by || tx.transaction_date
+                const isExpanded = expandedTx === tx.id
+
+                return (
+                  <div
+                    key={tx.id}
+                    className="bg-gray-800/50 rounded-lg overflow-hidden"
+                  >
+                    <div className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        {tx.transaction_type === 'income' ? (
+                          <ArrowUpCircle className="text-sc-green flex-shrink-0" size={24} />
+                        ) : (
+                          <ArrowDownCircle className="text-sc-red flex-shrink-0" size={24} />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">{tx.description}</p>
+                          <p className="text-sm text-gray-400">
+                            {tx.category && `${tx.category} • `}
+                            {tx.transaction_date
+                              ? new Date(tx.transaction_date).toLocaleDateString('de-DE')
+                              : new Date(tx.created_at).toLocaleDateString('de-DE')
+                            }
+                            {tx.beneficiary && ` • ${tx.beneficiary}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <p
+                          className={`font-bold whitespace-nowrap ${
+                            tx.amount > 0 ? 'text-sc-green' : 'text-sc-red'
+                          }`}
                         >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
+                          {tx.amount > 0 ? '+' : ''}
+                          {tx.amount.toLocaleString('de-DE')} aUEC
+                        </p>
+                        <div className="flex items-center gap-1">
+                          {hasExtendedData && (
+                            <button
+                              onClick={() => setExpandedTx(isExpanded ? null : tx.id)}
+                              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                              title="Details anzeigen"
+                            >
+                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => openEditModal(tx)}
+                            className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                            title="Bearbeiten"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleDelete(tx)}
+                              disabled={deleteMutation.isPending}
+                              className="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded transition-colors"
+                              title="Löschen (nur Admin)"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Erweiterte Details */}
+                    {isExpanded && hasExtendedData && (
+                      <div className="px-4 pb-4 pt-0 border-t border-gray-700/50">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
+                          {tx.sc_version && (
+                            <div>
+                              <span className="text-gray-500">SC Version:</span>
+                              <span className="ml-2 text-gray-300">{tx.sc_version}</span>
+                            </div>
+                          )}
+                          {tx.item_reference && (
+                            <div>
+                              <span className="text-gray-500">Item:</span>
+                              <span className="ml-2 text-gray-300">{tx.item_reference}</span>
+                            </div>
+                          )}
+                          {tx.beneficiary && (
+                            <div>
+                              <span className="text-gray-500">Wer:</span>
+                              <span className="ml-2 text-gray-300">{tx.beneficiary}</span>
+                            </div>
+                          )}
+                          {tx.verified_by && (
+                            <div>
+                              <span className="text-gray-500">Beglaubigt von:</span>
+                              <span className="ml-2 text-gray-300">{tx.verified_by}</span>
+                            </div>
+                          )}
+                          {tx.transaction_date && (
+                            <div>
+                              <span className="text-gray-500">Originaldatum:</span>
+                              <span className="ml-2 text-gray-300">
+                                {new Date(tx.transaction_date).toLocaleString('de-DE')}
+                              </span>
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-gray-500">Erfasst von:</span>
+                            <span className="ml-2 text-gray-300">
+                              {tx.created_by.display_name || tx.created_by.username}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <p className="text-gray-400">Noch keine Transaktionen vorhanden.</p>

@@ -1,11 +1,14 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime
+import csv
+import io
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.treasury import Treasury, TreasuryTransaction, TransactionType
-from app.schemas.treasury import TreasuryResponse, TransactionCreate, TransactionUpdate, TransactionResponse
+from app.schemas.treasury import TreasuryResponse, TransactionCreate, TransactionUpdate, TransactionResponse, CSVImportResponse
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
 
@@ -207,3 +210,114 @@ async def delete_transaction(
     db.commit()
 
     return {"message": "Transaktion gelöscht"}
+
+
+@router.post("/import-csv", response_model=CSVImportResponse)
+async def import_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Importiert Transaktionen aus einer Bank-CSV.
+    Spalten: Version, Datum, Zeit, Event, Nutzen, Was, Wer, Menge, Währung, Begl. von / An
+    Nur Admin.
+    """
+    check_role(current_user, UserRole.ADMIN)
+
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nur CSV-Dateien erlaubt"
+        )
+
+    content = await file.read()
+    # Versuche verschiedene Encodings
+    for encoding in ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252']:
+        try:
+            text = content.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Konnte CSV nicht dekodieren"
+        )
+
+    treasury = get_or_create_treasury(db)
+    imported = 0
+    skipped = 0
+    errors = []
+
+    reader = csv.DictReader(io.StringIO(text))
+
+    for row_num, row in enumerate(reader, start=2):
+        try:
+            # Menge parsen (kann negativ sein für Ausgaben)
+            menge_str = row.get('Menge', '0').strip().replace(',', '.')
+            if not menge_str:
+                skipped += 1
+                continue
+
+            menge = float(menge_str)
+            if menge == 0:
+                skipped += 1
+                continue
+
+            # Transaktionstyp basierend auf Vorzeichen
+            if menge > 0:
+                transaction_type = TransactionType.INCOME
+                amount = menge
+            else:
+                transaction_type = TransactionType.EXPENSE
+                amount = menge  # Bleibt negativ
+
+            # Datum parsen
+            datum_str = row.get('Datum', '').strip()
+            zeit_str = row.get('Zeit', '').strip()
+            transaction_date = None
+            if datum_str:
+                try:
+                    # Format: DD.MM.YYYY
+                    if zeit_str:
+                        transaction_date = datetime.strptime(f"{datum_str} {zeit_str}", "%d.%m.%Y %H:%M:%S")
+                    else:
+                        transaction_date = datetime.strptime(datum_str, "%d.%m.%Y")
+                except ValueError:
+                    pass  # Datum ignorieren wenn nicht parsbar
+
+            # Beschreibung zusammensetzen
+            event = row.get('Event', '').strip()
+            description = event if event else "Import aus CSV"
+
+            # Transaktion erstellen
+            db_transaction = TreasuryTransaction(
+                amount=amount,
+                transaction_type=transaction_type,
+                description=description,
+                category=row.get('Nutzen', '').strip() or None,
+                sc_version=row.get('Version', '').strip() or None,
+                item_reference=row.get('Was', '').strip() or None,
+                beneficiary=row.get('Wer', '').strip() or None,
+                verified_by=row.get('Begl. von / An', '').strip() or None,
+                transaction_date=transaction_date,
+                created_by_id=current_user.id
+            )
+            db.add(db_transaction)
+
+            # Kassenstand aktualisieren
+            treasury.current_balance += amount
+
+            imported += 1
+
+        except Exception as e:
+            errors.append(f"Zeile {row_num}: {str(e)}")
+
+    db.commit()
+
+    return CSVImportResponse(
+        imported=imported,
+        skipped=skipped,
+        errors=errors
+    )

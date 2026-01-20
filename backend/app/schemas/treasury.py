@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 from app.models.treasury import TransactionType
@@ -19,6 +19,12 @@ class TransactionCreate(BaseModel):
     transaction_type: TransactionType
     description: str
     category: Optional[str] = None
+    # Erweiterte Felder aus dem Bank-Spreadsheet
+    sc_version: Optional[str] = None
+    item_reference: Optional[str] = None
+    beneficiary: Optional[str] = None
+    verified_by: Optional[str] = None
+    transaction_date: Optional[datetime] = None
 
 
 class TransactionUpdate(BaseModel):
@@ -26,6 +32,12 @@ class TransactionUpdate(BaseModel):
     transaction_type: Optional[TransactionType] = None
     description: Optional[str] = None
     category: Optional[str] = None
+    # Erweiterte Felder
+    sc_version: Optional[str] = None
+    item_reference: Optional[str] = None
+    beneficiary: Optional[str] = None
+    verified_by: Optional[str] = None
+    transaction_date: Optional[datetime] = None
 
 
 class TransactionResponse(BaseModel):
@@ -34,8 +46,20 @@ class TransactionResponse(BaseModel):
     transaction_type: TransactionType
     description: str
     category: Optional[str]
+    # Erweiterte Felder
+    sc_version: Optional[str] = None
+    item_reference: Optional[str] = None
+    beneficiary: Optional[str] = None
+    verified_by: Optional[str] = None
+    transaction_date: Optional[datetime] = None
     created_by: UserResponse
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class CSVImportResponse(BaseModel):
+    imported: int
+    skipped: int
+    errors: List[str] = []
