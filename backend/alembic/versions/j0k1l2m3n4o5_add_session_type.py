@@ -20,8 +20,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Add session_type field to attendance_sessions table."""
-    with op.batch_alter_table('attendance_sessions', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('session_type', sa.String(20), server_default='staffelabend', nullable=False))
+    # Direkt add_column verwenden (ohne batch für simple add)
+    op.add_column('attendance_sessions', sa.Column('session_type', sa.String(20), server_default='staffelabend', nullable=True))
 
     # Mark sessions with linked loot sessions as loot_run
     op.execute("""
