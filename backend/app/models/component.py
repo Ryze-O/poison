@@ -21,6 +21,7 @@ class Component(Base):
     item_class = Column(String(50), nullable=True)  # Military, Industrial, Civilian, Stealth, Competition
     sc_type = Column(String(100), nullable=True)  # Original-Typ aus API
     sc_version = Column(String(20), nullable=True)  # SC Version bei Import
+    is_stackable = Column(Boolean, default=False)  # Teilbar (Erze etc.) vs. Einzelstück (Komponenten)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

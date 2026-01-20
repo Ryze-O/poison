@@ -25,6 +25,7 @@ export interface Component {
   grade: string | null
   item_class: string | null  // Military, Industrial, Civilian, Stealth, Competition
   sc_type: string | null
+  is_stackable: boolean  // Teilbar (Erze) vs. Einzelstück (Komponenten)
   created_at: string
 }
 

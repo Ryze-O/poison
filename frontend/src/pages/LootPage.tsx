@@ -58,6 +58,12 @@ export default function LootPage() {
   const [newLocationPlanet, setNewLocationPlanet] = useState('')
   const [newLocationType, setNewLocationType] = useState('')
 
+  // Verteilungs-Dialog beim Abschließen
+  const [showDistributionDialog, setShowDistributionDialog] = useState(false)
+  const [wantsLoot, setWantsLoot] = useState<Record<number, boolean>>({})
+  const [selectedPioneers, setSelectedPioneers] = useState<Record<number, number | null>>({})
+  const [distributionLocation, setDistributionLocation] = useState<number | null>(null)
+
   const canCreate = user?.role !== 'member'
   const isAdmin = user?.role === 'admin'
 
@@ -97,7 +103,14 @@ export default function LootPage() {
   const { data: allUsers } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: () => apiClient.get('/api/users').then((r) => r.data),
-    enabled: distributingItem !== null,
+    enabled: distributingItem !== null || showDistributionDialog,
+  })
+
+  // Locations für Verteilungs-Dialog laden
+  const { data: distributionLocations } = useQuery<Location[]>({
+    queryKey: ['locations'],
+    queryFn: () => apiClient.get('/api/locations').then((r) => r.data),
+    enabled: showDistributionDialog,
   })
 
   // Session erstellen (standalone)
@@ -162,7 +175,7 @@ export default function LootPage() {
     },
   })
 
-  // Item verteilen
+  // Item verteilen (einzeln)
   const distributeMutation = useMutation({
     mutationFn: ({ sessionId, itemId, userId, quantity }: { sessionId: number; itemId: number; userId: number; quantity: number }) =>
       apiClient.post(`/api/loot/${sessionId}/items/${itemId}/distribute`, { user_id: userId, quantity }),
@@ -171,6 +184,29 @@ export default function LootPage() {
       setDistributingItem(null)
       setDistributeUserId(null)
       setDistributeQuantity(1)
+      // Session neu laden
+      if (editingSession) {
+        apiClient.get(`/api/loot/${editingSession.id}`).then((r) => setEditingSession(r.data))
+      }
+    },
+  })
+
+  // Batch-Verteilung (mehrere User gleichzeitig)
+  const batchDistributeMutation = useMutation({
+    mutationFn: ({ sessionId, itemId, userIds, quantityPerUser, locationId }: {
+      sessionId: number
+      itemId: number
+      userIds: number[]
+      quantityPerUser: number
+      locationId?: number
+    }) =>
+      apiClient.post(`/api/loot/${sessionId}/items/${itemId}/distribute-batch`, {
+        user_ids: userIds,
+        quantity_per_user: quantityPerUser,
+        location_id: locationId || null
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['loot'] })
       // Session neu laden
       if (editingSession) {
         apiClient.get(`/api/loot/${editingSession.id}`).then((r) => setEditingSession(r.data))
@@ -218,6 +254,128 @@ export default function LootPage() {
     if (window.confirm('Loot-Session wirklich löschen? Dies kann nicht rückgängig gemacht werden.')) {
       deleteSessionMutation.mutate(sessionId)
     }
+  }
+
+  // Öffnet den Verteilungs-Dialog beim Abschließen
+  const openDistributionDialog = () => {
+    if (!editingSession) return
+
+    // Prüfen ob noch Items unverteilt sind
+    const hasUndistributedItems = editingSession.items.some(item => {
+      const distributed = item.distributions.reduce((sum, d) => sum + d.quantity, 0)
+      return item.quantity > distributed
+    })
+
+    if (!hasUndistributedItems) {
+      // Alles verteilt → direkt abschließen
+      updateSessionMutation.mutate({
+        sessionId: editingSession.id,
+        data: { is_completed: true }
+      })
+      return
+    }
+
+    // Dialog initialisieren
+    const initialWantsLoot: Record<number, boolean> = {}
+    const initialPioneers: Record<number, number | null> = {}
+
+    // Für stackable Items: alle User wollen standardmäßig Loot
+    // Für nicht-stackable: kein Pioneer ausgewählt
+    if (allUsers) {
+      allUsers.forEach(u => {
+        initialWantsLoot[u.id] = true
+      })
+    }
+    editingSession.items.forEach(item => {
+      initialPioneers[item.id] = null
+    })
+
+    setWantsLoot(initialWantsLoot)
+    setSelectedPioneers(initialPioneers)
+    setDistributionLocation(editingSession.location?.id || null)
+    setShowDistributionDialog(true)
+  }
+
+  // Schließt den Verteilungs-Dialog
+  const closeDistributionDialog = () => {
+    setShowDistributionDialog(false)
+    setWantsLoot({})
+    setSelectedPioneers({})
+  }
+
+  // Verteilt ein einzelnes Item (stackable oder nicht)
+  const distributeItem = async (item: LootItem) => {
+    if (!editingSession) return
+
+    const distributed = item.distributions.reduce((sum, d) => sum + d.quantity, 0)
+    const remaining = item.quantity - distributed
+
+    if (remaining === 0) return
+
+    if (item.component.is_stackable) {
+      // Stackable: Gleichmäßig auf alle die wollen
+      const recipients = Object.entries(wantsLoot)
+        .filter(([_, wants]) => wants)
+        .map(([id]) => parseInt(id))
+
+      if (recipients.length === 0) {
+        alert('Mindestens ein Empfänger muss ausgewählt sein')
+        return
+      }
+
+      const perPerson = Math.floor(remaining / recipients.length)
+      if (perPerson === 0) {
+        alert(`Nicht genug Items für ${recipients.length} Empfänger`)
+        return
+      }
+
+      await batchDistributeMutation.mutateAsync({
+        sessionId: editingSession.id,
+        itemId: item.id,
+        userIds: recipients,
+        quantityPerUser: perPerson,
+        locationId: distributionLocation || undefined
+      })
+    } else {
+      // Nicht-stackable: An einzelnen Pioneer
+      const pioneerId = selectedPioneers[item.id]
+      if (!pioneerId) {
+        alert('Bitte einen Pioneer auswählen')
+        return
+      }
+
+      await batchDistributeMutation.mutateAsync({
+        sessionId: editingSession.id,
+        itemId: item.id,
+        userIds: [pioneerId],
+        quantityPerUser: remaining,
+        locationId: distributionLocation || undefined
+      })
+    }
+  }
+
+  // Verteilt alle Items und schließt die Session ab
+  const distributeAllAndComplete = async () => {
+    if (!editingSession) return
+
+    // Alle unverteilten Items verteilen
+    for (const item of editingSession.items) {
+      const distributed = item.distributions.reduce((sum, d) => sum + d.quantity, 0)
+      const remaining = item.quantity - distributed
+
+      if (remaining > 0) {
+        await distributeItem(item)
+      }
+    }
+
+    // Session abschließen
+    await updateSessionMutation.mutateAsync({
+      sessionId: editingSession.id,
+      data: { is_completed: true }
+    })
+
+    closeDistributionDialog()
+    closeEditModal()
   }
 
   // Komponenten nach Kategorien gruppiert + Fuzzy-Search
@@ -1068,10 +1226,7 @@ export default function LootPage() {
                   </button>
                   {!editingSession.is_completed && (
                     <button
-                      onClick={() => updateSessionMutation.mutate({
-                        sessionId: editingSession.id,
-                        data: { is_completed: true }
-                      })}
+                      onClick={openDistributionDialog}
                       disabled={updateSessionMutation.isPending}
                       className="btn btn-primary flex items-center gap-2"
                     >
@@ -1081,6 +1236,209 @@ export default function LootPage() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Verteilungs-Dialog beim Abschließen */}
+      {showDistributionDialog && editingSession && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
+          <div className="card max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Gift size={24} className="text-krt-orange" />
+                Loot verteilen
+              </h2>
+              <button onClick={closeDistributionDialog} className="text-gray-400 hover:text-white">
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Standort-Auswahl (global) */}
+            <div className="mb-6 p-4 bg-gray-800/50 rounded-lg">
+              <label className="label flex items-center gap-2">
+                <MapPin size={16} />
+                Einlagerungsort für alle
+              </label>
+              <select
+                value={distributionLocation || ''}
+                onChange={(e) => setDistributionLocation(e.target.value ? parseInt(e.target.value) : null)}
+                className="input"
+              >
+                <option value="">-- Kein Standort --</option>
+                {(distributionLocations || locations)?.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name} {loc.system_name && `(${loc.system_name})`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Items zur Verteilung */}
+            <div className="space-y-4">
+              {editingSession.items.map((item) => {
+                const distributed = item.distributions.reduce((sum, d) => sum + d.quantity, 0)
+                const remaining = item.quantity - distributed
+                const isStackable = item.component.is_stackable
+
+                if (remaining === 0) {
+                  return (
+                    <div key={item.id} className="p-4 bg-green-900/20 rounded-lg border border-green-700">
+                      <div className="flex items-center gap-2 text-green-500">
+                        <CheckCircle size={18} />
+                        <span className="font-medium">{item.component.name}</span>
+                        <span className="text-sm">- Vollständig verteilt</span>
+                      </div>
+                    </div>
+                  )
+                }
+
+                if (isStackable) {
+                  // === TEILBARE ITEMS (Erze etc.) ===
+                  const recipients = Object.entries(wantsLoot)
+                    .filter(([_, wants]) => wants)
+                    .map(([id]) => parseInt(id))
+                  const perPerson = recipients.length > 0 ? Math.floor(remaining / recipients.length) : 0
+                  const leftover = recipients.length > 0 ? remaining % recipients.length : remaining
+
+                  return (
+                    <div key={item.id} className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h3 className="font-bold text-lg">{item.component.name}</h3>
+                          <p className="text-sm text-gray-400">{item.component.category}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-krt-orange">{remaining}x</p>
+                          <p className="text-sm text-gray-500">verfügbar</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-krt-orange/10 p-3 rounded mb-3">
+                        <p className="text-sm">
+                          <span className="text-krt-orange font-medium">Teilbar:</span>{' '}
+                          {recipients.length > 0 ? (
+                            <>
+                              {perPerson}x an jeden der {recipients.length} Empfänger
+                              {leftover > 0 && <span className="text-yellow-500"> ({leftover} Rest)</span>}
+                            </>
+                          ) : (
+                            <span className="text-yellow-500">Keine Empfänger ausgewählt</span>
+                          )}
+                        </p>
+                      </div>
+
+                      {/* Teilnehmer-Checkboxen */}
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-3">
+                        {allUsers?.map((u) => (
+                          <label
+                            key={u.id}
+                            className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                              wantsLoot[u.id] ? 'bg-green-900/30 border border-green-700' : 'bg-gray-700/50 border border-gray-600'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={wantsLoot[u.id] || false}
+                              onChange={(e) => setWantsLoot({ ...wantsLoot, [u.id]: e.target.checked })}
+                              className="rounded"
+                            />
+                            <span className={wantsLoot[u.id] ? 'text-green-400' : 'text-gray-400'}>
+                              {u.display_name || u.username}
+                            </span>
+                            {wantsLoot[u.id] && perPerson > 0 && (
+                              <span className="ml-auto text-green-500 text-sm">→{perPerson}x</span>
+                            )}
+                          </label>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => distributeItem(item)}
+                        disabled={recipients.length === 0 || perPerson === 0 || batchDistributeMutation.isPending}
+                        className="btn btn-primary w-full"
+                      >
+                        {batchDistributeMutation.isPending ? 'Verteile...' : `Gleichmäßig verteilen (${perPerson}x an ${recipients.length} Personen)`}
+                      </button>
+                    </div>
+                  )
+                } else {
+                  // === NICHT-TEILBARE ITEMS (Komponenten) ===
+                  const selectedPioneer = selectedPioneers[item.id]
+                  const officers = allUsers?.filter(u => u.role !== 'member') || []
+
+                  return (
+                    <div key={item.id} className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h3 className="font-bold text-lg">{item.component.name}</h3>
+                          <p className="text-sm text-gray-400">{item.component.category}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-krt-orange">{remaining}x</p>
+                          <p className="text-sm text-gray-500">verfügbar</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-yellow-900/20 p-3 rounded mb-3">
+                        <p className="text-sm">
+                          <span className="text-yellow-500 font-medium">Einzelstück:</span>{' '}
+                          Geht komplett an einen Pioneer zur späteren Verteilung
+                        </p>
+                      </div>
+
+                      {/* Pioneer-Auswahl (nur Offiziere+) */}
+                      <div className="mb-3">
+                        <label className="label">Pioneer auswählen (Offizier+)</label>
+                        <select
+                          value={selectedPioneer || ''}
+                          onChange={(e) => setSelectedPioneers({
+                            ...selectedPioneers,
+                            [item.id]: e.target.value ? parseInt(e.target.value) : null
+                          })}
+                          className="input"
+                        >
+                          <option value="">-- Pioneer wählen --</option>
+                          {officers.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.display_name || u.username} ({u.role})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button
+                        onClick={() => distributeItem(item)}
+                        disabled={!selectedPioneer || batchDistributeMutation.isPending}
+                        className="btn btn-primary w-full"
+                      >
+                        {batchDistributeMutation.isPending ? 'Übergebe...' : `An Pioneer übergeben (${remaining}x)`}
+                      </button>
+                    </div>
+                  )
+                }
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="mt-6 pt-4 border-t border-gray-700 flex justify-between">
+              <button
+                onClick={closeDistributionDialog}
+                className="btn bg-gray-700 hover:bg-gray-600"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={distributeAllAndComplete}
+                disabled={batchDistributeMutation.isPending || updateSessionMutation.isPending}
+                className="btn btn-primary flex items-center gap-2"
+              >
+                <CheckCircle size={16} />
+                {batchDistributeMutation.isPending || updateSessionMutation.isPending
+                  ? 'Verarbeite...'
+                  : 'Alles verteilen & abschließen'}
+              </button>
             </div>
           </div>
         </div>

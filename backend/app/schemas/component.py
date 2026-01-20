@@ -26,6 +26,7 @@ class ComponentResponse(ComponentBase):
     item_class: Optional[str] = None  # Military, Industrial, Civilian, Stealth, Competition
     sc_type: Optional[str] = None
     sc_version: Optional[str] = None
+    is_stackable: bool = False  # Teilbar (Erze) vs. Einzelstück (Komponenten)
     created_at: datetime
     updated_at: Optional[datetime] = None
 

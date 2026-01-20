@@ -12,6 +12,13 @@ class LootDistributionCreate(BaseModel):
     quantity: int
 
 
+class BatchDistributionCreate(BaseModel):
+    """Batch-Verteilung: Gleiche Menge an mehrere User."""
+    user_ids: List[int]           # Liste der Empfänger
+    quantity_per_user: int        # Menge pro Person
+    location_id: Optional[int] = None  # Wo einlagern
+
+
 class LootDistributionResponse(BaseModel):
     id: int
     user: UserResponse

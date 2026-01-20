@@ -9,7 +9,7 @@ from app.models.attendance import AttendanceSession
 from app.models.inventory import Inventory
 from app.models.component import Component
 from app.models.location import Location
-from app.schemas.loot import LootSessionCreate, LootSessionResponse, LootItemCreate, LootDistributionCreate, LootSessionUpdate
+from app.schemas.loot import LootSessionCreate, LootSessionResponse, LootItemCreate, LootDistributionCreate, LootSessionUpdate, BatchDistributionCreate
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
 
@@ -275,6 +275,82 @@ async def distribute_loot_item(
     return {
         "message": f"{distribution.quantity}x {component.name} an Spieler verteilt",
         "remaining": remaining - distribution.quantity
+    }
+
+
+@router.post("/{session_id}/items/{item_id}/distribute-batch")
+async def distribute_loot_batch(
+    session_id: int,
+    item_id: int,
+    distribution: BatchDistributionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Verteilt ein Loot-Item gleichmäßig an mehrere User. Nur Offiziere+."""
+    check_role(current_user, UserRole.OFFICER)
+
+    item = db.query(LootItem).filter(
+        LootItem.id == item_id,
+        LootItem.loot_session_id == session_id
+    ).first()
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Loot-Item nicht gefunden"
+        )
+
+    # Prüfen ob genug übrig ist
+    already_distributed = sum(d.quantity for d in item.distributions)
+    remaining = item.quantity - already_distributed
+    total_needed = len(distribution.user_ids) * distribution.quantity_per_user
+
+    if total_needed > remaining:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Nicht genug Items verfügbar. Benötigt: {total_needed}, Verfügbar: {remaining}"
+        )
+
+    if len(distribution.user_ids) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mindestens ein Empfänger erforderlich"
+        )
+
+    # Für jeden User eine Verteilung erstellen
+    for user_id in distribution.user_ids:
+        # Verteilung erstellen
+        dist = LootDistribution(
+            loot_item_id=item_id,
+            user_id=user_id,
+            quantity=distribution.quantity_per_user
+        )
+        db.add(dist)
+
+        # Ins Inventar des Empfängers (mit optionalem Standort)
+        inventory = db.query(Inventory).filter(
+            Inventory.user_id == user_id,
+            Inventory.component_id == item.component_id,
+            Inventory.location_id == distribution.location_id
+        ).first()
+
+        if inventory:
+            inventory.quantity += distribution.quantity_per_user
+        else:
+            inventory = Inventory(
+                user_id=user_id,
+                component_id=item.component_id,
+                quantity=distribution.quantity_per_user,
+                location_id=distribution.location_id
+            )
+            db.add(inventory)
+
+    db.commit()
+
+    component = db.query(Component).filter(Component.id == item.component_id).first()
+    return {
+        "message": f"{distribution.quantity_per_user}x {component.name} an {len(distribution.user_ids)} Spieler verteilt",
+        "total_distributed": total_needed,
+        "remaining": remaining - total_needed
     }
 
 
