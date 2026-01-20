@@ -250,7 +250,11 @@ async def import_csv(
     skipped = 0
     errors = []
 
-    reader = csv.DictReader(io.StringIO(text))
+    # Automatische Delimiter-Erkennung (deutsche Excel-CSVs nutzen Semikolon)
+    first_line = text.split('\n')[0] if '\n' in text else text
+    delimiter = ';' if first_line.count(';') > first_line.count(',') else ','
+
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
 
     for row_num, row in enumerate(reader, start=2):
         try:

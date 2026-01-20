@@ -87,7 +87,7 @@ export default function AdminPage() {
     mutationFn: (file: File) => {
       const formData = new FormData()
       formData.append('file', file)
-      return apiClient.post('/api/import/treasury', formData, {
+      return apiClient.post('/api/treasury/import-csv', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       }).then((r) => r.data)
     },
