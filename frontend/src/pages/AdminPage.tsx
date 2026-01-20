@@ -55,7 +55,7 @@ export default function AdminPage() {
   // Gäste-Tokens
   const { data: guestTokens } = useQuery<GuestToken[]>({
     queryKey: ['guest-tokens'],
-    queryFn: () => apiClient.get('/auth/guest-tokens').then((r) => r.data),
+    queryFn: () => apiClient.get('/api/auth/guest-tokens').then((r) => r.data),
     enabled: isAdmin,
   })
 
@@ -116,7 +116,7 @@ export default function AdminPage() {
   // Gäste-Token Mutations
   const createGuestTokenMutation = useMutation({
     mutationFn: (data: { name: string; role: UserRole; expires_in_days: number | null }) =>
-      apiClient.post('/auth/guest-tokens', data).then((r) => r.data),
+      apiClient.post('/api/auth/guest-tokens', data).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['guest-tokens'] })
       setShowNewTokenForm(false)
@@ -133,7 +133,7 @@ export default function AdminPage() {
 
   const toggleGuestTokenMutation = useMutation({
     mutationFn: (tokenId: number) =>
-      apiClient.post(`/auth/guest-tokens/${tokenId}/toggle`).then((r) => r.data),
+      apiClient.post(`/api/auth/guest-tokens/${tokenId}/toggle`).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['guest-tokens'] })
     },
@@ -141,7 +141,7 @@ export default function AdminPage() {
 
   const deleteGuestTokenMutation = useMutation({
     mutationFn: (tokenId: number) =>
-      apiClient.delete(`/auth/guest-tokens/${tokenId}`).then((r) => r.data),
+      apiClient.delete(`/api/auth/guest-tokens/${tokenId}`).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['guest-tokens'] })
     },

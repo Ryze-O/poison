@@ -35,7 +35,7 @@ app.add_middleware(
 )
 
 # Router einbinden
-app.include_router(auth.router, prefix="/auth", tags=["Authentifizierung"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentifizierung"])
 app.include_router(users.router, prefix="/api/users", tags=["Benutzer"])
 app.include_router(components.router, prefix="/api/items", tags=["Items"])
 app.include_router(components.router, prefix="/api/components", tags=["Items (Legacy)"])  # Alias für Kompatibilität
