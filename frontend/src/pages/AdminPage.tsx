@@ -124,8 +124,10 @@ export default function AdminPage() {
       setNewTokenRole('member')
       setNewTokenExpiresDays(null)
     },
-    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
-      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+    onError: (error: unknown) => {
+      console.error('Guest token creation error:', error)
+      const axiosError = error as { response?: { data?: { detail?: string } }; message?: string }
+      alert(`Fehler beim Erstellen: ${axiosError.response?.data?.detail || axiosError.message || 'Unbekannter Fehler'}`)
     },
   })
 
@@ -581,12 +583,16 @@ export default function AdminPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => {
+                  console.log('Button clicked, name:', newTokenName, 'role:', newTokenRole)
                   if (newTokenName.trim()) {
+                    console.log('Calling mutation...')
                     createGuestTokenMutation.mutate({
                       name: newTokenName.trim(),
                       role: newTokenRole,
                       expires_in_days: newTokenExpiresDays
                     })
+                  } else {
+                    console.log('Name is empty!')
                   }
                 }}
                 disabled={!newTokenName.trim() || createGuestTokenMutation.isPending}
