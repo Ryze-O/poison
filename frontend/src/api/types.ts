@@ -4,7 +4,7 @@ export type UserRole = 'member' | 'officer' | 'treasurer' | 'admin'
 // Benutzer
 export interface User {
   id: number
-  discord_id: string
+  discord_id: string | null  // null bei importierten Usern ohne Discord
   username: string
   display_name: string | null
   avatar: string | null

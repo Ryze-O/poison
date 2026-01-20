@@ -1,12 +1,19 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.schemas.user import UserResponse, UserUpdate
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
+
+
+class UserMergeRequest(BaseModel):
+    """Request zum Zusammenführen zweier User."""
+    source_user_id: int  # Wird gelöscht
+    target_user_id: int  # Behält alle Daten
 
 router = APIRouter()
 
@@ -203,3 +210,162 @@ async def get_aliases(
     aliases = [a.strip() for a in aliases if a.strip()]
 
     return {"user_id": user_id, "aliases": aliases}
+
+
+@router.delete("/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Löscht einen Benutzer. Nur Admins.
+    ACHTUNG: Kann nicht rückgängig gemacht werden!
+    Prüft ob der User noch Referenzen hat (Inventar, Transaktionen, etc.)
+    """
+    check_role(current_user, UserRole.ADMIN)
+
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Du kannst dich nicht selbst löschen"
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer nicht gefunden"
+        )
+
+    # Prüfen ob User noch Referenzen hat
+    from app.models.inventory import Inventory
+    from app.models.treasury import TreasuryTransaction
+    from app.models.attendance import AttendanceRecord
+    from app.models.loot import LootDistribution
+
+    inventory_count = db.query(Inventory).filter(Inventory.user_id == user_id).count()
+    transaction_count = db.query(TreasuryTransaction).filter(TreasuryTransaction.created_by_id == user_id).count()
+    attendance_count = db.query(AttendanceRecord).filter(AttendanceRecord.user_id == user_id).count()
+    loot_count = db.query(LootDistribution).filter(LootDistribution.user_id == user_id).count()
+
+    if inventory_count > 0 or transaction_count > 0 or attendance_count > 0 or loot_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User hat noch Referenzen: {inventory_count} Inventar, {transaction_count} Transaktionen, {attendance_count} Anwesenheiten, {loot_count} Loot-Verteilungen. Erst zusammenführen oder Daten löschen."
+        )
+
+    username = user.username
+    db.delete(user)
+    db.commit()
+
+    return {"message": f"Benutzer '{username}' gelöscht"}
+
+
+@router.post("/merge")
+async def merge_users(
+    merge_request: UserMergeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Führt zwei Benutzer zusammen. Nur Admins.
+    - Alle Referenzen vom source_user werden auf target_user übertragen
+    - source_user wird gelöscht
+    - Nützlich um importierte User mit Discord-Usern zu verknüpfen
+    """
+    check_role(current_user, UserRole.ADMIN)
+
+    if merge_request.source_user_id == merge_request.target_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source und Target dürfen nicht gleich sein"
+        )
+
+    source = db.query(User).filter(User.id == merge_request.source_user_id).first()
+    target = db.query(User).filter(User.id == merge_request.target_user_id).first()
+
+    if not source:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source-Benutzer nicht gefunden"
+        )
+
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target-Benutzer nicht gefunden"
+        )
+
+    # Alle Referenzen übertragen
+    from app.models.inventory import Inventory, InventoryTransfer
+    from app.models.treasury import TreasuryTransaction
+    from app.models.attendance import AttendanceRecord, AttendanceSession
+    from app.models.loot import LootSession, LootDistribution
+
+    # Inventar übertragen
+    db.query(Inventory).filter(Inventory.user_id == source.id).update(
+        {Inventory.user_id: target.id}
+    )
+
+    # Inventar-Transfers (from und to)
+    db.query(InventoryTransfer).filter(InventoryTransfer.from_user_id == source.id).update(
+        {InventoryTransfer.from_user_id: target.id}
+    )
+    db.query(InventoryTransfer).filter(InventoryTransfer.to_user_id == source.id).update(
+        {InventoryTransfer.to_user_id: target.id}
+    )
+
+    # Treasury-Transaktionen
+    db.query(TreasuryTransaction).filter(TreasuryTransaction.created_by_id == source.id).update(
+        {TreasuryTransaction.created_by_id: target.id}
+    )
+
+    # Anwesenheits-Records
+    db.query(AttendanceRecord).filter(AttendanceRecord.user_id == source.id).update(
+        {AttendanceRecord.user_id: target.id}
+    )
+
+    # Anwesenheits-Sessions (created_by)
+    db.query(AttendanceSession).filter(AttendanceSession.created_by_id == source.id).update(
+        {AttendanceSession.created_by_id: target.id}
+    )
+
+    # Loot-Sessions (created_by)
+    db.query(LootSession).filter(LootSession.created_by_id == source.id).update(
+        {LootSession.created_by_id: target.id}
+    )
+
+    # Loot-Verteilungen
+    db.query(LootDistribution).filter(LootDistribution.user_id == source.id).update(
+        {LootDistribution.user_id: target.id}
+    )
+
+    # Source-Username als Alias zum Target hinzufügen
+    existing_aliases = target.aliases.split(',') if target.aliases else []
+    existing_aliases = [a.strip() for a in existing_aliases if a.strip()]
+    if source.username not in existing_aliases:
+        existing_aliases.append(source.username)
+    if source.display_name and source.display_name not in existing_aliases:
+        existing_aliases.append(source.display_name)
+    target.aliases = ','.join(existing_aliases) if existing_aliases else None
+
+    # Falls target keinen display_name hat, vom source übernehmen
+    if not target.display_name and source.display_name:
+        target.display_name = source.display_name
+
+    # Falls target keine Discord-ID hat aber source schon
+    if not target.discord_id and source.discord_id:
+        target.discord_id = source.discord_id
+        target.avatar = source.avatar
+
+    # Source-User löschen
+    source_username = source.username
+    db.delete(source)
+    db.commit()
+    db.refresh(target)
+
+    return {
+        "message": f"Benutzer '{source_username}' wurde mit '{target.username}' zusammengeführt",
+        "target_user": UserResponse.model_validate(target)
+    }
