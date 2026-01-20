@@ -5,10 +5,10 @@ import { useAuthStore } from '../hooks/useAuth'
 import { ClipboardList, Package, Wallet, Users, Gift, MapPin, CheckCircle, X, ExternalLink, Gamepad2, Target } from 'lucide-react'
 import type { Treasury, AttendanceSession, InventoryItem, LootSession, SessionType } from '../api/types'
 
-const SESSION_TYPE_CONFIG: Record<SessionType, { label: string; color: string; bgColor: string; icon: typeof ClipboardList }> = {
-  staffelabend: { label: 'Staffelabend', color: 'emerald-500', bgColor: 'emerald-500/20', icon: ClipboardList },
-  loot_run: { label: 'Loot-Run', color: 'amber-500', bgColor: 'amber-500/20', icon: Target },
-  freeplay: { label: 'Freeplay', color: 'blue-500', bgColor: 'blue-500/20', icon: Gamepad2 },
+const SESSION_TYPE_CONFIG: Record<SessionType, { label: string; labelPlural: string; color: string; bgColor: string; icon: typeof ClipboardList }> = {
+  staffelabend: { label: 'Staffelabend', labelPlural: 'Staffelabende', color: 'emerald-500', bgColor: 'emerald-500/20', icon: ClipboardList },
+  loot_run: { label: 'Loot-Run', labelPlural: 'Loot-Runs', color: 'amber-500', bgColor: 'amber-500/20', icon: Target },
+  freeplay: { label: 'Freeplay', labelPlural: 'Freeplay-Sessions', color: 'blue-500', bgColor: 'blue-500/20', icon: Gamepad2 },
 }
 
 export default function DashboardPage() {
@@ -93,7 +93,7 @@ export default function DashboardPage() {
       <div className="card">
         <div className="flex items-center gap-3 mb-4">
           <Icon className={`text-${config.color}`} size={20} />
-          <h2 className="text-xl font-bold">Letzte {config.label}s</h2>
+          <h2 className="text-xl font-bold">Letzte {config.labelPlural}</h2>
         </div>
         {sessionList.length > 0 ? (
           <div className="space-y-3">
