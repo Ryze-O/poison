@@ -124,6 +124,9 @@ export default function AdminPage() {
       setNewTokenRole('member')
       setNewTokenExpiresDays(null)
     },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
   })
 
   const toggleGuestTokenMutation = useMutation({
