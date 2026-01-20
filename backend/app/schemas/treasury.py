@@ -21,6 +21,13 @@ class TransactionCreate(BaseModel):
     category: Optional[str] = None
 
 
+class TransactionUpdate(BaseModel):
+    amount: Optional[float] = None
+    transaction_type: Optional[TransactionType] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+
+
 class TransactionResponse(BaseModel):
     id: int
     amount: float

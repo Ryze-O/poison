@@ -188,7 +188,7 @@ async def delete_guest_token(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Löscht/deaktiviert einen Gäste-Token. Nur Admins können das."""
+    """Löscht einen Gäste-Token permanent. Nur Admins können das."""
     check_role(current_user, UserRole.ADMIN)
 
     guest_token = db.query(GuestToken).filter(GuestToken.id == token_id).first()
@@ -198,9 +198,14 @@ async def delete_guest_token(
             detail="Token nicht gefunden"
         )
 
-    guest_token.is_active = False
+    # Auch den zugehörigen Gast-User löschen falls vorhanden
+    guest_user = db.query(User).filter(User.username == f"guest_{guest_token.id}").first()
+    if guest_user:
+        db.delete(guest_user)
+
+    db.delete(guest_token)
     db.commit()
-    return {"message": "Token deaktiviert"}
+    return {"message": "Token gelöscht"}
 
 
 @router.post("/guest-tokens/{token_id}/toggle")

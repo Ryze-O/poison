@@ -671,12 +671,12 @@ export default function AdminPage() {
                     </button>
                     <button
                       onClick={() => {
-                        if (window.confirm(`Gäste-Link "${token.name}" wirklich deaktivieren?`)) {
+                        if (window.confirm(`Gäste-Link "${token.name}" wirklich permanent löschen? Der zugehörige Gast-User wird ebenfalls entfernt.`)) {
                           deleteGuestTokenMutation.mutate(token.id)
                         }
                       }}
                       className="btn bg-red-900/50 hover:bg-red-800/50 text-red-400"
-                      title="Löschen"
+                      title="Permanent löschen"
                     >
                       <Trash2 size={16} />
                     </button>
