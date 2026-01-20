@@ -196,8 +196,12 @@ async def import_members(
     - DisplayName: Anzeigename in der Staffel (optional)
     - Rolle: member, officer, treasurer, admin (optional, default: member)
 
-    Bestehende User werden anhand des Usernamens aktualisiert.
-    Neue User werden ohne Discord-ID angelegt (können sich später via Discord einloggen).
+    Duplikat-Erkennung (case-insensitive):
+    - Existiert ein User mit gleichem Username? → Übersprungen
+    - Existiert ein User mit gleichem Display-Name? → Übersprungen
+    - Existiert Username in den Aliasen eines Users? → Übersprungen
+
+    Nur neue User werden angelegt (ohne Discord-ID).
     """
     check_role(current_user, UserRole.ADMIN)
 
@@ -210,6 +214,7 @@ async def import_members(
     reader = create_csv_reader(text)
 
     success = 0
+    skipped = 0
     errors = []
     warnings = []
 
@@ -225,6 +230,22 @@ async def import_members(
         'administrator': UserRole.ADMIN,
     }
 
+    # Alle existierenden User laden für Duplikat-Check
+    all_users = db.query(User).all()
+
+    # Cache für schnelles Nachschlagen (alles lowercase)
+    existing_usernames = {u.username.lower() for u in all_users}
+    existing_display_names = {u.display_name.lower() for u in all_users if u.display_name}
+
+    # Aliase auch prüfen
+    existing_aliases = set()
+    for u in all_users:
+        if u.aliases:
+            for alias in u.aliases.split(','):
+                alias = alias.strip().lower()
+                if alias:
+                    existing_aliases.add(alias)
+
     for row_num, row in enumerate(reader, start=2):
         try:
             # Username extrahieren (Pflicht)
@@ -237,10 +258,28 @@ async def import_members(
                 errors.append(f"Zeile {row_num}: Username zu kurz (min. 2 Zeichen)")
                 continue
 
+            username_lower = username.lower()
+
             # Display-Name extrahieren (optional)
             display_name = row.get('DisplayName', row.get('displayname', row.get('Anzeigename', ''))).strip()
             if not display_name:
                 display_name = None
+
+            # Duplikat-Check (case-insensitive)
+            if username_lower in existing_usernames:
+                warnings.append(f"Zeile {row_num}: '{username}' existiert bereits (Username)")
+                skipped += 1
+                continue
+
+            if display_name and display_name.lower() in existing_display_names:
+                warnings.append(f"Zeile {row_num}: '{username}' existiert bereits (Display-Name '{display_name}')")
+                skipped += 1
+                continue
+
+            if username_lower in existing_aliases:
+                warnings.append(f"Zeile {row_num}: '{username}' existiert bereits (als Alias)")
+                skipped += 1
+                continue
 
             # Rolle extrahieren (optional, default: member)
             role_str = row.get('Rolle', row.get('rolle', row.get('Role', 'member'))).strip().lower()
@@ -249,24 +288,19 @@ async def import_members(
             if role_str and role_str not in role_mapping:
                 warnings.append(f"Zeile {row_num}: Unbekannte Rolle '{role_str}', verwende 'member'")
 
-            # Prüfen ob User bereits existiert (via Username)
-            existing_user = db.query(User).filter(User.username == username).first()
+            # Neuen User anlegen (ohne Discord-ID)
+            new_user = User(
+                discord_id=None,  # Wird bei Discord-Login nachträglich gesetzt
+                username=username,
+                display_name=display_name,
+                role=role
+            )
+            db.add(new_user)
 
-            if existing_user:
-                # User aktualisieren
-                if display_name:
-                    existing_user.display_name = display_name
-                existing_user.role = role
-                warnings.append(f"Zeile {row_num}: User '{username}' aktualisiert")
-            else:
-                # Neuen User anlegen (ohne Discord-ID)
-                new_user = User(
-                    discord_id=None,  # Wird bei Discord-Login nachträglich gesetzt
-                    username=username,
-                    display_name=display_name,
-                    role=role
-                )
-                db.add(new_user)
+            # Caches aktualisieren für weitere Zeilen
+            existing_usernames.add(username_lower)
+            if display_name:
+                existing_display_names.add(display_name.lower())
 
             success += 1
 
@@ -274,6 +308,10 @@ async def import_members(
             errors.append(f"Zeile {row_num}: {str(e)}")
 
     db.commit()
+
+    # Skipped-Info in Warnings am Anfang
+    if skipped > 0:
+        warnings.insert(0, f"{skipped} Duplikate übersprungen")
 
     return ImportResult(success=success, errors=errors, warnings=warnings)
 
