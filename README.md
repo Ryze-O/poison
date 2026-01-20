@@ -65,57 +65,6 @@ Eine moderne Webanwendung zur Verwaltung einer Star Citizen Staffel. Ersetzt Goo
 
 ---
 
-## Schnellstart (Entwicklung)
-
-### Voraussetzungen
-- Python 3.11+
-- Node.js 20+
-- Tesseract OCR
-
-### Backend starten
-```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate          # Windows
-source venv/bin/activate       # Linux/Mac
-pip install -r requirements.txt
-cp .env.example .env           # Dann .env ausfüllen
-alembic upgrade head
-uvicorn app.main:app --reload
-```
-
-### Frontend starten
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Umgebungsvariablen
-
-**Backend (.env)**
-```
-DATABASE_URL=sqlite:///./data/poison.db
-DISCORD_CLIENT_ID=xxx
-DISCORD_CLIENT_SECRET=xxx
-DISCORD_REDIRECT_URI=http://localhost:5173/auth/callback
-SECRET_KEY=xxx
-ADMIN_DISCORD_ID=xxx
-```
-
-**Frontend (.env)**
-```
-VITE_API_URL=http://localhost:8000
-```
-
----
-
-## Deployment
-
-Für Deployment-Anweisungen auf einem Proxmox Homeserver mit Cloudflare Tunnel siehe die separate Deployment-Anleitung (nicht im Repository enthalten).
-
----
-
 ## Screenshots
 
 *Coming soon*
