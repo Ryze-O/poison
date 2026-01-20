@@ -20,6 +20,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    # Prüfen ob Tabelle bereits existiert
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    if 'guest_tokens' in inspector.get_table_names():
+        return  # Tabelle existiert bereits
+
     # Guest Tokens Tabelle erstellen
     op.create_table('guest_tokens',
         sa.Column('id', sa.Integer(), nullable=False),

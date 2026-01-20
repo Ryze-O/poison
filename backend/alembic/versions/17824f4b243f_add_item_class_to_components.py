@@ -20,8 +20,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # Nur item_class Spalte hinzufügen
-    op.add_column('components', sa.Column('item_class', sa.String(length=50), nullable=True))
+    # Prüfen ob Spalte bereits existiert
+    conn = op.get_bind()
+    result = conn.execute(sa.text("PRAGMA table_info(components)"))
+    columns = [row[1] for row in result]
+
+    if 'item_class' not in columns:
+        op.add_column('components', sa.Column('item_class', sa.String(length=50), nullable=True))
 
 
 def downgrade() -> None:
