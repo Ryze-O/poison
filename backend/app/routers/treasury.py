@@ -176,6 +176,26 @@ async def update_transaction(
     return transaction
 
 
+@router.delete("/transactions/all")
+async def delete_all_transactions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Löscht alle Transaktionen und setzt Kassenstand auf 0. Nur Admin."""
+    check_role(current_user, UserRole.ADMIN)
+
+    # Alle Transaktionen löschen
+    deleted_count = db.query(TreasuryTransaction).delete()
+
+    # Kassenstand auf 0 setzen
+    treasury = get_or_create_treasury(db)
+    treasury.current_balance = 0.0
+
+    db.commit()
+
+    return {"message": f"{deleted_count} Transaktionen gelöscht, Kassenstand auf 0 gesetzt"}
+
+
 @router.delete("/transactions/{transaction_id}")
 async def delete_transaction(
     transaction_id: int,
@@ -210,26 +230,6 @@ async def delete_transaction(
     db.commit()
 
     return {"message": "Transaktion gelöscht"}
-
-
-@router.delete("/transactions/all")
-async def delete_all_transactions(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Löscht alle Transaktionen und setzt Kassenstand auf 0. Nur Admin."""
-    check_role(current_user, UserRole.ADMIN)
-
-    # Alle Transaktionen löschen
-    deleted_count = db.query(TreasuryTransaction).delete()
-
-    # Kassenstand auf 0 setzen
-    treasury = get_or_create_treasury(db)
-    treasury.current_balance = 0.0
-
-    db.commit()
-
-    return {"message": f"{deleted_count} Transaktionen gelöscht, Kassenstand auf 0 gesetzt"}
 
 
 @router.post("/import-csv", response_model=CSVImportResponse)

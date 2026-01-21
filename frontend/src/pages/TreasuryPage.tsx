@@ -175,8 +175,10 @@ export default function TreasuryPage() {
       queryClient.invalidateQueries({ queryKey: ['treasury'] })
       alert('Alle Transaktionen wurden gelöscht.')
     },
-    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
-      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: { detail?: string } }; message?: string }
+      const message = err.response?.data?.detail || err.message || 'Unbekannter Fehler'
+      alert(`Fehler: ${message}`)
     },
   })
 
