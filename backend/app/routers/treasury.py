@@ -359,17 +359,28 @@ async def import_csv(
             transaction_date = None
             if datum_str and datum_str != '-':
                 try:
-                    # Format: DD.MM.YYYY oder D.M.YYYY
+                    # Datum normalisieren: 8.1.2025 -> 08.01.2025
+                    date_parts = datum_str.split('.')
+                    if len(date_parts) == 3:
+                        day = date_parts[0].zfill(2)
+                        month = date_parts[1].zfill(2)
+                        year = date_parts[2]
+                        # Jahr normalisieren (25 -> 2025)
+                        if len(year) == 2:
+                            year = '20' + year
+                        datum_str = f"{day}.{month}.{year}"
+
                     if zeit_str and zeit_str != '-':
-                        transaction_date = datetime.strptime(f"{datum_str} {zeit_str}", "%d.%m.%Y %H:%M:%S")
+                        # Zeit auch normalisieren falls nötig
+                        try:
+                            transaction_date = datetime.strptime(f"{datum_str} {zeit_str}", "%d.%m.%Y %H:%M:%S")
+                        except ValueError:
+                            # Nur Datum ohne Zeit
+                            transaction_date = datetime.strptime(datum_str, "%d.%m.%Y")
                     else:
                         transaction_date = datetime.strptime(datum_str, "%d.%m.%Y")
-                except ValueError:
-                    try:
-                        # Alternatives Format ohne führende Nullen
-                        transaction_date = datetime.strptime(datum_str, "%d.%m.%Y")
-                    except ValueError:
-                        pass  # Datum ignorieren wenn nicht parsbar
+                except (ValueError, IndexError):
+                    pass  # Datum ignorieren wenn nicht parsbar
 
             # Beschreibung zusammensetzen
             event = (row.get(col_event, '') or '').strip() if col_event else ''
