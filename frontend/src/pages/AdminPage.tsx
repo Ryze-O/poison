@@ -22,9 +22,11 @@ interface SCStats {
 }
 
 interface CSVImportResult {
-  success: number
+  success?: number
+  imported?: number
+  skipped?: number
   errors: string[]
-  warnings: string[]
+  warnings?: string[]
 }
 
 export default function AdminPage() {
@@ -81,6 +83,12 @@ export default function AdminPage() {
       setCsvType('inventory')
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
     },
+    onError: (error: unknown) => {
+      console.error('Inventory import error:', error)
+      const axiosError = error as { response?: { data?: { detail?: string } }; message?: string }
+      setCsvResult({ errors: [axiosError.response?.data?.detail || axiosError.message || 'Unbekannter Fehler'] })
+      setCsvType('inventory')
+    },
   })
 
   const treasuryImportMutation = useMutation({
@@ -96,6 +104,12 @@ export default function AdminPage() {
       setCsvType('treasury')
       queryClient.invalidateQueries({ queryKey: ['treasury'] })
     },
+    onError: (error: unknown) => {
+      console.error('Treasury import error:', error)
+      const axiosError = error as { response?: { data?: { detail?: string } }; message?: string }
+      setCsvResult({ errors: [axiosError.response?.data?.detail || axiosError.message || 'Unbekannter Fehler'] })
+      setCsvType('treasury')
+    },
   })
 
   const membersImportMutation = useMutation({
@@ -110,6 +124,12 @@ export default function AdminPage() {
       setCsvResult(data)
       setCsvType('members')
       queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+    onError: (error: unknown) => {
+      console.error('Members import error:', error)
+      const axiosError = error as { response?: { data?: { detail?: string } }; message?: string }
+      setCsvResult({ errors: [axiosError.response?.data?.detail || axiosError.message || 'Unbekannter Fehler'] })
+      setCsvType('members')
     },
   })
 
@@ -438,17 +458,30 @@ export default function AdminPage() {
         {csvResult && (
           <div className="mt-6 p-4 bg-gray-800/50 rounded-lg">
             <div className="flex items-center gap-2 mb-3">
-              <CheckCircle className="text-emerald-500" size={20} />
+              {csvResult.errors.length === 0 ? (
+                <CheckCircle className="text-emerald-500" size={20} />
+              ) : (
+                <AlertCircle className="text-red-500" size={20} />
+              )}
               <span className="font-medium">
                 {csvType === 'inventory' ? 'Inventar' : csvType === 'treasury' ? 'Kassen' : 'Mitglieder'}-Import abgeschlossen
               </span>
             </div>
 
-            <div className="text-sm mb-3">
-              <span className="text-emerald-400">{csvResult.success}</span> Einträge erfolgreich importiert
+            <div className="text-sm mb-3 space-y-1">
+              {(csvResult.success !== undefined || csvResult.imported !== undefined) && (
+                <div>
+                  <span className="text-emerald-400">{csvResult.success ?? csvResult.imported}</span> Einträge erfolgreich importiert
+                </div>
+              )}
+              {csvResult.skipped !== undefined && csvResult.skipped > 0 && (
+                <div>
+                  <span className="text-yellow-400">{csvResult.skipped}</span> Einträge übersprungen
+                </div>
+              )}
             </div>
 
-            {csvResult.warnings.length > 0 && (
+            {csvResult.warnings && csvResult.warnings.length > 0 && (
               <div className="mb-3">
                 <span className="text-yellow-400 text-sm">
                   {csvResult.warnings.length} Warnungen

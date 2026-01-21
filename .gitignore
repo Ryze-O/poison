@@ -54,3 +54,6 @@ htmlcov/
 .env.*.local
 CLAUDE.md
 DEPLOYMENT_ANLEITUNG.md
+Deployment.md
+deploy.sh
+push.ps1
