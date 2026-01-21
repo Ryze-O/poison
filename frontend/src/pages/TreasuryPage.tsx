@@ -1,9 +1,11 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, ArrowUpCircle, ArrowDownCircle, Edit3, Trash2, X, Upload, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, ArrowUpCircle, ArrowDownCircle, Edit3, Trash2, X, Upload, TrendingUp, TrendingDown, Filter, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Treasury, Transaction, TransactionType, CSVImportResponse } from '../api/types'
+
+const ITEMS_PER_PAGE = 50
 
 export default function TreasuryPage() {
   const { user } = useAuthStore()
@@ -17,10 +19,14 @@ export default function TreasuryPage() {
     category: '',
   })
 
+  // Filter und Pagination
+  const [filterCategory, setFilterCategory] = useState<string>('')
+  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all')
+  const [currentPage, setCurrentPage] = useState(1)
+
   const canManage = user?.role === 'treasurer' || user?.role === 'admin'
   const isAdmin = user?.role === 'admin'
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [expandedTx, setExpandedTx] = useState<number | null>(null)
 
   const { data: treasury } = useQuery<Treasury>({
     queryKey: ['treasury'],
@@ -29,9 +35,72 @@ export default function TreasuryPage() {
 
   const { data: transactions } = useQuery<Transaction[]>({
     queryKey: ['treasury', 'transactions'],
-    queryFn: () => apiClient.get('/api/treasury/transactions').then((r) => r.data),
+    queryFn: () => apiClient.get('/api/treasury/transactions?limit=1000').then((r) => r.data),
     enabled: canManage,
   })
+
+  // Kategorien extrahieren
+  const categories = useMemo(() => {
+    if (!transactions) return []
+    const cats = new Set<string>()
+    transactions.forEach(tx => {
+      if (tx.category) cats.add(tx.category)
+    })
+    return Array.from(cats).sort()
+  }, [transactions])
+
+  // Gefilterte und sortierte Transaktionen (nach Datum absteigend)
+  const filteredTransactions = useMemo(() => {
+    if (!transactions) return []
+    return transactions
+      .filter(tx => {
+        if (filterCategory && tx.category !== filterCategory) return false
+        if (filterType === 'income' && tx.amount <= 0) return false
+        if (filterType === 'expense' && tx.amount >= 0) return false
+        return true
+      })
+      .sort((a, b) => {
+        const dateA = a.transaction_date || a.created_at
+        const dateB = b.transaction_date || b.created_at
+        return new Date(dateB).getTime() - new Date(dateA).getTime()
+      })
+  }, [transactions, filterCategory, filterType])
+
+  // Pagination
+  const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE)
+  const paginatedTransactions = filteredTransactions.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  )
+
+  // Laufender Stand berechnen (für die aktuelle Seite, rückwärts vom aktuellen Stand)
+  const transactionsWithBalance = useMemo(() => {
+    if (!treasury || !filteredTransactions.length) return []
+
+    // Berechne den Stand vor der ersten Transaktion auf dieser Seite
+    let runningBalance = treasury.current_balance
+
+    // Subtrahiere alle Transaktionen vor der aktuellen Seite
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    for (let i = 0; i < startIndex; i++) {
+      runningBalance -= filteredTransactions[i].amount
+    }
+
+    // Jetzt für jede Transaktion auf der Seite den Stand berechnen
+    return paginatedTransactions.map((tx, idx) => {
+      const balance = runningBalance
+      runningBalance -= tx.amount
+      return { ...tx, runningBalance: balance }
+    })
+  }, [treasury, filteredTransactions, paginatedTransactions, currentPage])
+
+  // Statistiken
+  const stats = useMemo(() => {
+    if (!transactions) return { totalIncome: 0, totalExpense: 0, transactionCount: 0 }
+    const totalIncome = transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0)
+    const totalExpense = transactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0)
+    return { totalIncome, totalExpense, transactionCount: transactions.length }
+  }, [transactions])
 
   const createMutation = useMutation({
     mutationFn: (data: {
@@ -102,7 +171,6 @@ export default function TreasuryPage() {
         importMutation.mutate(file)
       }
     }
-    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -153,14 +221,26 @@ export default function TreasuryPage() {
   }
 
   const handleDelete = (tx: Transaction) => {
-    if (window.confirm(`Transaktion "${tx.description}" wirklich löschen? Der Kassenstand wird angepasst.`)) {
+    if (window.confirm(`Transaktion "${tx.description}" wirklich löschen?`)) {
       deleteMutation.mutate(tx.id)
     }
   }
 
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    })
+  }
+
+  const formatAmount = (amount: number) => {
+    return amount.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  }
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Staffelkasse</h1>
         {canManage && !showForm && (
           <div className="flex items-center gap-3">
@@ -178,7 +258,7 @@ export default function TreasuryPage() {
                   disabled={importMutation.isPending}
                   className="btn btn-secondary flex items-center gap-2"
                 >
-                  <Upload size={20} />
+                  <Upload size={18} />
                   {importMutation.isPending ? 'Importiere...' : 'CSV Import'}
                 </button>
               </>
@@ -187,24 +267,44 @@ export default function TreasuryPage() {
               onClick={() => setShowForm(true)}
               className="btn btn-primary flex items-center gap-2"
             >
-              <Plus size={20} />
+              <Plus size={18} />
               Transaktion
             </button>
           </div>
         )}
       </div>
 
-      {/* Kassenstand */}
-      <div className="card mb-8">
-        <p className="text-gray-400 mb-2">Aktueller Kontostand</p>
-        <p className="text-4xl font-bold text-sc-gold">
-          {treasury?.current_balance.toLocaleString('de-DE')} aUEC
-        </p>
+      {/* Statistik-Karten */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="card !p-4">
+          <p className="text-gray-400 text-sm mb-1">Kassenstand</p>
+          <p className="text-2xl font-bold text-krt-orange">
+            {formatAmount(treasury?.current_balance || 0)} aUEC
+          </p>
+        </div>
+        <div className="card !p-4">
+          <p className="text-gray-400 text-sm mb-1">Einnahmen (gesamt)</p>
+          <p className="text-2xl font-bold text-emerald-400">
+            +{formatAmount(stats.totalIncome)} aUEC
+          </p>
+        </div>
+        <div className="card !p-4">
+          <p className="text-gray-400 text-sm mb-1">Ausgaben (gesamt)</p>
+          <p className="text-2xl font-bold text-red-400">
+            -{formatAmount(stats.totalExpense)} aUEC
+          </p>
+        </div>
+        <div className="card !p-4">
+          <p className="text-gray-400 text-sm mb-1">Transaktionen</p>
+          <p className="text-2xl font-bold text-white">
+            {stats.transactionCount}
+          </p>
+        </div>
       </div>
 
-      {/* Neue Transaktion */}
+      {/* Neue Transaktion Form */}
       {showForm && (
-        <div className="card mb-8">
+        <div className="card mb-6">
           <h2 className="text-xl font-bold mb-4">Neue Transaktion</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex gap-4">
@@ -213,76 +313,77 @@ export default function TreasuryPage() {
                 onClick={() => setFormData({ ...formData, type: 'income' })}
                 className={`flex-1 p-4 rounded-lg border-2 transition-colors ${
                   formData.type === 'income'
-                    ? 'border-sc-green bg-sc-green/20'
+                    ? 'border-emerald-500 bg-emerald-500/20'
                     : 'border-gray-700'
                 }`}
               >
-                <ArrowUpCircle
+                <TrendingUp
                   className={`mx-auto mb-2 ${
-                    formData.type === 'income' ? 'text-sc-green' : 'text-gray-400'
+                    formData.type === 'income' ? 'text-emerald-400' : 'text-gray-400'
                   }`}
-                  size={32}
+                  size={28}
                 />
-                <p className="font-medium">Eingang</p>
+                <p className="font-medium">Einnahme</p>
               </button>
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, type: 'expense' })}
                 className={`flex-1 p-4 rounded-lg border-2 transition-colors ${
                   formData.type === 'expense'
-                    ? 'border-sc-red bg-sc-red/20'
+                    ? 'border-red-500 bg-red-500/20'
                     : 'border-gray-700'
                 }`}
               >
-                <ArrowDownCircle
+                <TrendingDown
                   className={`mx-auto mb-2 ${
-                    formData.type === 'expense' ? 'text-sc-red' : 'text-gray-400'
+                    formData.type === 'expense' ? 'text-red-400' : 'text-gray-400'
                   }`}
-                  size={32}
+                  size={28}
                 />
-                <p className="font-medium">Ausgang</p>
+                <p className="font-medium">Ausgabe</p>
               </button>
             </div>
 
-            <div>
-              <label className="label">Betrag (aUEC)</label>
-              <input
-                type="number"
-                min="1"
-                value={formData.amount}
-                onChange={(e) =>
-                  setFormData({ ...formData, amount: e.target.value })
-                }
-                placeholder="z.B. 50000"
-                className="input"
-                required
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Betrag (aUEC)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  placeholder="z.B. 5000000"
+                  className="input"
+                  required
+                />
+              </div>
+              <div>
+                <label className="label">Kategorie</label>
+                <input
+                  type="text"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  placeholder="z.B. Einzahlung, Schiff Fitting"
+                  className="input"
+                  list="categories"
+                />
+                <datalist id="categories">
+                  {categories.map(cat => (
+                    <option key={cat} value={cat} />
+                  ))}
+                </datalist>
+              </div>
             </div>
 
             <div>
-              <label className="label">Beschreibung</label>
+              <label className="label">Beschreibung / Event</label>
               <input
                 type="text"
                 value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                placeholder="z.B. Spende von Max"
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="z.B. Großzügige Spende von Silva-7"
                 className="input"
                 required
-              />
-            </div>
-
-            <div>
-              <label className="label">Kategorie (optional)</label>
-              <input
-                type="text"
-                value={formData.category}
-                onChange={(e) =>
-                  setFormData({ ...formData, category: e.target.value })
-                }
-                placeholder="z.B. Spende, Ausrüstung, Event"
-                className="input"
               />
             </div>
 
@@ -306,139 +407,188 @@ export default function TreasuryPage() {
         </div>
       )}
 
-      {/* Transaktions-Historie */}
-      {canManage && (
-        <div className="card">
-          <h2 className="text-xl font-bold mb-4">Transaktions-Historie</h2>
-          {transactions && transactions.length > 0 ? (
-            <div className="space-y-3">
-              {transactions.map((tx) => {
-                const hasExtendedData = tx.sc_version || tx.item_reference || tx.beneficiary || tx.verified_by || tx.transaction_date
-                const isExpanded = expandedTx === tx.id
+      {/* Filter */}
+      {canManage && transactions && transactions.length > 0 && (
+        <div className="card mb-4 !p-3">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2 text-gray-400">
+              <Filter size={18} />
+              <span className="text-sm">Filter:</span>
+            </div>
 
-                return (
-                  <div
-                    key={tx.id}
-                    className="bg-gray-800/50 rounded-lg overflow-hidden"
-                  >
-                    <div className="flex items-center justify-between p-4">
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        {tx.transaction_type === 'income' ? (
-                          <ArrowUpCircle className="text-sc-green flex-shrink-0" size={24} />
-                        ) : (
-                          <ArrowDownCircle className="text-sc-red flex-shrink-0" size={24} />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium truncate">{tx.description}</p>
-                          <p className="text-sm text-gray-400">
-                            {tx.category && `${tx.category} • `}
-                            {tx.transaction_date
-                              ? new Date(tx.transaction_date).toLocaleDateString('de-DE')
-                              : new Date(tx.created_at).toLocaleDateString('de-DE')
-                            }
-                            {tx.beneficiary && ` • ${tx.beneficiary}`}
+            <select
+              value={filterType}
+              onChange={(e) => { setFilterType(e.target.value as 'all' | 'income' | 'expense'); setCurrentPage(1) }}
+              className="input !w-auto !py-1.5 text-sm"
+            >
+              <option value="all">Alle Typen</option>
+              <option value="income">Nur Einnahmen</option>
+              <option value="expense">Nur Ausgaben</option>
+            </select>
+
+            <select
+              value={filterCategory}
+              onChange={(e) => { setFilterCategory(e.target.value); setCurrentPage(1) }}
+              className="input !w-auto !py-1.5 text-sm"
+            >
+              <option value="">Alle Kategorien</option>
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+
+            {(filterType !== 'all' || filterCategory) && (
+              <button
+                onClick={() => { setFilterType('all'); setFilterCategory(''); setCurrentPage(1) }}
+                className="text-sm text-krt-orange hover:text-krt-orange/80"
+              >
+                Filter zurücksetzen
+              </button>
+            )}
+
+            <span className="text-sm text-gray-500 ml-auto">
+              {filteredTransactions.length} Einträge
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Transaktions-Tabelle */}
+      {canManage && (
+        <div className="card !p-0 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-800/80 border-b border-gray-700">
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Datum</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Event / Beschreibung</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Kategorie</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Wer</th>
+                  <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">Transaktion</th>
+                  <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">Stand</th>
+                  <th className="text-center py-3 px-4 text-sm font-semibold text-gray-300 w-20">Aktion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactionsWithBalance.length > 0 ? (
+                  transactionsWithBalance.map((tx, idx) => (
+                    <tr
+                      key={tx.id}
+                      className={`border-b border-gray-800 hover:bg-gray-800/50 transition-colors ${
+                        idx % 2 === 0 ? 'bg-gray-900/30' : ''
+                      }`}
+                    >
+                      <td className="py-3 px-4 text-sm text-gray-300 whitespace-nowrap">
+                        {tx.transaction_date ? formatDate(tx.transaction_date) : formatDate(tx.created_at)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="max-w-xs">
+                          <p className="text-sm text-white truncate" title={tx.description}>
+                            {tx.description}
                           </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <p
-                          className={`font-bold whitespace-nowrap ${
-                            tx.amount > 0 ? 'text-sc-green' : 'text-sc-red'
-                          }`}
-                        >
-                          {tx.amount > 0 ? '+' : ''}
-                          {tx.amount.toLocaleString('de-DE')} aUEC
-                        </p>
-                        <div className="flex items-center gap-1">
-                          {hasExtendedData && (
-                            <button
-                              onClick={() => setExpandedTx(isExpanded ? null : tx.id)}
-                              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
-                              title="Details anzeigen"
-                            >
-                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                            </button>
+                          {tx.item_reference && tx.item_reference !== '-' && (
+                            <p className="text-xs text-gray-500 truncate" title={tx.item_reference}>
+                              {tx.item_reference}
+                            </p>
                           )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        {tx.category && (
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+                            tx.category === 'Einzahlung' || tx.category === 'Spende'
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : tx.category.includes('Beschaffung')
+                              ? 'bg-blue-500/20 text-blue-400'
+                              : tx.category.includes('Fitting')
+                              ? 'bg-purple-500/20 text-purple-400'
+                              : 'bg-gray-700 text-gray-300'
+                          }`}>
+                            {tx.category}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-300">
+                        {tx.beneficiary && tx.beneficiary !== '-' ? tx.beneficiary : '-'}
+                      </td>
+                      <td className={`py-3 px-4 text-sm text-right font-mono font-medium whitespace-nowrap ${
+                        tx.amount > 0 ? 'text-emerald-400' : 'text-red-400'
+                      }`}>
+                        {tx.amount > 0 ? '+' : ''}{formatAmount(tx.amount)}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-right font-mono text-krt-orange whitespace-nowrap">
+                        {formatAmount(tx.runningBalance)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => openEditModal(tx)}
-                            className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
                             title="Bearbeiten"
                           >
-                            <Edit3 size={16} />
+                            <Edit3 size={14} />
                           </button>
                           {isAdmin && (
                             <button
                               onClick={() => handleDelete(tx)}
                               disabled={deleteMutation.isPending}
-                              className="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded transition-colors"
-                              title="Löschen (nur Admin)"
+                              className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded transition-colors"
+                              title="Löschen"
                             >
-                              <Trash2 size={16} />
+                              <Trash2 size={14} />
                             </button>
                           )}
                         </div>
-                      </div>
-                    </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-gray-400">
+                      {transactions?.length === 0
+                        ? 'Noch keine Transaktionen vorhanden.'
+                        : 'Keine Transaktionen entsprechen dem Filter.'
+                      }
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
 
-                    {/* Erweiterte Details */}
-                    {isExpanded && hasExtendedData && (
-                      <div className="px-4 pb-4 pt-0 border-t border-gray-700/50">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
-                          {tx.sc_version && (
-                            <div>
-                              <span className="text-gray-500">SC Version:</span>
-                              <span className="ml-2 text-gray-300">{tx.sc_version}</span>
-                            </div>
-                          )}
-                          {tx.item_reference && (
-                            <div>
-                              <span className="text-gray-500">Item:</span>
-                              <span className="ml-2 text-gray-300">{tx.item_reference}</span>
-                            </div>
-                          )}
-                          {tx.beneficiary && (
-                            <div>
-                              <span className="text-gray-500">Wer:</span>
-                              <span className="ml-2 text-gray-300">{tx.beneficiary}</span>
-                            </div>
-                          )}
-                          {tx.verified_by && (
-                            <div>
-                              <span className="text-gray-500">Beglaubigt von:</span>
-                              <span className="ml-2 text-gray-300">{tx.verified_by}</span>
-                            </div>
-                          )}
-                          {tx.transaction_date && (
-                            <div>
-                              <span className="text-gray-500">Originaldatum:</span>
-                              <span className="ml-2 text-gray-300">
-                                {new Date(tx.transaction_date).toLocaleString('de-DE')}
-                              </span>
-                            </div>
-                          )}
-                          <div>
-                            <span className="text-gray-500">Erfasst von:</span>
-                            <span className="ml-2 text-gray-300">
-                              {tx.created_by.display_name || tx.created_by.username}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-700 bg-gray-800/50">
+              <span className="text-sm text-gray-400">
+                Seite {currentPage} von {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
             </div>
-          ) : (
-            <p className="text-gray-400">Noch keine Transaktionen vorhanden.</p>
           )}
         </div>
       )}
 
       {!canManage && (
-        <p className="text-gray-400 text-center">
-          Nur Kassenwarte können die Transaktions-Historie einsehen.
-        </p>
+        <div className="card text-center py-8">
+          <p className="text-gray-400">
+            Nur Kassenwarte und Admins können die Transaktions-Historie einsehen.
+          </p>
+        </div>
       )}
 
       {/* Edit Modal */}
@@ -463,36 +613,36 @@ export default function TreasuryPage() {
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, type: 'income' })}
-                  className={`flex-1 p-4 rounded-lg border-2 transition-colors ${
+                  className={`flex-1 p-3 rounded-lg border-2 transition-colors ${
                     formData.type === 'income'
-                      ? 'border-sc-green bg-sc-green/20'
+                      ? 'border-emerald-500 bg-emerald-500/20'
                       : 'border-gray-700'
                   }`}
                 >
-                  <ArrowUpCircle
-                    className={`mx-auto mb-2 ${
-                      formData.type === 'income' ? 'text-sc-green' : 'text-gray-400'
+                  <TrendingUp
+                    className={`mx-auto mb-1 ${
+                      formData.type === 'income' ? 'text-emerald-400' : 'text-gray-400'
                     }`}
-                    size={32}
+                    size={24}
                   />
-                  <p className="font-medium">Eingang</p>
+                  <p className="font-medium text-sm">Einnahme</p>
                 </button>
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, type: 'expense' })}
-                  className={`flex-1 p-4 rounded-lg border-2 transition-colors ${
+                  className={`flex-1 p-3 rounded-lg border-2 transition-colors ${
                     formData.type === 'expense'
-                      ? 'border-sc-red bg-sc-red/20'
+                      ? 'border-red-500 bg-red-500/20'
                       : 'border-gray-700'
                   }`}
                 >
-                  <ArrowDownCircle
-                    className={`mx-auto mb-2 ${
-                      formData.type === 'expense' ? 'text-sc-red' : 'text-gray-400'
+                  <TrendingDown
+                    className={`mx-auto mb-1 ${
+                      formData.type === 'expense' ? 'text-red-400' : 'text-gray-400'
                     }`}
-                    size={32}
+                    size={24}
                   />
-                  <p className="font-medium">Ausgang</p>
+                  <p className="font-medium text-sm">Ausgabe</p>
                 </button>
               </div>
 
@@ -502,10 +652,7 @@ export default function TreasuryPage() {
                   type="number"
                   min="1"
                   value={formData.amount}
-                  onChange={(e) =>
-                    setFormData({ ...formData, amount: e.target.value })
-                  }
-                  placeholder="z.B. 50000"
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                   className="input"
                   required
                 />
@@ -516,29 +663,29 @@ export default function TreasuryPage() {
                 <input
                   type="text"
                   value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  placeholder="z.B. Spende von Max"
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="input"
                   required
                 />
               </div>
 
               <div>
-                <label className="label">Kategorie (optional)</label>
+                <label className="label">Kategorie</label>
                 <input
                   type="text"
                   value={formData.category}
-                  onChange={(e) =>
-                    setFormData({ ...formData, category: e.target.value })
-                  }
-                  placeholder="z.B. Spende, Ausrüstung, Event"
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="input"
+                  list="categories-edit"
                 />
+                <datalist id="categories-edit">
+                  {categories.map(cat => (
+                    <option key={cat} value={cat} />
+                  ))}
+                </datalist>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -554,7 +701,7 @@ export default function TreasuryPage() {
                   disabled={updateMutation.isPending}
                   className="btn btn-primary flex-1"
                 >
-                  {updateMutation.isPending ? 'Wird gespeichert...' : 'Speichern'}
+                  {updateMutation.isPending ? 'Speichern...' : 'Speichern'}
                 </button>
               </div>
             </form>
