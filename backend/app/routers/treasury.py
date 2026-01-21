@@ -251,20 +251,76 @@ async def import_csv(
     errors = []
 
     # Automatische Delimiter-Erkennung (deutsche Excel-CSVs nutzen Semikolon)
-    first_line = text.split('\n')[0] if '\n' in text else text
+    lines = text.split('\n')
+    first_line = lines[0] if lines else text
     delimiter = ';' if first_line.count(';') > first_line.count(',') else ','
 
-    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+    # Header-Zeile finden (suche nach "Version" und "Menge" in einer Zeile)
+    header_row_idx = None
+    for idx, line in enumerate(lines):
+        if 'Version' in line and 'Menge' in line and 'Datum' in line:
+            header_row_idx = idx
+            break
 
-    for row_num, row in enumerate(reader, start=2):
+    if header_row_idx is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Konnte Header-Zeile nicht finden (benötigt: Version, Datum, Menge)"
+        )
+
+    # CSV ab Header-Zeile parsen
+    csv_text = '\n'.join(lines[header_row_idx:])
+    reader = csv.DictReader(io.StringIO(csv_text), delimiter=delimiter)
+
+    # Spalten-Mapping: Finde die echten Spaltennamen (können leer sein am Anfang)
+    # Die Spalten sind: (leer), Version, Datum, Zeit, Event, Nutzen, Was, Wer, Menge, Währung, Begl. von / An
+    fieldnames = reader.fieldnames or []
+
+    # Finde Spaltenindizes basierend auf Namen
+    def find_column(name):
+        for fn in fieldnames:
+            if fn and name.lower() in fn.lower():
+                return fn
+        return None
+
+    col_version = find_column('Version')
+    col_datum = find_column('Datum')
+    col_zeit = find_column('Zeit')
+    col_event = find_column('Event')
+    col_nutzen = find_column('Nutzen')
+    col_was = find_column('Was')
+    col_wer = find_column('Wer')
+    col_menge = find_column('Menge')
+    col_begl = find_column('Begl')
+
+    if not col_menge:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Spalte 'Menge' nicht gefunden"
+        )
+
+    for row_num, row in enumerate(reader, start=header_row_idx + 2):
         try:
             # Menge parsen (kann negativ sein für Ausgaben)
-            menge_str = row.get('Menge', '0').strip().replace(',', '.')
-            if not menge_str:
+            menge_str = (row.get(col_menge, '') or '').strip().replace(',', '.').replace('"', '')
+            if not menge_str or menge_str == '-':
                 skipped += 1
                 continue
 
-            menge = float(menge_str)
+            # Entferne Tausender-Punkte (1.900.000,00 -> 1900000.00)
+            # Nach replace(',', '.') haben wir z.B. "1.900.000.00"
+            # Wir müssen alle Punkte außer dem letzten entfernen
+            parts = menge_str.split('.')
+            if len(parts) > 2:
+                # Letzte zwei Teile mit Punkt verbinden, Rest ohne
+                menge_str = ''.join(parts[:-2]) + parts[-2] + '.' + parts[-1]
+
+            try:
+                menge = float(menge_str)
+            except ValueError:
+                skipped += 1
+                continue
+
             if menge == 0:
                 skipped += 1
                 continue
@@ -278,33 +334,40 @@ async def import_csv(
                 amount = menge  # Bleibt negativ
 
             # Datum parsen
-            datum_str = row.get('Datum', '').strip()
-            zeit_str = row.get('Zeit', '').strip()
+            datum_str = (row.get(col_datum, '') or '').strip() if col_datum else ''
+            zeit_str = (row.get(col_zeit, '') or '').strip() if col_zeit else ''
             transaction_date = None
-            if datum_str:
+            if datum_str and datum_str != '-':
                 try:
-                    # Format: DD.MM.YYYY
-                    if zeit_str:
+                    # Format: DD.MM.YYYY oder D.M.YYYY
+                    if zeit_str and zeit_str != '-':
                         transaction_date = datetime.strptime(f"{datum_str} {zeit_str}", "%d.%m.%Y %H:%M:%S")
                     else:
                         transaction_date = datetime.strptime(datum_str, "%d.%m.%Y")
                 except ValueError:
-                    pass  # Datum ignorieren wenn nicht parsbar
+                    try:
+                        # Alternatives Format ohne führende Nullen
+                        transaction_date = datetime.strptime(datum_str, "%d.%m.%Y")
+                    except ValueError:
+                        pass  # Datum ignorieren wenn nicht parsbar
 
             # Beschreibung zusammensetzen
-            event = row.get('Event', '').strip()
-            description = event if event else "Import aus CSV"
+            event = (row.get(col_event, '') or '').strip() if col_event else ''
+            if not event or event == '-':
+                skipped += 1
+                continue
+            description = event
 
             # Transaktion erstellen
             db_transaction = TreasuryTransaction(
                 amount=amount,
                 transaction_type=transaction_type,
                 description=description,
-                category=row.get('Nutzen', '').strip() or None,
-                sc_version=row.get('Version', '').strip() or None,
-                item_reference=row.get('Was', '').strip() or None,
-                beneficiary=row.get('Wer', '').strip() or None,
-                verified_by=row.get('Begl. von / An', '').strip() or None,
+                category=(row.get(col_nutzen, '') or '').strip() or None if col_nutzen else None,
+                sc_version=(row.get(col_version, '') or '').strip() or None if col_version else None,
+                item_reference=(row.get(col_was, '') or '').strip() or None if col_was else None,
+                beneficiary=(row.get(col_wer, '') or '').strip() or None if col_wer else None,
+                verified_by=(row.get(col_begl, '') or '').strip() or None if col_begl else None,
                 transaction_date=transaction_date,
                 created_by_id=current_user.id
             )
