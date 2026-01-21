@@ -7,6 +7,21 @@ import type { Treasury, Transaction, TransactionType, CSVImportResponse } from '
 
 const ITEMS_PER_PAGE = 50
 
+// Feste Kategorien für Transaktionen
+const TRANSACTION_CATEGORIES = [
+  'Einzahlung',
+  'Spende',
+  'Schiff Fitting',
+  'Beschaffung Schiff',
+  'Beschaffung Ausrüstung',
+  'Restock / Aufmunitionierung',
+  'Reparaturkosten',
+  'Anteil Aktivität',
+  'Bereinigung',
+  'Veruntreuung von Geldern',
+  'Wiederholte ausgabe (Bug)',
+]
+
 export default function TreasuryPage() {
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
@@ -38,16 +53,6 @@ export default function TreasuryPage() {
     queryFn: () => apiClient.get('/api/treasury/transactions?limit=1000').then((r) => r.data),
     enabled: canManage,
   })
-
-  // Kategorien extrahieren
-  const categories = useMemo(() => {
-    if (!transactions) return []
-    const cats = new Set<string>()
-    transactions.forEach(tx => {
-      if (tx.category) cats.add(tx.category)
-    })
-    return Array.from(cats).sort()
-  }, [transactions])
 
   // Gefilterte und sortierte Transaktionen (nach Datum absteigend)
   const filteredTransactions = useMemo(() => {
@@ -164,6 +169,17 @@ export default function TreasuryPage() {
     },
   })
 
+  const deleteAllMutation = useMutation({
+    mutationFn: () => apiClient.delete('/api/treasury/transactions/all'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['treasury'] })
+      alert('Alle Transaktionen wurden gelöscht.')
+    },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -173,6 +189,14 @@ export default function TreasuryPage() {
     }
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
+    }
+  }
+
+  const handleDeleteAll = () => {
+    if (window.confirm('ACHTUNG: Alle Transaktionen werden unwiderruflich gelöscht und der Kassenstand auf 0 gesetzt. Fortfahren?')) {
+      if (window.confirm('Bist du WIRKLICH sicher? Diese Aktion kann nicht rückgängig gemacht werden!')) {
+        deleteAllMutation.mutate()
+      }
     }
   }
 
@@ -253,6 +277,15 @@ export default function TreasuryPage() {
                   onChange={handleFileSelect}
                   className="hidden"
                 />
+                <button
+                  onClick={handleDeleteAll}
+                  disabled={deleteAllMutation.isPending || !transactions?.length}
+                  className="btn btn-secondary flex items-center gap-2 !text-red-400 hover:!bg-red-500/20"
+                  title="Alle Transaktionen löschen"
+                >
+                  <Trash2 size={18} />
+                  Alle löschen
+                </button>
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={importMutation.isPending}
@@ -359,19 +392,17 @@ export default function TreasuryPage() {
               </div>
               <div>
                 <label className="label">Kategorie</label>
-                <input
-                  type="text"
+                <select
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  placeholder="z.B. Einzahlung, Schiff Fitting"
                   className="input"
-                  list="categories"
-                />
-                <datalist id="categories">
-                  {categories.map(cat => (
-                    <option key={cat} value={cat} />
+                  required
+                >
+                  <option value="">Kategorie wählen...</option>
+                  {TRANSACTION_CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
                   ))}
-                </datalist>
+                </select>
               </div>
             </div>
 
@@ -432,7 +463,7 @@ export default function TreasuryPage() {
               className="input !w-auto !py-1.5 text-sm"
             >
               <option value="">Alle Kategorien</option>
-              {categories.map(cat => (
+              {TRANSACTION_CATEGORIES.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
@@ -671,18 +702,16 @@ export default function TreasuryPage() {
 
               <div>
                 <label className="label">Kategorie</label>
-                <input
-                  type="text"
+                <select
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="input"
-                  list="categories-edit"
-                />
-                <datalist id="categories-edit">
-                  {categories.map(cat => (
-                    <option key={cat} value={cat} />
+                >
+                  <option value="">Keine Kategorie</option>
+                  {TRANSACTION_CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
                   ))}
-                </datalist>
+                </select>
               </div>
 
               <div className="flex gap-3 pt-2">
