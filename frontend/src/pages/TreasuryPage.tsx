@@ -2,7 +2,7 @@ import { useState, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, ArrowUpCircle, ArrowDownCircle, Edit3, Trash2, X, Upload, TrendingUp, TrendingDown, Filter, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Edit3, Trash2, X, Upload, TrendingUp, TrendingDown, Filter, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Treasury, Transaction, TransactionType, CSVImportResponse } from '../api/types'
 
 const ITEMS_PER_PAGE = 50
@@ -87,7 +87,7 @@ export default function TreasuryPage() {
     }
 
     // Jetzt für jede Transaktion auf der Seite den Stand berechnen
-    return paginatedTransactions.map((tx, idx) => {
+    return paginatedTransactions.map((tx) => {
       const balance = runningBalance
       runningBalance -= tx.amount
       return { ...tx, runningBalance: balance }
