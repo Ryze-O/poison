@@ -716,9 +716,16 @@ export default function TreasuryPage() {
                     onSubmit={(e) => {
                       e.preventDefault()
                       const input = (e.target as HTMLFormElement).elements.namedItem('balance') as HTMLInputElement
+                      // Bereinige Eingabe: entferne Tausendertrennzeichen, ersetze Komma durch Punkt
+                      const cleaned = input.value.replace(/\./g, '').replace(',', '.')
+                      const balance = parseFloat(cleaned)
+                      if (isNaN(balance)) {
+                        alert('Bitte gib eine gültige Zahl ein')
+                        return
+                      }
                       setBalanceMutation.mutate({
                         id: selectedAccountId,
-                        balance: parseFloat(input.value),
+                        balance: balance,
                       })
                     }}
                     className="space-y-4"
@@ -733,12 +740,23 @@ export default function TreasuryPage() {
                     <div>
                       <label className="label">Neuer Stand (aUEC)</label>
                       <input
-                        type="number"
+                        type="text"
                         name="balance"
-                        defaultValue={account.balance}
-                        className="input"
+                        defaultValue={Math.round(account.balance).toString()}
+                        className="input font-mono"
                         required
+                        placeholder="z.B. 23990339"
+                        onPaste={(e) => {
+                          // Bei Paste: Tausendertrennzeichen entfernen
+                          e.preventDefault()
+                          const text = e.clipboardData.getData('text')
+                          // Entferne Punkte (Tausender) und ersetze Komma durch Punkt (Dezimal)
+                          const cleaned = text.replace(/\./g, '').replace(',', '.')
+                          const input = e.target as HTMLInputElement
+                          input.value = cleaned
+                        }}
                       />
+                      <p className="text-xs text-gray-500 mt-1">Nur Zahlen, keine Tausendertrennzeichen</p>
                     </div>
 
                     <div className="flex gap-3">
