@@ -199,3 +199,41 @@ async def get_terminals(
         ItemPrice.terminal_name
     ).all()
     return [t[0] for t in terminals]
+
+
+@router.get("/uex/debug")
+async def debug_uex_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Debug-Endpoint für UEX-Daten."""
+    check_role(current_user, UserRole.ADMIN)
+
+    # Zähle Components mit UUID
+    components_with_uuid = db.query(Component).filter(
+        Component.sc_uuid.isnot(None)
+    ).count()
+
+    # Beispiel UUIDs aus Components
+    sample_component_uuids = db.query(Component.sc_uuid, Component.name).filter(
+        Component.sc_uuid.isnot(None)
+    ).limit(5).all()
+
+    # Zähle ItemPrices
+    total_prices = db.query(ItemPrice).count()
+    matched_prices = db.query(ItemPrice).filter(
+        ItemPrice.component_id.isnot(None)
+    ).count()
+
+    # Beispiel UUIDs aus ItemPrices
+    sample_price_uuids = db.query(ItemPrice.item_uuid, ItemPrice.item_name).filter(
+        ItemPrice.item_uuid.isnot(None)
+    ).limit(5).all()
+
+    return {
+        "components_with_uuid": components_with_uuid,
+        "sample_component_uuids": [{"uuid": u, "name": n} for u, n in sample_component_uuids],
+        "total_item_prices": total_prices,
+        "matched_item_prices": matched_prices,
+        "sample_price_uuids": [{"uuid": u, "name": n} for u, n in sample_price_uuids],
+    }

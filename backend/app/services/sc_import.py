@@ -109,6 +109,7 @@ class SCImportService:
         page = 1
         total_pages = 1
         max_pages = 500  # Limit um Timeout zu vermeiden
+        consecutive_errors = 0
 
         while page <= min(total_pages, max_pages):
             try:
@@ -119,8 +120,15 @@ class SCImportService:
 
                 if response.status_code != 200:
                     self.stats.errors.append(f"API-Fehler Seite {page}: {response.status_code}")
-                    break
+                    consecutive_errors += 1
+                    page += 1
+                    # Nach 3 aufeinanderfolgenden Fehlern abbrechen
+                    if consecutive_errors >= 3:
+                        self.stats.errors.append("Abbruch nach 3 aufeinanderfolgenden API-Fehlern")
+                        break
+                    continue
 
+                consecutive_errors = 0  # Reset bei Erfolg
                 data = response.json()
                 total_pages = data.get("meta", {}).get("last_page", 1)
                 items = data.get("data", [])
@@ -142,7 +150,11 @@ class SCImportService:
 
             except Exception as e:
                 self.stats.errors.append(f"Fehler auf Seite {page}: {str(e)}")
-                break
+                consecutive_errors += 1
+                page += 1
+                if consecutive_errors >= 3:
+                    self.stats.errors.append("Abbruch nach 3 aufeinanderfolgenden Fehlern")
+                    break
 
         # Finaler Commit (falls letzte Seite erfolgreich war)
         try:

@@ -124,19 +124,23 @@ class UEXImportService:
             return []
 
     def _build_uuid_mapping(self) -> dict:
-        """Erstellt ein Mapping von UUID -> Component ID."""
+        """Erstellt ein Mapping von UUID (lowercase) -> Component ID."""
         components = self.db.query(Component.id, Component.sc_uuid).filter(
             Component.sc_uuid.isnot(None)
         ).all()
 
-        return {comp.sc_uuid: comp.id for comp in components}
+        # Lowercase für case-insensitive Matching
+        return {comp.sc_uuid.lower(): comp.id for comp in components}
 
     def _match_component(self, price_entry: dict, uuid_mapping: dict) -> Optional[int]:
         """Versucht ein Price-Entry mit einer Komponente zu matchen."""
         item_uuid = price_entry.get("item_uuid")
 
-        if item_uuid and item_uuid in uuid_mapping:
-            return uuid_mapping[item_uuid]
+        if item_uuid:
+            # Lowercase für case-insensitive Matching
+            uuid_lower = item_uuid.lower()
+            if uuid_lower in uuid_mapping:
+                return uuid_mapping[uuid_lower]
 
         return None
 
