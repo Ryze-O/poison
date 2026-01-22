@@ -20,7 +20,7 @@ class UEXImportService:
 
     def __init__(self, db: Session):
         self.db = db
-        self.client = httpx.Client(timeout=60.0)
+        self.client = httpx.Client(timeout=60.0, follow_redirects=True)
         self.log: Optional[UEXSyncLog] = None
 
     def __del__(self):

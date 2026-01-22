@@ -69,7 +69,7 @@ class SCImportService:
     def __init__(self, db: Session):
         self.db = db
         self.stats = SCImportStats()
-        self.client = httpx.Client(timeout=30.0)
+        self.client = httpx.Client(timeout=30.0, follow_redirects=True)
 
     def __del__(self):
         if hasattr(self, 'client'):
