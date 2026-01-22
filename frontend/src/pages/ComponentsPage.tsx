@@ -6,7 +6,6 @@ import { Plus, Trash2, Search } from 'lucide-react'
 import type { Component } from '../api/types'
 
 export default function ComponentsPage() {
-  const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState('')

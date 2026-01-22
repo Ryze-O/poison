@@ -6,7 +6,6 @@ import { MapPin, Plus, Edit2, Trash2, Package, Search, Globe, Building } from 'l
 import type { Location, InventoryItem } from '../api/types'
 
 export default function LocationsPage() {
-  const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const [editModal, setEditModal] = useState<Location | null>(null)
   const [createModal, setCreateModal] = useState(false)

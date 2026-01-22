@@ -23,7 +23,6 @@ const TRANSACTION_CATEGORIES = [
 ]
 
 export default function TreasuryPage() {
-  const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)

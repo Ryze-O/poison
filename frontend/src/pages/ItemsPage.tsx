@@ -9,7 +9,6 @@ import type { Component } from '../api/types'
 type Item = Component
 
 export default function ItemsPage() {
-  const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState('')

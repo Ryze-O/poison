@@ -34,7 +34,6 @@ const SESSION_TYPE_LABELS: Record<SessionType, string> = {
 }
 
 export default function AttendancePage() {
-  const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const [isCreating, setIsCreating] = useState(false)
   const [sessionType, setSessionType] = useState<SessionType>('staffelabend')
