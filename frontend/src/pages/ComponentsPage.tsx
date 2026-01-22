@@ -301,7 +301,9 @@ export default function ComponentsPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           {comp.sc_uuid && (
-                            <ShoppingCart size={16} className="text-gray-500" title="Hat Preisdaten" />
+                            <span title="Hat Preisdaten">
+                              <ShoppingCart size={16} className="text-gray-500" />
+                            </span>
                           )}
                           {canDelete && !comp.is_predefined && (
                             <button
