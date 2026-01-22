@@ -304,7 +304,7 @@ export default function ItemsPage() {
                                 >
                                   <div className="min-w-0 flex-1">
                                     <p className="font-medium truncate">{item.name}</p>
-                                    <p className="text-xs text-gray-400 truncate">
+                                    <p className="text-xs text-krt-orange/60 truncate">
                                       {[
                                         item.manufacturer,
                                         item.size && `Size ${item.size}`,
