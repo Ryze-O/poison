@@ -26,8 +26,10 @@ export default function LocationsPage() {
   const [filterPlanet, setFilterPlanet] = useState('')
   const [filterType, setFilterType] = useState('')
 
-  const canManage = user?.role !== 'member'
-  const isAdmin = user?.role === 'admin'
+  // Effektive Rolle (berücksichtigt Vorschaumodus)
+  const effectiveRole = useAuthStore.getState().getEffectiveRole()
+  const canManage = effectiveRole !== 'member' && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
+  const isAdmin = effectiveRole === 'admin'
 
   const { data: locations } = useQuery<Location[]>({
     queryKey: ['locations'],

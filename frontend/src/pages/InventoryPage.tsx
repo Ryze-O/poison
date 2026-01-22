@@ -62,7 +62,9 @@ export default function InventoryPage() {
   const [filterSubCategory, setFilterSubCategory] = useState<string>('')
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
-  const canManage = user?.role !== 'member'
+  // Effektive Rolle (berücksichtigt Vorschaumodus)
+  const effectiveRole = useAuthStore.getState().getEffectiveRole()
+  const canManage = effectiveRole !== 'member' && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
 
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => {

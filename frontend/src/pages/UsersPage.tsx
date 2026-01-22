@@ -38,8 +38,10 @@ export default function UsersPage() {
   const [editUsername, setEditUsername] = useState('')
   const [editDisplayName, setEditDisplayName] = useState('')
 
-  const isAdmin = currentUser?.role === 'admin'
-  const isOfficer = currentUser?.role === 'officer' || currentUser?.role === 'treasurer' || isAdmin
+  // Effektive Rolle (berücksichtigt Vorschaumodus)
+  const effectiveRole = useAuthStore.getState().getEffectiveRole()
+  const isAdmin = effectiveRole === 'admin'
+  const isOfficer = effectiveRole === 'officer' || effectiveRole === 'treasurer' || isAdmin
 
   const { data: users } = useQuery<User[]>({
     queryKey: ['users'],

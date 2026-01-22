@@ -1,21 +1,30 @@
 import { create } from 'zustand'
 import { apiClient } from '../api/client'
-import type { User } from '../api/types'
+import type { User, UserRole } from '../api/types'
 
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
+  // Vorschaumodus: temporär als andere Rolle agieren
+  previewRole: UserRole | null
   login: () => Promise<void>
   logout: () => void
   fetchUser: () => Promise<void>
   setToken: (token: string) => void
+  // Vorschaumodus aktivieren/deaktivieren
+  setPreviewRole: (role: UserRole | null) => void
+  // Effektive Rolle (Vorschau oder echte Rolle)
+  getEffectiveRole: () => UserRole | undefined
+  // Prüft ob User mindestens Offizier ist (für Vorschau-Berechtigung)
+  canUsePreviewMode: () => boolean
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: !!localStorage.getItem('token'),
   isLoading: true,
+  previewRole: null,
 
   login: async () => {
     const response = await apiClient.get('/api/auth/login')
@@ -24,7 +33,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: () => {
     localStorage.removeItem('token')
-    set({ user: null, isAuthenticated: false })
+    set({ user: null, isAuthenticated: false, previewRole: null })
     window.location.href = '/login'
   },
 
@@ -47,6 +56,23 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.removeItem('token')
       set({ user: null, isAuthenticated: false, isLoading: false })
     }
+  },
+
+  setPreviewRole: (role: UserRole | null) => {
+    set({ previewRole: role })
+  },
+
+  getEffectiveRole: () => {
+    const { user, previewRole } = get()
+    if (!user) return undefined
+    return previewRole || user.role
+  },
+
+  canUsePreviewMode: () => {
+    const { user } = get()
+    if (!user) return false
+    // Offiziere, Kassenwartin, Admins können Vorschaumodus nutzen
+    return ['officer', 'treasurer', 'admin'].includes(user.role)
   },
 }))
 

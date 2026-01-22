@@ -15,7 +15,9 @@ export default function DashboardPage() {
   const { user } = useAuthStore()
   const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null)
 
-  const canManageSession = user?.role === 'admin' || user?.role === 'officer' || user?.role === 'treasurer'
+  // Effektive Rolle (berücksichtigt Vorschaumodus)
+  const effectiveRole = useAuthStore.getState().getEffectiveRole()
+  const canManageSession = effectiveRole === 'admin' || effectiveRole === 'officer' || effectiveRole === 'treasurer'
 
   const { data: treasury } = useQuery<Treasury>({
     queryKey: ['treasury'],
@@ -41,10 +43,10 @@ export default function DashboardPage() {
   const { data: myInventory } = useQuery<InventoryItem[]>({
     queryKey: ['inventory', 'my'],
     queryFn: () => apiClient.get('/api/inventory/my').then((r) => r.data),
-    enabled: user?.role !== 'member',
+    enabled: effectiveRole !== 'member' && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest',
   })
 
-  const canManage = user?.role !== 'member'
+  const canManage = effectiveRole !== 'member' && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
 
   // Hilfsfunktion für Session-Karten
   const renderSessionCard = (session: AttendanceSession, type: SessionType) => {

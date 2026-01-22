@@ -17,6 +17,8 @@ import {
   Search,
   Sun,
   Moon,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
@@ -35,9 +37,11 @@ const navItems = [
 ] as const
 
 export default function Layout() {
-  const { user, logout } = useAuthStore()
+  const { user, logout, previewRole, setPreviewRole, canUsePreviewMode } = useAuthStore()
   const { theme, toggleTheme } = useTheme()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  const isInPreviewMode = previewRole !== null
 
   return (
     <div className="min-h-screen flex bg-page text-primary">
@@ -77,7 +81,13 @@ export default function Layout() {
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {navItems
-              .filter((item) => !('adminOnly' in item && item.adminOnly) || user?.role === 'admin')
+              .filter((item) => {
+                // Im Vorschaumodus: Admin-Only Items ausblenden
+                if ('adminOnly' in item && item.adminOnly) {
+                  return !isInPreviewMode && user?.role === 'admin'
+                }
+                return true
+              })
               .map((item) => (
               <NavLink
                 key={item.to}
@@ -110,15 +120,38 @@ export default function Layout() {
               <span className="text-sm">{theme === 'dark' ? 'Heller Modus' : 'Dunkler Modus'}</span>
             </button>
 
+            {/* Vorschaumodus Toggle (nur für Offiziere+) */}
+            {canUsePreviewMode() && (
+              <button
+                onClick={() => setPreviewRole(isInPreviewMode ? null : 'member')}
+                className={clsx(
+                  'w-full flex items-center gap-3 px-4 py-2 mb-4 rounded-lg transition-colors',
+                  isInPreviewMode
+                    ? 'bg-purple-600/20 text-purple-400 border border-purple-500'
+                    : 'text-muted hover:bg-card-hover hover:text-primary'
+                )}
+                title={isInPreviewMode ? 'Vorschaumodus beenden' : 'Als Viper ansehen'}
+              >
+                {isInPreviewMode ? <EyeOff size={20} /> : <Eye size={20} />}
+                <span className="text-sm">{isInPreviewMode ? 'Vorschau beenden' : 'Als Viper ansehen'}</span>
+              </button>
+            )}
+
             <div className="flex items-center gap-3 mb-4">
               {user?.avatar ? (
                 <img
                   src={user.avatar}
                   alt={user.username}
-                  className="w-10 h-10 rounded-full ring-2 ring-default"
+                  className={clsx(
+                    'w-10 h-10 rounded-full ring-2',
+                    isInPreviewMode ? 'ring-purple-500' : 'ring-default'
+                  )}
                 />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-card flex items-center justify-center ring-2 ring-default">
+                <div className={clsx(
+                  'w-10 h-10 rounded-full bg-card flex items-center justify-center ring-2',
+                  isInPreviewMode ? 'ring-purple-500' : 'ring-default'
+                )}>
                   {user?.username?.charAt(0).toUpperCase()}
                 </div>
               )}
@@ -126,7 +159,12 @@ export default function Layout() {
                 <p className="font-medium truncate">
                   {user?.display_name || user?.username}
                 </p>
-                <p className="text-xs text-krt-orange capitalize">{user?.role}</p>
+                <p className={clsx(
+                  'text-xs capitalize',
+                  isInPreviewMode ? 'text-purple-400' : 'text-krt-orange'
+                )}>
+                  {isInPreviewMode ? `Vorschau: Viper` : user?.role}
+                </p>
               </div>
             </div>
             <button
@@ -150,6 +188,20 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 p-6 lg:p-8 lg:ml-64 overflow-auto relative">
+        {/* Vorschaumodus Banner */}
+        {isInPreviewMode && (
+          <div className="fixed top-0 left-0 right-0 lg:left-64 z-50 bg-purple-600 text-white py-2 px-4 flex items-center justify-center gap-4">
+            <Eye size={18} />
+            <span className="text-sm font-medium">Vorschaumodus aktiv - Du siehst die Seite als Viper (Mitglied)</span>
+            <button
+              onClick={() => setPreviewRole(null)}
+              className="ml-4 px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-sm transition-colors"
+            >
+              Beenden
+            </button>
+          </div>
+        )}
+
         {/* KRT Logo Watermark - nur im Dark Mode sichtbar */}
         <div
           className={clsx(
@@ -164,7 +216,7 @@ export default function Layout() {
             filter: theme === 'dark' ? 'invert(1) brightness(0)' : 'brightness(0)',
           }}
         />
-        <div className="relative z-10">
+        <div className={clsx('relative z-10', isInPreviewMode && 'mt-10')}>
           <Outlet />
         </div>
       </main>

@@ -55,8 +55,10 @@ export default function TreasuryPage() {
     description: '',
   })
 
-  const canManage = user?.role === 'treasurer' || user?.role === 'admin'
-  const isAdmin = user?.role === 'admin'
+  // Effektive Rolle (berücksichtigt Vorschaumodus)
+  const effectiveRole = useAuthStore.getState().getEffectiveRole()
+  const canManage = effectiveRole === 'treasurer' || effectiveRole === 'admin'
+  const isAdmin = effectiveRole === 'admin'
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data: treasury } = useQuery<Treasury>({

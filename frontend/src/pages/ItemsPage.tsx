@@ -23,8 +23,10 @@ export default function ItemsPage() {
     sub_category: '',
   })
 
-  const canCreate = user?.role === 'officer' || user?.role === 'treasurer' || user?.role === 'admin'
-  const canDelete = user?.role === 'admin'
+  // Effektive Rolle (berücksichtigt Vorschaumodus)
+  const effectiveRole = useAuthStore.getState().getEffectiveRole()
+  const canCreate = effectiveRole === 'officer' || effectiveRole === 'treasurer' || effectiveRole === 'admin'
+  const canDelete = effectiveRole === 'admin'
 
   const { data: items } = useQuery<Item[]>({
     queryKey: ['items'],

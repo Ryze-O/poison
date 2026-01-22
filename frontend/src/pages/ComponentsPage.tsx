@@ -17,8 +17,10 @@ export default function ComponentsPage() {
     category: '',
   })
 
-  const canCreate = user?.role === 'officer' || user?.role === 'treasurer' || user?.role === 'admin'
-  const canDelete = user?.role === 'admin'
+  // Effektive Rolle (berücksichtigt Vorschaumodus)
+  const effectiveRole = useAuthStore.getState().getEffectiveRole()
+  const canCreate = effectiveRole === 'officer' || effectiveRole === 'treasurer' || effectiveRole === 'admin'
+  const canDelete = effectiveRole === 'admin'
 
   const { data: components } = useQuery<Component[]>({
     queryKey: ['components'],

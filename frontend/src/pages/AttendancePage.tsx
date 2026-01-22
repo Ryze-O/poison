@@ -55,8 +55,10 @@ export default function AttendancePage() {
   const [guestUsername, setGuestUsername] = useState('')
   const [guestDisplayName, setGuestDisplayName] = useState('')
 
-  const canCreate = user?.role !== 'member'
-  const isAdmin = user?.role === 'admin'
+  // Effektive Rolle (berücksichtigt Vorschaumodus)
+  const effectiveRole = useAuthStore.getState().getEffectiveRole()
+  const canCreate = effectiveRole !== 'member' && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
+  const isAdmin = effectiveRole === 'admin'
 
   const { data: sessions } = useQuery<AttendanceSession[]>({
     queryKey: ['attendance'],
