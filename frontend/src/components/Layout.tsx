@@ -19,29 +19,45 @@ import {
   Moon,
   Eye,
   EyeOff,
+  Database,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
 
-const navItems = [
+// Haupt-Navigation (für alle sichtbar)
+const mainNavItems = [
   { to: '/', icon: Home, label: 'Dashboard' },
-  { to: '/attendance', icon: ClipboardList, label: 'Anwesenheit' },
+  { to: '/attendance', icon: ClipboardList, label: 'Staffelabende' },
   { to: '/loot', icon: Gift, label: 'Loot' },
   { to: '/inventory', icon: Package, label: 'Lager' },
+  { to: '/treasury', icon: Wallet, label: 'Kasse' },
+]
+
+// Datenbank-Navigation (nur für Offiziere+)
+const databaseNavItems = [
   { to: '/items', icon: Boxes, label: 'Items' },
   { to: '/components', icon: Search, label: 'Component Browser' },
   { to: '/locations', icon: MapPin, label: 'Standorte' },
-  { to: '/treasury', icon: Wallet, label: 'Kasse' },
   { to: '/users', icon: Users, label: 'Benutzer' },
-  { to: '/admin', icon: Settings, label: 'Admin', adminOnly: true },
-] as const
+]
+
+// Admin-Navigation
+const adminNavItems = [
+  { to: '/admin', icon: Settings, label: 'Admin' },
+]
 
 export default function Layout() {
   const { user, logout, previewRole, setPreviewRole, canUsePreviewMode } = useAuthStore()
   const { theme, toggleTheme } = useTheme()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [databaseExpanded, setDatabaseExpanded] = useState(false)
 
   const isInPreviewMode = previewRole !== null
+  const effectiveRole = previewRole || user?.role
+  const isOfficerOrHigher = effectiveRole === 'officer' || effectiveRole === 'treasurer' || effectiveRole === 'admin'
+  const isAdmin = !isInPreviewMode && user?.role === 'admin'
 
   return (
     <div className="min-h-screen flex bg-page text-primary">
@@ -80,15 +96,8 @@ export default function Layout() {
 
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {navItems
-              .filter((item) => {
-                // Im Vorschaumodus: Admin-Only Items ausblenden
-                if ('adminOnly' in item && item.adminOnly) {
-                  return !isInPreviewMode && user?.role === 'admin'
-                }
-                return true
-              })
-              .map((item) => (
+            {/* Haupt-Navigation */}
+            {mainNavItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -96,6 +105,64 @@ export default function Layout() {
                 className={({ isActive }) =>
                   clsx(
                     'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200',
+                    isActive
+                      ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange'
+                      : 'text-muted hover:bg-card-hover hover:text-primary'
+                  )
+                }
+              >
+                <item.icon size={20} />
+                {item.label}
+              </NavLink>
+            ))}
+
+            {/* Datenbank-Kategorie (nur für Offiziere+) */}
+            {isOfficerOrHigher && (
+              <>
+                <button
+                  onClick={() => setDatabaseExpanded(!databaseExpanded)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-muted hover:bg-card-hover hover:text-primary transition-all duration-200 mt-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <Database size={20} />
+                    <span>Datenbank</span>
+                  </div>
+                  {databaseExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </button>
+                {databaseExpanded && (
+                  <div className="ml-4 space-y-1 border-l border-gray-700">
+                    {databaseNavItems.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        onClick={() => setSidebarOpen(false)}
+                        className={({ isActive }) =>
+                          clsx(
+                            'flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 text-sm',
+                            isActive
+                              ? 'bg-krt-orange/20 text-krt-orange'
+                              : 'text-muted hover:bg-card-hover hover:text-primary'
+                          )
+                        }
+                      >
+                        <item.icon size={16} />
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Admin-Navigation */}
+            {isAdmin && adminNavItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={() => setSidebarOpen(false)}
+                className={({ isActive }) =>
+                  clsx(
+                    'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 mt-4',
                     isActive
                       ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange'
                       : 'text-muted hover:bg-card-hover hover:text-primary'

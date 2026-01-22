@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
@@ -18,8 +18,10 @@ import {
   Users,
   PlusCircle,
   RotateCcw,
+  Upload,
+  Clipboard,
 } from 'lucide-react'
-import type { LootSession, LootItem, Component, Location, User, AttendanceSession } from '../api/types'
+import type { LootSession, LootItem, Component, Location, User, AttendanceSession, ScanResult, SessionType } from '../api/types'
 
 // Fuzzy-Search: Normalisiert String für flexibleres Matching
 // "TS2" findet "TS-2", "ts_2", "TS 2" etc.
@@ -38,6 +40,11 @@ export default function LootPage() {
   const [newSessionDate, setNewSessionDate] = useState(() => new Date().toISOString().split('T')[0])
   const [newSessionNotes, setNewSessionNotes] = useState('')
   const [newSessionLocation, setNewSessionLocation] = useState<number | null>(null)
+  const [newSessionType, setNewSessionType] = useState<SessionType>('freeplay')
+
+  // OCR/Anwesenheit für neue Session
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null)
+  const [selectedUsers, setSelectedUsers] = useState<number[]>([])
 
   // Edit-Session: lokaler State für Notizen (um nicht bei jedem Tastendruck zu speichern)
   const [editNotes, setEditNotes] = useState('')
@@ -110,8 +117,46 @@ export default function LootPage() {
   const { data: allUsers } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: () => apiClient.get('/api/users').then((r) => r.data),
-    enabled: distributingItem !== null || showDistributionDialog,
+    enabled: distributingItem !== null || showDistributionDialog || isCreating,
   })
+
+  // OCR-Scan Mutation
+  const scanMutation = useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      return apiClient.post('/api/attendance/scan', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+    },
+    onSuccess: (response) => {
+      setScanResult(response.data)
+      setSelectedUsers(response.data.matched.map((m: { user_id: number }) => m.user_id))
+    },
+  })
+
+  // Paste-Handler für Screenshots
+  const handlePaste = useCallback(
+    (e: ClipboardEvent) => {
+      if (!isCreating) return
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (file) {
+            scanMutation.mutate(file)
+          }
+        }
+      }
+    },
+    [isCreating, scanMutation]
+  )
+
+  useEffect(() => {
+    document.addEventListener('paste', handlePaste)
+    return () => document.removeEventListener('paste', handlePaste)
+  }, [handlePaste])
 
   // Attendance-Session laden (falls Loot-Session mit Attendance verknüpft)
   const { data: attendanceSession } = useQuery<AttendanceSession>({
@@ -145,16 +190,52 @@ export default function LootPage() {
     enabled: showDistributionDialog,
   })
 
-  // Session erstellen (standalone)
+  // Session erstellen (mit optionaler Attendance-Session)
   const createSessionMutation = useMutation({
-    mutationFn: (data: { date?: string; notes?: string; location_id?: number; items?: unknown[] }) =>
-      apiClient.post('/api/loot', data),
+    mutationFn: async (data: {
+      date?: string
+      notes?: string
+      location_id?: number
+      items?: unknown[]
+      session_type?: SessionType
+      records?: { user_id: number }[]
+      screenshot_base64?: string
+    }) => {
+      // Wenn wir Teilnehmer haben, erst Attendance-Session erstellen
+      if (data.records && data.records.length > 0) {
+        const attendanceResponse = await apiClient.post('/api/attendance', {
+          session_type: data.session_type || 'freeplay',
+          notes: data.notes,
+          records: data.records,
+          screenshot_base64: data.screenshot_base64,
+        })
+        // Dann Loot-Session mit Attendance-Referenz
+        return apiClient.post('/api/loot', {
+          attendance_session_id: attendanceResponse.data.id,
+          date: data.date,
+          notes: data.notes,
+          location_id: data.location_id,
+          items: data.items || [],
+        })
+      }
+      // Ohne Teilnehmer: nur Loot-Session
+      return apiClient.post('/api/loot', {
+        date: data.date,
+        notes: data.notes,
+        location_id: data.location_id,
+        items: data.items || [],
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loot'] })
+      queryClient.invalidateQueries({ queryKey: ['attendance'] })
       setIsCreating(false)
       setNewSessionDate(new Date().toISOString().split('T')[0])
       setNewSessionNotes('')
       setNewSessionLocation(null)
+      setNewSessionType('freeplay')
+      setScanResult(null)
+      setSelectedUsers([])
     },
     onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
       console.error('Fehler beim Erstellen:', error)
@@ -496,9 +577,42 @@ export default function LootPage() {
         <div className="card mb-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold">Neue Loot-Session</h2>
-            <button onClick={() => setIsCreating(false)} className="text-gray-400 hover:text-white">
+            <button onClick={() => {
+              setIsCreating(false)
+              setScanResult(null)
+              setSelectedUsers([])
+            }} className="text-gray-400 hover:text-white">
               <X size={24} />
             </button>
+          </div>
+
+          {/* Session-Typ */}
+          <div className="mb-6">
+            <label className="label">Session-Typ</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setNewSessionType('loot_run')}
+                className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors ${
+                  newSessionType === 'loot_run'
+                    ? 'bg-krt-orange text-white'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                Loot-Run
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewSessionType('freeplay')}
+                className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors ${
+                  newSessionType === 'freeplay'
+                    ? 'bg-krt-orange text-white'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                Freeplay
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -549,13 +663,97 @@ export default function LootPage() {
             />
           </div>
 
+          {/* OCR Screenshot Upload */}
+          <div className="mb-6">
+            <label className="label">Teilnehmer per Screenshot (optional)</label>
+            <label className="flex flex-col items-center justify-center gap-3 p-6 border-2 border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-krt-orange transition-colors">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Upload size={20} />
+                  <span className="text-sm">Datei auswählen</span>
+                </div>
+                <span className="text-gray-600">oder</span>
+                <div className="flex items-center gap-2 text-krt-orange">
+                  <Clipboard size={20} />
+                  <span className="text-sm">Strg+V</span>
+                </div>
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) scanMutation.mutate(file)
+                }}
+              />
+            </label>
+            {scanMutation.isPending && (
+              <p className="text-sm text-krt-orange mt-2">Scanne Screenshot...</p>
+            )}
+          </div>
+
+          {/* OCR Ergebnis oder manuelle Auswahl */}
+          {(scanResult || selectedUsers.length > 0) && (
+            <div className="mb-6">
+              <label className="label">Teilnehmer ({selectedUsers.length})</label>
+              {scanResult && (
+                <p className="text-sm text-gray-400 mb-2">
+                  {scanResult.matched.length} erkannt, {scanResult.unmatched.length} nicht zugeordnet
+                </p>
+              )}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-2 bg-gray-800/50 rounded-lg">
+                {allUsers?.filter(u => u.role !== 'guest').map((u) => (
+                  <label
+                    key={u.id}
+                    className={`flex items-center gap-2 p-2 rounded cursor-pointer ${
+                      selectedUsers.includes(u.id)
+                        ? 'bg-krt-orange/20 border border-krt-orange'
+                        : 'hover:bg-gray-700'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedUsers.includes(u.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedUsers([...selectedUsers, u.id])
+                        } else {
+                          setSelectedUsers(selectedUsers.filter((id) => id !== u.id))
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-sm truncate">{u.display_name || u.username}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Teilnehmer manuell hinzufügen Button */}
+          {!scanResult && selectedUsers.length === 0 && (
+            <div className="mb-6">
+              <button
+                type="button"
+                onClick={() => setSelectedUsers([])}
+                className="text-sm text-krt-orange hover:underline flex items-center gap-1"
+              >
+                <Users size={16} />
+                Teilnehmer manuell auswählen
+              </button>
+            </div>
+          )}
+
           <button
             onClick={() => {
-              console.log('Creating session with:', { date: newSessionDate, notes: newSessionNotes, location_id: newSessionLocation })
               createSessionMutation.mutate({
                 date: newSessionDate || undefined,
                 notes: newSessionNotes || undefined,
                 location_id: newSessionLocation || undefined,
+                session_type: newSessionType,
+                records: selectedUsers.map((id) => ({ user_id: id })),
+                screenshot_base64: scanResult?.screenshot_base64,
                 items: [],
               })
             }}
@@ -574,11 +772,11 @@ export default function LootPage() {
           <div>
             <h3 className="font-bold mb-1">So funktioniert die Loot-Verteilung</h3>
             <ol className="text-gray-300 space-y-1 text-sm list-decimal list-inside">
-              <li>Erstelle eine Loot-Session (oder über Anwesenheit)</li>
+              <li>Erstelle eine Loot-Session mit Session-Typ (Loot-Run/Freeplay)</li>
+              <li>Lade optional einen Screenshot für OCR-Erkennung der Teilnehmer hoch</li>
               <li>Klicke auf "Bearbeiten" um Loot-Items hinzuzufügen</li>
               <li>Verteile den Loot auf die Teilnehmer</li>
               <li>Die Items landen automatisch im jeweiligen Lager</li>
-              <li>Schließe die Session ab wenn alles verteilt ist</li>
             </ol>
           </div>
         </div>

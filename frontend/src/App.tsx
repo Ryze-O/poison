@@ -40,6 +40,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Route nur für Offiziere und höher (Datenbank-Seiten)
+function OfficerRoute({ children }: { children: React.ReactNode }) {
+  const effectiveRole = useAuthStore.getState().getEffectiveRole()
+  const isOfficerOrHigher = effectiveRole === 'officer' || effectiveRole === 'treasurer' || effectiveRole === 'admin'
+
+  if (!isOfficerOrHigher) {
+    return <Navigate to="/" replace />
+  }
+
+  return <>{children}</>
+}
+
 function App() {
   return (
     <Routes>
@@ -60,11 +72,12 @@ function App() {
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="loot" element={<LootPage />} />
         <Route path="inventory" element={<InventoryPage />} />
-        <Route path="items" element={<ItemsPage />} />
-        <Route path="components" element={<ComponentBrowserPage />} />
-        <Route path="locations" element={<LocationsPage />} />
         <Route path="treasury" element={<TreasuryPage />} />
-        <Route path="users" element={<UsersPage />} />
+        {/* Datenbank-Seiten (nur Offiziere+) */}
+        <Route path="items" element={<OfficerRoute><ItemsPage /></OfficerRoute>} />
+        <Route path="components" element={<OfficerRoute><ComponentBrowserPage /></OfficerRoute>} />
+        <Route path="locations" element={<OfficerRoute><LocationsPage /></OfficerRoute>} />
+        <Route path="users" element={<OfficerRoute><UsersPage /></OfficerRoute>} />
         <Route path="admin" element={<AdminPage />} />
       </Route>
     </Routes>

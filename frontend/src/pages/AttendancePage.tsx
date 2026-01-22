@@ -27,16 +27,9 @@ interface UnmatchedAssignment {
   newUsername: string
 }
 
-const SESSION_TYPE_LABELS: Record<SessionType, string> = {
-  staffelabend: 'Staffelabend',
-  loot_run: 'Loot-Run',
-  freeplay: 'Freeplay',
-}
-
 export default function AttendancePage() {
   const queryClient = useQueryClient()
   const [isCreating, setIsCreating] = useState(false)
-  const [sessionType, setSessionType] = useState<SessionType>('staffelabend')
   const [notes, setNotes] = useState('')
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [selectedUsers, setSelectedUsers] = useState<number[]>([])
@@ -59,9 +52,10 @@ export default function AttendancePage() {
   const canCreate = effectiveRole !== 'member' && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
   const isAdmin = effectiveRole === 'admin'
 
+  // Nur Staffelabende laden (keine Loot-Runs oder Freeplay)
   const { data: sessions } = useQuery<AttendanceSession[]>({
-    queryKey: ['attendance'],
-    queryFn: () => apiClient.get('/api/attendance').then((r) => r.data),
+    queryKey: ['attendance', 'staffelabende'],
+    queryFn: () => apiClient.get('/api/attendance?session_type=staffelabend').then((r) => r.data),
   })
 
   const { data: allUsers } = useQuery<User[]>({
@@ -164,7 +158,6 @@ export default function AttendancePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance'] })
       setIsCreating(false)
-      setSessionType('staffelabend')
       setNotes('')
       setScanResult(null)
       setSelectedUsers([])
@@ -426,9 +419,9 @@ export default function AttendancePage() {
       console.error('Fehler beim Speichern:', error)
     }
 
-    // Session erstellen mit Screenshot und OCR-Daten
+    // Session erstellen mit Screenshot und OCR-Daten (immer als Staffelabend)
     createMutation.mutate({
-      session_type: sessionType,
+      session_type: 'staffelabend',
       notes,
       records: selectedUsers.map((user_id) => ({ user_id })),
       screenshot_base64: scanResult?.screenshot_base64,
@@ -444,14 +437,14 @@ export default function AttendancePage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold">Anwesenheit</h1>
+        <h1 className="text-3xl font-bold">Staffelabende</h1>
         {canCreate && !isCreating && (
           <button
             onClick={() => setIsCreating(true)}
             className="btn btn-primary flex items-center gap-2"
           >
             <Plus size={20} />
-            Neue Session
+            Neuer Staffelabend
           </button>
         )}
       </div>
@@ -501,15 +494,14 @@ export default function AttendancePage() {
         </div>
       )}
 
-      {/* Neue Session erstellen */}
+      {/* Neuen Staffelabend erstellen */}
       {isCreating && (
         <div className="card mb-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold">Neue Session erstellen</h2>
+            <h2 className="text-xl font-bold">Neuer Staffelabend</h2>
             <button
               onClick={() => {
                 setIsCreating(false)
-                setSessionType('staffelabend')
                 setScanResult(null)
                 setSelectedUsers([])
                 setUnmatchedAssignments([])
@@ -521,27 +513,6 @@ export default function AttendancePage() {
           </div>
 
           <div className="space-y-6">
-            {/* Session-Typ */}
-            <div>
-              <label className="label">Session-Typ</label>
-              <div className="flex gap-3">
-                {(Object.keys(SESSION_TYPE_LABELS) as SessionType[]).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setSessionType(type)}
-                    className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors ${
-                      sessionType === type
-                        ? 'bg-krt-orange text-white'
-                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    }`}
-                  >
-                    {SESSION_TYPE_LABELS[type]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Notizen */}
             <div>
               <label className="label">Notizen (optional)</label>
@@ -801,12 +772,8 @@ export default function AttendancePage() {
                       month: 'long',
                       year: 'numeric',
                     })}
-                    <span className={`text-sm font-normal px-2 py-0.5 rounded ${
-                      session.session_type === 'loot_run' ? 'bg-amber-600/30 text-amber-400' :
-                      session.session_type === 'freeplay' ? 'bg-blue-600/30 text-blue-400' :
-                      'bg-emerald-600/30 text-emerald-400'
-                    }`}>
-                      {SESSION_TYPE_LABELS[session.session_type] || 'Staffelabend'}
+                    <span className="text-sm font-normal px-2 py-0.5 rounded bg-emerald-600/30 text-emerald-400">
+                      Staffelabend
                     </span>
                     {session.is_confirmed && (
                       <span title="Bestätigt"><CheckCircle size={18} className="text-green-500" /></span>

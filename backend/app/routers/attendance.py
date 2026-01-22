@@ -94,13 +94,17 @@ def session_to_response(session: AttendanceSession) -> dict:
 @router.get("", response_model=List[AttendanceSessionResponse])
 async def get_sessions(
     limit: int = 20,
+    session_type: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Gibt die letzten Anwesenheits-Sessions zurück."""
-    sessions = db.query(AttendanceSession).order_by(
-        AttendanceSession.date.desc()
-    ).limit(limit).all()
+    """Gibt die letzten Anwesenheits-Sessions zurück. Optional gefiltert nach session_type."""
+    query = db.query(AttendanceSession)
+
+    if session_type:
+        query = query.filter(AttendanceSession.session_type == session_type)
+
+    sessions = query.order_by(AttendanceSession.date.desc()).limit(limit).all()
     return [session_to_response(s) for s in sessions]
 
 
