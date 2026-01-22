@@ -296,11 +296,11 @@ export default function ItemsPage() {
                             <h4 className="text-sm font-medium text-gray-300 mb-2 border-b border-gray-700 pb-1">
                               {subCategory} ({items.length})
                             </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                               {items.map((item) => (
                                 <div
                                   key={item.id}
-                                  className="list-item flex items-center justify-between"
+                                  className="element p-3 flex items-center justify-between"
                                 >
                                   <div className="min-w-0 flex-1">
                                     <p className="font-medium truncate">{item.name}</p>
