@@ -44,23 +44,38 @@ export default function ComponentBrowserPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [selectedComponent, setSelectedComponent] = useState<Component | null>(null)
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [subCategoryFilter, setSubCategoryFilter] = useState('')
 
   // Admin check für UEX Sync
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
   const isAdmin = effectiveRole === 'admin'
 
-  // Suche nach Komponenten
+  // Suche nach Komponenten (mit optionalem Kategorie-Filter)
   const { data: searchResults, isLoading: isSearching } = useQuery<Component[]>({
-    queryKey: ['component-search', search],
-    queryFn: () => apiClient.get(`/api/items/search?q=${encodeURIComponent(search)}`).then(r => r.data),
+    queryKey: ['component-search', search, categoryFilter],
+    queryFn: () => {
+      let url = `/api/items/search?q=${encodeURIComponent(search)}`
+      if (categoryFilter) url += `&category=${encodeURIComponent(categoryFilter)}`
+      return apiClient.get(url).then(r => r.data)
+    },
     enabled: search.length >= 2,
   })
 
-  // Sub-Kategorien für Ship Components
+  // Alle Kategorien laden
+  const { data: categories } = useQuery<string[]>({
+    queryKey: ['items', 'categories'],
+    queryFn: () => apiClient.get('/api/items/categories').then(r => r.data),
+  })
+
+  // Sub-Kategorien für gewählte Kategorie
   const { data: subCategories } = useQuery<string[]>({
-    queryKey: ['items', 'sub-categories', 'Ship Components'],
-    queryFn: () => apiClient.get('/api/items/sub-categories?category=Ship+Components').then(r => r.data),
+    queryKey: ['items', 'sub-categories', categoryFilter],
+    queryFn: () => {
+      let url = '/api/items/sub-categories'
+      if (categoryFilter) url += `?category=${encodeURIComponent(categoryFilter)}`
+      return apiClient.get(url).then(r => r.data)
+    },
   })
 
   // Detail-Daten für ausgewählte Komponente
@@ -93,10 +108,10 @@ export default function ComponentBrowserPage() {
     },
   })
 
-  // Gefilterte Ergebnisse
+  // Gefilterte Ergebnisse (Sub-Kategorie wird clientseitig gefiltert)
   const filteredResults = searchResults?.filter(c => {
-    if (!subCategoryFilter) return true
-    return c.sub_category === subCategoryFilter
+    if (subCategoryFilter && c.sub_category !== subCategoryFilter) return false
+    return true
   })
 
   // Formatierung für große Zahlen
@@ -111,9 +126,9 @@ export default function ComponentBrowserPage() {
     <div>
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Component Browser</h1>
+          <h1 className="text-3xl font-bold mb-2">Item Search</h1>
           <p className="text-gray-400">
-            Durchsuche Ship Components nach Name, Hersteller oder Typ. Zeigt Class, Grade und Stats.
+            Durchsuche alle Star Citizen Items nach Name, Hersteller oder Typ.
           </p>
           {uexStats && uexStats.status === 'completed' && (
             <p className="text-sm text-gray-500 mt-1">
@@ -161,11 +176,24 @@ export default function ComponentBrowserPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder='Suche nach Komponente (z.B. "FR-76", "Sukoran", "Aegis")...'
+              placeholder='Suche nach Item (z.B. "FR-76", "Sukoran", "P4-AR")...'
               className="input pl-10"
               autoFocus
             />
           </div>
+          <select
+            value={categoryFilter}
+            onChange={(e) => {
+              setCategoryFilter(e.target.value)
+              setSubCategoryFilter('')  // Reset sub-filter wenn Kategorie wechselt
+            }}
+            className="input md:w-48"
+          >
+            <option value="">Alle Kategorien</option>
+            {categories?.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
           <select
             value={subCategoryFilter}
             onChange={(e) => setSubCategoryFilter(e.target.value)}

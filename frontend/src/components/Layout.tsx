@@ -33,7 +33,7 @@ const mainNavItems = [
   { to: '/loot', icon: Gift, label: 'Freeplay (Loot)' },
   { to: '/inventory', icon: Package, label: 'Lager' },
   { to: '/treasury', icon: Wallet, label: 'Kasse' },
-  { to: '/components', icon: Search, label: 'Component Browser' },
+  { to: '/components', icon: Search, label: 'Item Search' },
 ]
 
 // Datenbank-Navigation (nur für Offiziere+)

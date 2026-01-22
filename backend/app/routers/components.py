@@ -156,10 +156,6 @@ async def search_components(
     if sub_category:
         query = query.filter(Component.sub_category == sub_category)
 
-    # Nur Ship Components für Browser
-    if not category:
-        query = query.filter(Component.category == "Ship Components")
-
     # Alle laden und clientseitig filtern für Fuzzy-Search
     all_components = query.all()
 
