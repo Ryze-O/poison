@@ -280,3 +280,25 @@ export interface PendingMerge {
   status: 'pending' | 'approved' | 'rejected'
   created_at: string
 }
+
+// UEX Preise und Shops
+export interface ItemPrice {
+  id: number
+  component_id: number | null
+  item_name: string
+  terminal_name: string
+  price_buy: number | null
+  price_sell: number | null
+  synced_at: string
+}
+
+export interface UEXSyncStats {
+  id: number
+  started_at: string
+  finished_at: string | null
+  items_processed: number
+  items_matched: number
+  items_unmatched: number
+  status: string
+  errors: string | null
+}

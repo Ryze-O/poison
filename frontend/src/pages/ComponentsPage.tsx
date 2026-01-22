@@ -2,8 +2,14 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, Trash2, Search } from 'lucide-react'
-import type { Component } from '../api/types'
+import { Plus, Trash2, Search, ShoppingCart, ChevronDown, ChevronUp, RefreshCw, MapPin } from 'lucide-react'
+import type { Component, ItemPrice, UEXSyncStats } from '../api/types'
+
+// Formatiert aUEC Preise
+const formatPrice = (price: number | null): string => {
+  if (price === null || price === 0) return '-'
+  return price.toLocaleString('de-DE') + ' aUEC'
+}
 
 export default function ComponentsPage() {
   const queryClient = useQueryClient()
@@ -11,6 +17,7 @@ export default function ComponentsPage() {
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('')
   const [filterManufacturer, setFilterManufacturer] = useState<string>('')
+  const [expandedComponent, setExpandedComponent] = useState<number | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -20,6 +27,7 @@ export default function ComponentsPage() {
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
   const canCreate = effectiveRole === 'officer' || effectiveRole === 'treasurer' || effectiveRole === 'admin'
   const canDelete = effectiveRole === 'admin'
+  const isAdmin = effectiveRole === 'admin'
 
   const { data: components } = useQuery<Component[]>({
     queryKey: ['components'],
@@ -36,6 +44,20 @@ export default function ComponentsPage() {
     queryFn: () => apiClient.get('/api/components/manufacturers').then((r) => r.data),
   })
 
+  // UEX Sync Status
+  const { data: uexStats } = useQuery<UEXSyncStats>({
+    queryKey: ['uex', 'stats'],
+    queryFn: () => apiClient.get('/api/sc/uex/stats').then((r) => r.data),
+    retry: false,
+  })
+
+  // Preise für expandiertes Component laden
+  const { data: componentPrices, isLoading: pricesLoading } = useQuery<ItemPrice[]>({
+    queryKey: ['component', 'prices', expandedComponent],
+    queryFn: () => apiClient.get(`/api/sc/items/${expandedComponent}/prices`).then((r) => r.data),
+    enabled: expandedComponent !== null,
+  })
+
   const createMutation = useMutation({
     mutationFn: (data: { name: string; category?: string }) =>
       apiClient.post('/api/components', data),
@@ -50,6 +72,15 @@ export default function ComponentsPage() {
     mutationFn: (id: number) => apiClient.delete(`/api/components/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['components'] })
+    },
+  })
+
+  // UEX Sync
+  const syncUEXMutation = useMutation({
+    mutationFn: () => apiClient.post('/api/sc/uex/sync'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['uex', 'stats'] })
+      queryClient.invalidateQueries({ queryKey: ['component', 'prices'] })
     },
   })
 
@@ -84,17 +115,52 @@ export default function ComponentsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold">Komponenten</h1>
-        {canCreate && !showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="btn btn-primary flex items-center gap-2"
-          >
-            <Plus size={20} />
-            Neue Komponente
-          </button>
-        )}
+        <div>
+          <h1 className="text-3xl font-bold">Component Browser</h1>
+          {uexStats && uexStats.status === 'completed' && (
+            <p className="text-sm text-gray-400 mt-1">
+              {uexStats.items_matched.toLocaleString()} Items mit Preisdaten
+              {uexStats.finished_at && ` • Sync: ${new Date(uexStats.finished_at).toLocaleDateString('de-DE')}`}
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          {isAdmin && (
+            <button
+              onClick={() => syncUEXMutation.mutate()}
+              disabled={syncUEXMutation.isPending}
+              className="btn btn-secondary flex items-center gap-2"
+              title="Preise von UEX API synchronisieren"
+            >
+              <RefreshCw size={20} className={syncUEXMutation.isPending ? 'animate-spin' : ''} />
+              {syncUEXMutation.isPending ? 'Sync läuft...' : 'UEX Sync'}
+            </button>
+          )}
+          {canCreate && !showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="btn btn-primary flex items-center gap-2"
+            >
+              <Plus size={20} />
+              Neue Komponente
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Sync Status Meldung */}
+      {syncUEXMutation.isSuccess && (
+        <div className="card mb-6 bg-green-900/30 border-green-600/50">
+          <p className="text-green-400">
+            UEX Sync erfolgreich! {(syncUEXMutation.data as { data: UEXSyncStats })?.data?.items_matched || 0} Items aktualisiert.
+          </p>
+        </div>
+      )}
+      {syncUEXMutation.isError && (
+        <div className="card mb-6 bg-red-900/30 border-red-600/50">
+          <p className="text-red-400">Fehler beim UEX Sync. Bitte später erneut versuchen.</p>
+        </div>
+      )}
 
       {/* Neue Komponente erstellen */}
       {showForm && (
@@ -212,35 +278,97 @@ export default function ComponentsPage() {
                 <h3 className="text-lg font-bold mb-4 text-krt-orange">
                   {category}
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="space-y-2">
                   {comps.map((comp) => (
-                    <div
-                      key={comp.id}
-                      className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium truncate">{comp.name}</p>
-                        <p className="text-xs text-gray-400 truncate">
-                          {[
-                            comp.manufacturer,
-                            comp.size && `Size ${comp.size}`,
-                            comp.grade && `Grade ${comp.grade}`,
-                          ]
-                            .filter(Boolean)
-                            .join(' • ') || (comp.is_predefined ? 'Vordefiniert' : '')}
-                        </p>
+                    <div key={comp.id}>
+                      <div
+                        className={`flex items-center justify-between p-3 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors ${
+                          expandedComponent === comp.id ? 'rounded-b-none border-b border-gray-700' : ''
+                        }`}
+                        onClick={() => setExpandedComponent(expandedComponent === comp.id ? null : comp.id)}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">{comp.name}</p>
+                          <p className="text-xs text-gray-400 truncate">
+                            {[
+                              comp.manufacturer,
+                              comp.size && `Size ${comp.size}`,
+                              comp.grade && `Grade ${comp.grade}`,
+                            ]
+                              .filter(Boolean)
+                              .join(' • ') || (comp.is_predefined ? 'Vordefiniert' : '')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {comp.sc_uuid && (
+                            <ShoppingCart size={16} className="text-gray-500" title="Hat Preisdaten" />
+                          )}
+                          {canDelete && !comp.is_predefined && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (confirm(`"${comp.name}" wirklich löschen?`)) {
+                                  deleteMutation.mutate(comp.id)
+                                }
+                              }}
+                              className="p-2 text-gray-400 hover:text-sc-red rounded-lg flex-shrink-0"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          )}
+                          {expandedComponent === comp.id ? (
+                            <ChevronUp size={20} className="text-gray-400" />
+                          ) : (
+                            <ChevronDown size={20} className="text-gray-400" />
+                          )}
+                        </div>
                       </div>
-                      {canDelete && !comp.is_predefined && (
-                        <button
-                          onClick={() => {
-                            if (confirm(`"${comp.name}" wirklich löschen?`)) {
-                              deleteMutation.mutate(comp.id)
-                            }
-                          }}
-                          className="p-2 text-gray-400 hover:text-sc-red rounded-lg flex-shrink-0"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+
+                      {/* Expandierter Bereich mit Preisen */}
+                      {expandedComponent === comp.id && (
+                        <div className="bg-gray-800/30 rounded-b-lg p-4 border-t-0">
+                          <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                            <MapPin size={16} className="text-krt-orange" />
+                            Wo kaufbar?
+                          </h4>
+                          {pricesLoading ? (
+                            <p className="text-sm text-gray-400">Lade Preisdaten...</p>
+                          ) : componentPrices && componentPrices.length > 0 ? (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="text-left text-gray-400 border-b border-gray-700">
+                                    <th className="pb-2 pr-4">Shop / Terminal</th>
+                                    <th className="pb-2 pr-4 text-right">Kaufpreis</th>
+                                    <th className="pb-2 text-right">Verkaufspreis</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {componentPrices.map((price) => (
+                                    <tr key={price.id} className="border-b border-gray-800 last:border-0">
+                                      <td className="py-2 pr-4">{price.terminal_name}</td>
+                                      <td className="py-2 pr-4 text-right text-green-400">
+                                        {formatPrice(price.price_buy)}
+                                      </td>
+                                      <td className="py-2 text-right text-yellow-400">
+                                        {formatPrice(price.price_sell)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500">
+                              Keine Preisdaten verfügbar.
+                              {!comp.sc_uuid && ' (Kein SC-UUID vorhanden)'}
+                              {isAdmin && ' Führe einen UEX Sync durch.'}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-500 mt-3">
+                            Preisdaten von <a href="https://uexcorp.space" target="_blank" rel="noopener noreferrer" className="text-krt-orange hover:underline">UEX</a> (Community-basiert)
+                          </p>
+                        </div>
                       )}
                     </div>
                   ))}

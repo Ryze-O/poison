@@ -45,6 +45,7 @@ export default function LootPage() {
   // OCR/Anwesenheit für neue Session
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [selectedUsers, setSelectedUsers] = useState<number[]>([])
+  const [showManualSelection, setShowManualSelection] = useState(false)
 
   // Edit-Session: lokaler State für Notizen (um nicht bei jedem Tastendruck zu speichern)
   const [editNotes, setEditNotes] = useState('')
@@ -236,6 +237,7 @@ export default function LootPage() {
       setNewSessionType('freeplay')
       setScanResult(null)
       setSelectedUsers([])
+      setShowManualSelection(false)
     },
     onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
       console.error('Fehler beim Erstellen:', error)
@@ -581,6 +583,7 @@ export default function LootPage() {
               setIsCreating(false)
               setScanResult(null)
               setSelectedUsers([])
+              setShowManualSelection(false)
             }} className="text-gray-400 hover:text-white">
               <X size={24} />
             </button>
@@ -694,7 +697,7 @@ export default function LootPage() {
           </div>
 
           {/* OCR Ergebnis oder manuelle Auswahl */}
-          {(scanResult || selectedUsers.length > 0) && (
+          {(scanResult || selectedUsers.length > 0 || showManualSelection) && (
             <div className="mb-6">
               <label className="label">Teilnehmer ({selectedUsers.length})</label>
               {scanResult && (
@@ -732,11 +735,11 @@ export default function LootPage() {
           )}
 
           {/* Teilnehmer manuell hinzufügen Button */}
-          {!scanResult && selectedUsers.length === 0 && (
+          {!scanResult && selectedUsers.length === 0 && !showManualSelection && (
             <div className="mb-6">
               <button
                 type="button"
-                onClick={() => setSelectedUsers([])}
+                onClick={() => setShowManualSelection(true)}
                 className="text-sm text-krt-orange hover:underline flex items-center gap-1"
               >
                 <Users size={16} />

@@ -119,3 +119,41 @@ class SCImportStats(BaseModel):
     locations_updated: int = 0
     errors: list[str] = []
     sc_version: Optional[str] = None
+
+
+# UEX Price Schemas
+class ItemPriceResponse(BaseModel):
+    """Preis- und Shop-Info für ein Item."""
+    id: int
+    component_id: Optional[int] = None
+    item_name: str
+    terminal_name: str
+    price_buy: Optional[float] = None
+    price_sell: Optional[float] = None
+    synced_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UEXSyncStats(BaseModel):
+    """Statistiken nach einem UEX-Sync."""
+    id: int
+    started_at: datetime
+    finished_at: Optional[datetime] = None
+    items_processed: int = 0
+    items_matched: int = 0
+    items_unmatched: int = 0
+    status: str
+    errors: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ComponentWithPrices(ComponentResponse):
+    """Komponente mit Preis-Informationen."""
+    prices: list[ItemPriceResponse] = []
+
+    class Config:
+        from_attributes = True

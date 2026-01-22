@@ -7,6 +7,7 @@ from app.models.inventory import Inventory, InventoryTransfer
 from app.models.inventory_log import InventoryLog, InventoryAction
 from app.models.treasury import Treasury, TreasuryTransaction
 from app.models.officer_account import OfficerAccount, OfficerTransaction
+from app.models.item_price import ItemPrice, UEXSyncLog
 
 __all__ = [
     "User",
@@ -28,4 +29,6 @@ __all__ = [
     "TreasuryTransaction",
     "OfficerAccount",
     "OfficerTransaction",
+    "ItemPrice",
+    "UEXSyncLog",
 ]

@@ -8,9 +8,11 @@ import re
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.component import Component
+from app.models.item_price import ItemPrice
 from app.schemas.component import (
     ComponentCreate, ComponentResponse, ComponentDetailResponse,
-    ShieldStats, PowerStats, CoolerStats, QuantumDriveStats, WeaponStats
+    ShieldStats, PowerStats, CoolerStats, QuantumDriveStats, WeaponStats,
+    ItemPriceResponse
 )
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
