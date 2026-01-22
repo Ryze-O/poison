@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
 import {
@@ -11,8 +11,16 @@ import {
   X,
   Info,
   ChevronRight,
+  RefreshCw,
+  MapPin,
 } from 'lucide-react'
-import type { Component, ComponentDetail } from '../api/types'
+import type { Component, ComponentDetail, ItemPrice, UEXSyncStats } from '../api/types'
+
+// Formatiert aUEC Preise
+const formatPrice = (price: number | null): string => {
+  if (price === null || price === 0) return '-'
+  return price.toLocaleString('de-DE') + ' aUEC'
+}
 
 
 // Class-Farben
@@ -33,10 +41,14 @@ const gradeColors: Record<string, string> = {
 }
 
 export default function ComponentBrowserPage() {
-  useAuthStore() // Auth check
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [selectedComponent, setSelectedComponent] = useState<Component | null>(null)
   const [subCategoryFilter, setSubCategoryFilter] = useState('')
+
+  // Admin check für UEX Sync
+  const effectiveRole = useAuthStore.getState().getEffectiveRole()
+  const isAdmin = effectiveRole === 'admin'
 
   // Suche nach Komponenten
   const { data: searchResults, isLoading: isSearching } = useQuery<Component[]>({
@@ -58,6 +70,29 @@ export default function ComponentBrowserPage() {
     enabled: !!selectedComponent,
   })
 
+  // UEX Preise für ausgewählte Komponente
+  const { data: componentPrices, isLoading: isPricesLoading } = useQuery<ItemPrice[]>({
+    queryKey: ['component-prices', selectedComponent?.id],
+    queryFn: () => apiClient.get(`/api/sc/items/${selectedComponent!.id}/prices`).then(r => r.data),
+    enabled: !!selectedComponent,
+  })
+
+  // UEX Sync Status
+  const { data: uexStats } = useQuery<UEXSyncStats>({
+    queryKey: ['uex', 'stats'],
+    queryFn: () => apiClient.get('/api/sc/uex/stats').then(r => r.data),
+    retry: false,
+  })
+
+  // UEX Sync Mutation
+  const syncUEXMutation = useMutation({
+    mutationFn: () => apiClient.post('/api/sc/uex/sync'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['uex', 'stats'] })
+      queryClient.invalidateQueries({ queryKey: ['component-prices'] })
+    },
+  })
+
   // Gefilterte Ergebnisse
   const filteredResults = searchResults?.filter(c => {
     if (!subCategoryFilter) return true
@@ -74,12 +109,45 @@ export default function ComponentBrowserPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Component Browser</h1>
-        <p className="text-gray-400">
-          Durchsuche Ship Components nach Name, Hersteller oder Typ. Zeigt Class, Grade und Stats.
-        </p>
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Component Browser</h1>
+          <p className="text-gray-400">
+            Durchsuche Ship Components nach Name, Hersteller oder Typ. Zeigt Class, Grade und Stats.
+          </p>
+          {uexStats && uexStats.status === 'completed' && (
+            <p className="text-sm text-gray-500 mt-1">
+              {uexStats.items_matched.toLocaleString()} Items mit Preisdaten
+              {uexStats.finished_at && ` • Sync: ${new Date(uexStats.finished_at).toLocaleDateString('de-DE')}`}
+            </p>
+          )}
+        </div>
+        {isAdmin && (
+          <button
+            onClick={() => syncUEXMutation.mutate()}
+            disabled={syncUEXMutation.isPending}
+            className="btn btn-secondary flex items-center gap-2"
+            title="Preise von UEX API synchronisieren"
+          >
+            <RefreshCw size={20} className={syncUEXMutation.isPending ? 'animate-spin' : ''} />
+            {syncUEXMutation.isPending ? 'Sync läuft...' : 'UEX Sync'}
+          </button>
+        )}
       </div>
+
+      {/* Sync Status Meldung */}
+      {syncUEXMutation.isSuccess && (
+        <div className="card mb-6 bg-green-900/30 border-green-600/50">
+          <p className="text-green-400">
+            UEX Sync erfolgreich!
+          </p>
+        </div>
+      )}
+      {syncUEXMutation.isError && (
+        <div className="card mb-6 bg-red-900/30 border-red-600/50">
+          <p className="text-red-400">Fehler beim UEX Sync. Bitte später erneut versuchen.</p>
+        </div>
+      )}
 
       {/* Such-Bereich */}
       <div className="card mb-6">
@@ -336,6 +404,46 @@ export default function ComponentBrowserPage() {
                   </div>
                 </div>
               )}
+
+              {/* UEX Preise / Wo kaufbar */}
+              <div className="mb-4">
+                <h4 className="text-sm font-bold text-krt-orange mb-2 flex items-center gap-2">
+                  <MapPin size={16} />
+                  Wo kaufbar?
+                </h4>
+                {isPricesLoading ? (
+                  <p className="text-sm text-gray-400">Lade Preisdaten...</p>
+                ) : componentPrices && componentPrices.length > 0 ? (
+                  <div className="max-h-48 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-gray-500 border-b border-gray-700">
+                          <th className="pb-2 pr-2">Shop / Terminal</th>
+                          <th className="pb-2 text-right">Preis</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {componentPrices.map((price) => (
+                          <tr key={price.id} className="border-b border-gray-800 last:border-0">
+                            <td className="py-1.5 pr-2 text-gray-300">{price.terminal_name}</td>
+                            <td className="py-1.5 text-right text-green-400">
+                              {formatPrice(price.price_buy)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    Keine Preisdaten verfügbar.
+                    {isAdmin && ' Führe einen UEX Sync durch.'}
+                  </p>
+                )}
+                <p className="text-xs text-gray-600 mt-2">
+                  Daten von <a href="https://uexcorp.space" target="_blank" rel="noopener noreferrer" className="text-krt-orange hover:underline">UEX</a>
+                </p>
+              </div>
 
               {/* Typ Info */}
               <div className="text-xs text-gray-500 pt-3 border-t border-gray-700">
