@@ -1,5 +1,6 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuthStore } from '../hooks/useAuth'
+import { useTheme } from '../hooks/useTheme'
 import {
   Home,
   Users,
@@ -14,6 +15,8 @@ import {
   MapPin,
   Settings,
   Search,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
@@ -33,14 +36,15 @@ const navItems = [
 
 export default function Layout() {
   const { user, logout } = useAuthStore()
+  const { theme, toggleTheme } = useTheme()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex bg-page text-primary">
       {/* Mobile Menu Button */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-krt-dark rounded-lg border border-gray-700"
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-card rounded-lg border border-default"
       >
         {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
@@ -48,13 +52,13 @@ export default function Layout() {
       {/* Sidebar */}
       <aside
         className={clsx(
-          'fixed lg:static inset-y-0 left-0 z-40 w-64 bg-gradient-to-b from-krt-dark to-krt-darker border-r border-gray-800/50 transform transition-transform duration-200',
+          'fixed lg:static inset-y-0 left-0 z-40 w-64 bg-sidebar border-r border-default transform transition-transform duration-200',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="p-6 border-b border-gray-800/50">
+          <div className="p-6 border-b border-default">
             <div className="flex items-center gap-3">
               <img
                 src="/assets/Staffel-Viper-RWK 2019-750px.png"
@@ -62,7 +66,7 @@ export default function Layout() {
                 className="w-12 h-12 object-contain"
               />
               <div>
-                <h1 className="text-xl font-bold text-white tracking-wide">STAFFEL VIPER</h1>
+                <h1 className="text-xl font-bold tracking-wide">STAFFEL VIPER</h1>
                 <p className="text-xs text-krt-orange tracking-widest">DAS KARTELL</p>
               </div>
             </div>
@@ -71,7 +75,7 @@ export default function Layout() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-1">
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {navItems
               .filter((item) => !('adminOnly' in item && item.adminOnly) || user?.role === 'admin')
               .map((item) => (
@@ -84,7 +88,7 @@ export default function Layout() {
                     'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200',
                     isActive
                       ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange'
-                      : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
+                      : 'text-muted hover:bg-card-hover hover:text-primary'
                   )
                 }
               >
@@ -94,17 +98,27 @@ export default function Layout() {
             ))}
           </nav>
 
-          {/* User */}
-          <div className="p-4 border-t border-gray-800/50">
+          {/* Theme Toggle & User */}
+          <div className="p-4 border-t border-default">
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="w-full flex items-center gap-3 px-4 py-2 mb-4 rounded-lg text-muted hover:bg-card-hover hover:text-primary transition-colors"
+              title={theme === 'dark' ? 'Zu hellem Modus wechseln' : 'Zu dunklem Modus wechseln'}
+            >
+              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+              <span className="text-sm">{theme === 'dark' ? 'Heller Modus' : 'Dunkler Modus'}</span>
+            </button>
+
             <div className="flex items-center gap-3 mb-4">
               {user?.avatar ? (
                 <img
                   src={user.avatar}
                   alt={user.username}
-                  className="w-10 h-10 rounded-full ring-2 ring-gray-700"
+                  className="w-10 h-10 rounded-full ring-2 ring-default"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center ring-2 ring-gray-600">
+                <div className="w-10 h-10 rounded-full bg-card flex items-center justify-center ring-2 ring-default">
                   {user?.username?.charAt(0).toUpperCase()}
                 </div>
               )}
@@ -117,7 +131,7 @@ export default function Layout() {
             </div>
             <button
               onClick={logout}
-              className="flex items-center gap-2 w-full px-4 py-2 text-gray-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+              className="flex items-center gap-2 w-full px-4 py-2 text-muted hover:text-error hover:bg-error/10 rounded-lg transition-colors"
             >
               <LogOut size={20} />
               Abmelden
@@ -136,15 +150,18 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 p-6 lg:p-8 overflow-auto relative">
-        {/* KRT Logo Watermark */}
+        {/* KRT Logo Watermark - nur im Dark Mode sichtbar */}
         <div
-          className="fixed right-8 top-1/2 -translate-y-1/2 w-96 h-96 opacity-[0.03] pointer-events-none z-0"
+          className={clsx(
+            'fixed right-8 top-1/2 -translate-y-1/2 w-96 h-96 pointer-events-none z-0 transition-opacity duration-200',
+            theme === 'dark' ? 'opacity-[0.03]' : 'opacity-[0.02]'
+          )}
           style={{
             backgroundImage: 'url(/assets/krt_logo.svg)',
             backgroundSize: 'contain',
             backgroundRepeat: 'no-repeat',
             backgroundPosition: 'center',
-            filter: 'invert(1) brightness(0)',
+            filter: theme === 'dark' ? 'invert(1) brightness(0)' : 'brightness(0)',
           }}
         />
         <div className="relative z-10">

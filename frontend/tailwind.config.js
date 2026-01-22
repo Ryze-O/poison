@@ -4,52 +4,60 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        // Kartell Farben
+        // Kartell Farben - Orange Akzent
         'krt': {
-          'dark': '#1a1a1a',
-          'darker': '#121212',
-          'darkest': '#0a0a0a',
           'orange': '#E85A24',
           'orange-dark': '#C94A1A',
           'orange-light': '#F26522',
-          'silver': '#A8A8A8',
-          'gold': '#c9a227',
         },
-        // Legacy aliases
-        'sc-dark': '#1a1a1a',
-        'sc-darker': '#121212',
-        'sc-blue': '#E85A24',
-        'sc-blue-dark': '#C94A1A',
-        'sc-gold': '#c9a227',
-        'sc-red': '#e63946',
-        'sc-green': '#2a9d8f',
+        // Grautöne für Dark Mode
+        'dark': {
+          '50': '#fafafa',
+          '100': '#f5f5f5',
+          '200': '#e5e5e5',
+          '300': '#d4d4d4',
+          '400': '#a3a3a3',
+          '500': '#737373',
+          '600': '#525252',
+          '700': '#404040',
+          '800': '#262626',
+          '850': '#1f1f1f',
+          '900': '#171717',
+          '950': '#0a0a0a',
+        },
+        // Semantische Farben
+        'success': '#22c55e',
+        'error': '#ef4444',
+        'warning': '#f59e0b',
       },
-      backgroundImage: {
-        'krt-gradient': 'linear-gradient(180deg, #2d2d2d 0%, #1a1a1a 50%, #0a0a0a 100%)',
-        'krt-card': 'linear-gradient(145deg, #242424 0%, #1a1a1a 100%)',
+      backgroundColor: {
+        // Theme-spezifische Hintergründe
+        'page': 'var(--bg-page)',
+        'card': 'var(--bg-card)',
+        'card-hover': 'var(--bg-card-hover)',
+        'input': 'var(--bg-input)',
+        'sidebar': 'var(--bg-sidebar)',
       },
-      // Default Ring-Farbe auf Orange setzen
+      textColor: {
+        'primary': 'var(--text-primary)',
+        'secondary': 'var(--text-secondary)',
+        'muted': 'var(--text-muted)',
+      },
+      borderColor: {
+        'default': 'var(--border-color)',
+        'hover': 'var(--border-hover)',
+      },
       ringColor: {
         DEFAULT: '#E85A24',
       },
-      // Default Outline-Farbe auf Orange setzen
       outlineColor: {
         DEFAULT: '#E85A24',
       },
-      // Alle blauen Farben überschreiben (falls irgendwo verwendet)
-      borderColor: {
-        DEFAULT: 'rgba(55, 65, 81, 0.5)', // gray-700/50 statt blau
-      },
     },
-  },
-  // Coreconfig: Focus-Ring deaktivieren
-  corePlugins: {
-    ringWidth: true,
-    ringColor: true,
-    ringOpacity: true,
   },
   plugins: [],
 }

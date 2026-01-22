@@ -2,72 +2,146 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================
+   CSS Custom Properties für Theme
+   ============================================ */
+:root {
+  /* Dark Mode (Default) */
+  --bg-page: #0a0a0a;
+  --bg-sidebar: #171717;
+  --bg-card: #1f1f1f;
+  --bg-card-hover: #262626;
+  --bg-input: #262626;
+
+  --text-primary: #ffffff;
+  --text-secondary: #d4d4d4;
+  --text-muted: #737373;
+
+  --border-color: rgba(64, 64, 64, 0.5);
+  --border-hover: rgba(64, 64, 64, 0.8);
+
+  /* Konstanten */
+  --krt-orange: #E85A24;
+  --krt-orange-dark: #C94A1A;
+  --success: #22c55e;
+  --error: #ef4444;
+}
+
+.light {
+  --bg-page: #f5f5f5;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fafafa;
+  --bg-input: #ffffff;
+
+  --text-primary: #171717;
+  --text-secondary: #404040;
+  --text-muted: #737373;
+
+  --border-color: rgba(212, 212, 212, 0.8);
+  --border-hover: rgba(163, 163, 163, 0.8);
+}
+
 @layer base {
-  /* KRITISCH: Focus-Styles ZUERST definieren für maximale Browser-Kompatibilität */
+  /* Focus-Styles global */
   *, *::before, *::after {
     outline: none !important;
-    outline-color: transparent !important;
   }
 
-  *:focus, *:focus-visible, *:focus-within {
+  *:focus, *:focus-visible {
     outline: none !important;
-    outline-color: transparent !important;
   }
 
   body {
-    @apply bg-krt-darkest text-gray-100 min-h-screen;
-    background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
-    background-attachment: fixed;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
-  /* Kartell Orange-Akzent für Selection */
+  /* Selection mit Orange-Akzent */
   ::selection {
-    @apply bg-krt-orange/30 text-white;
+    background-color: rgba(232, 90, 36, 0.3);
+    color: white;
   }
 }
 
 @layer components {
+  /* Buttons */
   .btn {
     @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
   }
 
   .btn-primary {
-    @apply bg-krt-orange hover:bg-krt-orange-dark text-white shadow-lg shadow-krt-orange/20;
+    background-color: var(--krt-orange);
+    color: white;
+    box-shadow: 0 4px 14px rgba(232, 90, 36, 0.25);
+  }
+
+  .btn-primary:hover {
+    background-color: var(--krt-orange-dark);
   }
 
   .btn-secondary {
-    @apply bg-gray-700/80 hover:bg-gray-600 text-white border border-gray-600;
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+  }
+
+  .btn-secondary:hover {
+    background-color: var(--bg-card-hover);
+    border-color: var(--border-hover);
   }
 
   .btn-danger {
-    @apply bg-sc-red hover:bg-red-700 text-white;
+    @apply bg-error hover:bg-red-600 text-white;
   }
 
   .btn-success {
-    @apply bg-sc-green hover:bg-emerald-700 text-white;
+    @apply bg-success hover:bg-green-600 text-white;
   }
 
+  /* Cards */
   .card {
-    @apply bg-gradient-to-br from-gray-800/50 to-gray-900/50 rounded-xl p-6
-           rounded-xl backdrop-blur-sm;
-    border: 1px solid rgba(55, 65, 81, 0.5); /* gray-700 mit 50% opacity - KEIN Blau! */
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
   }
 
   .card-highlight {
-    @apply card border-l-4 border-l-krt-orange;
+    @apply card;
+    border-left: 4px solid var(--krt-orange);
   }
 
+  /* Input-Felder */
   .input {
-    @apply w-full px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg
-           focus:outline-none focus:border-krt-orange focus:ring-1 focus:ring-krt-orange/50
-           transition-all placeholder-gray-500;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    color: var(--text-primary);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
 
-  /* Select-Elemente - Browser-Default überschreiben */
+  .input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .input:focus {
+    border-color: var(--krt-orange);
+    box-shadow: 0 0 0 2px rgba(232, 90, 36, 0.2);
+  }
+
+  /* Select-Elemente */
   select.input,
   select {
-    @apply appearance-none cursor-pointer bg-gray-800/50;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    appearance: none;
+    cursor: pointer;
+    background-color: var(--bg-input);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23737373' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
     background-position: right 0.5rem center;
     background-repeat: no-repeat;
     background-size: 1.5em 1.5em;
@@ -75,155 +149,67 @@
   }
 
   select:focus {
-    @apply border-krt-orange ring-1 ring-krt-orange/50 outline-none;
+    border-color: var(--krt-orange);
+    box-shadow: 0 0 0 2px rgba(232, 90, 36, 0.2);
   }
 
-  /* Option-Styling */
   option {
-    @apply bg-gray-800 text-gray-100;
+    background-color: var(--bg-card);
+    color: var(--text-primary);
   }
 
+  /* Labels */
   .label {
-    @apply block text-sm font-medium text-gray-400 mb-1;
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
   }
 
-  /* Orange Akzent-Linie (wie im Wallpaper) */
+  /* Orange Akzent-Linie */
   .accent-line {
-    @apply h-px bg-gradient-to-r from-transparent via-krt-orange to-transparent;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--krt-orange), transparent);
   }
 
-  /* Glow-Effekt für wichtige Elemente */
+  /* Glow-Effekt */
   .glow-orange {
     box-shadow: 0 0 20px rgba(232, 90, 36, 0.3);
   }
 }
 
 /* ============================================
-   WICHTIG: Globale Focus/Outline Overrides
-   Muss NACH @layer sein für höchste Spezifität
+   Focus Overrides - Muss nach @layer sein
    ============================================ */
-
-/* Alle Focus-Outlines komplett deaktivieren */
 *:focus {
   outline: none !important;
-  outline-width: 0 !important;
-  outline-color: transparent !important;
-  box-shadow: none !important;
 }
 
 *:focus-visible {
   outline: none !important;
-  outline-width: 0 !important;
 }
 
-/* Alle Elemente - kein blauer Ring */
-button, a, div, span, input, select, textarea,
-[role="button"], [tabindex] {
-  outline: none !important;
-}
-
-button:focus, button:focus-visible,
-a:focus, a:focus-visible,
-div:focus, div:focus-visible,
-[role="button"]:focus, [role="button"]:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-/* Input-Felder: Orange statt Blau */
 input:focus, select:focus, textarea:focus {
   outline: none !important;
-  border-color: #E85A24 !important;
-  box-shadow: 0 0 0 1px rgba(232, 90, 36, 0.5) !important;
+  border-color: var(--krt-orange) !important;
+  box-shadow: 0 0 0 2px rgba(232, 90, 36, 0.2) !important;
 }
 
-/* Cards - EXPLIZIT graue Border, niemals blau */
-.card {
-  border: 1px solid rgba(55, 65, 81, 0.5) !important; /* gray-700/50 */
-  outline: none !important;
-}
-
-.card * {
-  outline: none !important;
-}
-
-.card:focus, .card:focus-within, .card:focus-visible,
-.card:active, .card:hover {
+button:focus, button:focus-visible {
   outline: none !important;
   box-shadow: none !important;
-  border: 1px solid rgba(55, 65, 81, 0.5) !important;
 }
 
-/* NUCLEAR OPTION: Alle blauen Farben global überschreiben */
-* {
-  --tw-ring-color: #E85A24 !important;
-  --tw-border-opacity: 1;
-}
-
-/* Browser-Default Focus Styles komplett entfernen */
-:focus {
-  outline: 0 !important;
-  outline-offset: 0 !important;
-}
-
-/* Webkit/Chrome spezifisch */
+/* Browser-spezifische Overrides */
 ::-webkit-focus-ring-color {
   color: transparent !important;
 }
 
-input:focus, textarea:focus, select:focus, button:focus {
-  outline: none !important;
-  -webkit-appearance: none;
-}
-
-/* ============================================
-   CHROME-SPEZIFISCH: Focus-Ring Override
-   Chrome verwendet :focus-visible mit hartnäckigem blauem Ring
-   ============================================ */
-
-/* Chrome/Webkit: Deaktiviere den blauen Focus-Ring */
-*:focus-visible {
-  outline: none !important;
-  outline-color: transparent !important;
-  outline-style: none !important;
-  outline-width: 0 !important;
-  box-shadow: none !important;
-}
-
-/* Chrome: Spezifische Elemente */
-div:focus-visible,
-button:focus-visible,
-a:focus-visible,
-[tabindex]:focus-visible {
-  outline: none !important;
-  outline-color: transparent !important;
-  box-shadow: none !important;
-}
-
-/* Chrome Focus Ring auf Containern komplett deaktivieren */
-.card:has(:focus-visible),
-div:has(button:focus-visible),
-div:has(input:focus-visible) {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-/* Firefox-spezifisch */
 ::-moz-focus-inner {
   border: 0 !important;
 }
 
 *:-moz-focusring {
   outline: none !important;
-}
-
-/* Alle interaktiven Elemente */
-button, [type="button"], [type="reset"], [type="submit"] {
-  -webkit-appearance: none;
-  outline: none !important;
-}
-
-button:focus, button:focus-visible, button:active {
-  outline: none !important;
-  box-shadow: none !important;
 }
