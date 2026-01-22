@@ -52,7 +52,7 @@ export default function Layout() {
       {/* Sidebar */}
       <aside
         className={clsx(
-          'fixed lg:static inset-y-0 left-0 z-40 w-64 bg-sidebar border-r border-default transform transition-transform duration-200 shadow-lg',
+          'fixed inset-y-0 left-0 z-40 w-64 bg-sidebar border-r border-default transform transition-transform duration-200 shadow-lg',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
@@ -149,7 +149,7 @@ export default function Layout() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 p-6 lg:p-8 overflow-auto relative">
+      <main className="flex-1 p-6 lg:p-8 lg:ml-64 overflow-auto relative">
         {/* KRT Logo Watermark - nur im Dark Mode sichtbar */}
         <div
           className={clsx(
