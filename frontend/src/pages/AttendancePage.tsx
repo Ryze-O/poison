@@ -102,13 +102,32 @@ export default function AttendancePage() {
   const createUserRequestMutation = useMutation({
     mutationFn: (data: { username: string; display_name?: string; detected_name: string }) =>
       apiClient.post('/api/attendance/user-requests', data),
-    onSuccess: () => {
+    onSuccess: async (response) => {
       queryClient.invalidateQueries({ queryKey: ['user-requests'] })
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      // OCR-Daten neu laden, damit der neue User dort auftaucht
-      if (editingSession) {
+
+      // User sofort zur Session hinzufügen wenn user_id vorhanden
+      const userId = response.data.user_id
+      if (userId && editingSession) {
+        await addRecordMutation.mutateAsync({
+          sessionId: editingSession.id,
+          userId,
+          detectedName: creatingGuestFor || undefined
+        })
+        // Session-Daten aktualisieren
+        const updatedSessions = await queryClient.fetchQuery<AttendanceSession[]>({
+          queryKey: ['attendance'],
+          queryFn: () => apiClient.get('/api/attendance').then((r) => r.data),
+        })
+        const updatedSession = updatedSessions?.find((s: AttendanceSession) => s.id === editingSession.id)
+        if (updatedSession) {
+          setEditingSession(updatedSession)
+          setEditSelectedUsers(updatedSession.records.filter((r) => r.user).map((r) => r.user!.id))
+        }
+        // OCR-Daten neu laden
         queryClient.invalidateQueries({ queryKey: ['session', editingSession.id, 'ocr'] })
       }
+
       setCreatingGuestFor(null)
       setGuestUsername('')
     },
@@ -173,6 +192,16 @@ export default function AttendancePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance'] })
       closeEditModal()
+    },
+  })
+
+  // Screenshot löschen (Alle Teilnehmer übernommen)
+  const deleteScreenshotMutation = useMutation({
+    mutationFn: (sessionId: number) => apiClient.delete(`/api/attendance/${sessionId}/screenshot`),
+    onSuccess: () => {
+      setEditScreenshotUrl(null)
+      setEditOcrData(null)
+      queryClient.invalidateQueries({ queryKey: ['attendance'] })
     },
   })
 
@@ -902,6 +931,21 @@ export default function AttendancePage() {
                       alt="Session Screenshot"
                       className="w-full rounded-lg border border-gray-700"
                     />
+                    {/* Button zum Löschen des Screenshots */}
+                    {!editingSession.is_confirmed && (
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Screenshot wirklich löschen? Die OCR-Daten werden ebenfalls entfernt.')) {
+                            deleteScreenshotMutation.mutate(editingSession.id)
+                          }
+                        }}
+                        disabled={deleteScreenshotMutation.isPending}
+                        className="mt-3 w-full btn bg-green-600 hover:bg-green-700 flex items-center justify-center gap-2"
+                      >
+                        <Check size={16} />
+                        {deleteScreenshotMutation.isPending ? 'Wird gelöscht...' : 'Alle Teilnehmer übernommen'}
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -1108,11 +1152,11 @@ export default function AttendancePage() {
 
             {/* Footer mit Actions */}
             <div className="mt-6 pt-4 border-t border-gray-700">
-              {/* Bestätigungs-Warnung */}
-              {!editingSession.is_confirmed && editScreenshotUrl && (
-                <div className="p-3 bg-yellow-900/20 border border-yellow-700 rounded-lg mb-4">
-                  <p className="text-yellow-400 text-sm">
-                    <strong>Hinweis:</strong> Nach der Bestätigung wird der Screenshot gelöscht.
+              {/* Bestätigungs-Hinweis */}
+              {!editingSession.is_confirmed && editingSession.records.length > 0 && (
+                <div className="p-3 bg-blue-900/20 border border-blue-700 rounded-lg mb-4">
+                  <p className="text-blue-400 text-sm">
+                    <strong>Tipp:</strong> Sobald alle Teilnehmer erfasst sind, kannst du die Session bestätigen.
                   </p>
                 </div>
               )}

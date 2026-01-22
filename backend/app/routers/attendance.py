@@ -501,6 +501,29 @@ async def update_session(
     return session_to_response(session)
 
 
+@router.delete("/{session_id}/screenshot")
+async def delete_session_screenshot(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Löscht den Screenshot einer Session (Teilnehmer wurden übernommen)."""
+    check_role(current_user, UserRole.OFFICER)
+
+    session = db.query(AttendanceSession).filter(
+        AttendanceSession.id == session_id
+    ).first()
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session nicht gefunden"
+        )
+
+    session.screenshot_data = None
+    db.commit()
+    return {"message": "Screenshot gelöscht"}
+
+
 @router.get("/{session_id}/screenshot")
 async def get_session_screenshot(
     session_id: int,
