@@ -79,3 +79,21 @@ class UserRequest(Base):
 
     # Relationships
     requested_by = relationship("User", foreign_keys=[requested_by_id])
+
+
+class PendingMerge(Base):
+    """Vorgeschlagene Zusammenführung von Discord-User mit existierendem User."""
+    __tablename__ = "pending_merges"
+
+    id = Column(Integer, primary_key=True, index=True)
+    discord_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Neuer Discord-User
+    existing_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Existierender User ohne Discord
+    match_reason = Column(String(100), nullable=False)  # z.B. "username_match", "display_name_match", "alias_match"
+    status = Column(String(20), default="pending")  # pending, approved, rejected
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    discord_user = relationship("User", foreign_keys=[discord_user_id])
+    existing_user = relationship("User", foreign_keys=[existing_user_id])

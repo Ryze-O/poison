@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.config import get_settings
-from app.models.user import User, UserRole, GuestToken
+from app.models.user import User, UserRole, GuestToken, PendingMerge
 from app.schemas.user import UserResponse, GuestTokenCreate, GuestTokenResponse, GuestLoginResponse
 from app.auth.discord import get_oauth_url, exchange_code, get_discord_user, get_user_guilds, is_member_of_guild
 from app.auth.jwt import create_access_token, get_current_user
@@ -73,6 +73,47 @@ async def callback(code: str, state: str, db: Session = Depends(get_db)):
             settings.admin_discord_id
             and discord_user.id == settings.admin_discord_id
         )
+
+        # Nach existierendem User ohne Discord suchen (für Auto-Merge)
+        potential_match = None
+        match_reason = None
+
+        # Suche nach Username-Match (case-insensitive)
+        potential_match = db.query(User).filter(
+            User.discord_id.is_(None),
+            User.username.ilike(discord_user.username)
+        ).first()
+        if potential_match:
+            match_reason = "username_match"
+
+        # Falls kein Username-Match, nach Display-Name suchen
+        if not potential_match and discord_user.global_name:
+            potential_match = db.query(User).filter(
+                User.discord_id.is_(None),
+                User.display_name.ilike(discord_user.global_name)
+            ).first()
+            if potential_match:
+                match_reason = "display_name_match"
+
+        # Falls kein Display-Name-Match, nach Alias suchen
+        if not potential_match:
+            # Suche in Aliase (case-insensitive)
+            all_users_with_aliases = db.query(User).filter(
+                User.discord_id.is_(None),
+                User.aliases.isnot(None)
+            ).all()
+            search_names = [discord_user.username.lower()]
+            if discord_user.global_name:
+                search_names.append(discord_user.global_name.lower())
+
+            for u in all_users_with_aliases:
+                aliases = [a.strip().lower() for a in u.aliases.split(',') if a.strip()]
+                if any(name in aliases for name in search_names):
+                    potential_match = u
+                    match_reason = "alias_match"
+                    break
+
+        # Neuen User anlegen
         user = User(
             discord_id=discord_user.id,
             username=discord_user.username,
@@ -83,6 +124,17 @@ async def callback(code: str, state: str, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
+
+        # Falls Match gefunden, Merge-Vorschlag erstellen
+        if potential_match and not is_admin:
+            pending_merge = PendingMerge(
+                discord_user_id=user.id,
+                existing_user_id=potential_match.id,
+                match_reason=match_reason,
+                status="pending"
+            )
+            db.add(pending_merge)
+            db.commit()
     else:
         # Benutzer-Daten aktualisieren
         user.username = discord_user.username

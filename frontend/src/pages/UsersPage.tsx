@@ -2,13 +2,13 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Shield, User as UserIcon, Compass, Trash2, Link2, X, Plus, Tag, Wallet } from 'lucide-react'
-import type { User, UserRole } from '../api/types'
+import { Shield, User as UserIcon, Compass, Trash2, Link2, X, Plus, Tag, Wallet, Edit3, GitMerge, Check, XCircle } from 'lucide-react'
+import type { User, UserRole, PendingMerge } from '../api/types'
 
 const roleLabels: Record<UserRole, string> = {
   guest: 'Gast',
   loot_guest: 'Loot-Gast',
-  member: 'Mitglied',
+  member: 'Viper',
   officer: 'Offizier',
   treasurer: 'Kassenwart',
   admin: 'Admin',
@@ -33,6 +33,10 @@ export default function UsersPage() {
   const [aliasUser, setAliasUser] = useState<User | null>(null)
   const [newAlias, setNewAlias] = useState('')
   const [userAliases, setUserAliases] = useState<string[]>([])
+  // Benutzer-Bearbeitung
+  const [editUserModal, setEditUserModal] = useState<User | null>(null)
+  const [editUsername, setEditUsername] = useState('')
+  const [editDisplayName, setEditDisplayName] = useState('')
 
   const isAdmin = currentUser?.role === 'admin'
   const isOfficer = currentUser?.role === 'officer' || currentUser?.role === 'treasurer' || isAdmin
@@ -40,6 +44,13 @@ export default function UsersPage() {
   const { data: users } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: () => apiClient.get('/api/users').then((r) => r.data),
+  })
+
+  // Pending Merge-Vorschläge (nur für Admins)
+  const { data: pendingMerges } = useQuery<PendingMerge[]>({
+    queryKey: ['pending-merges'],
+    queryFn: () => apiClient.get('/api/users/pending-merges').then((r) => r.data),
+    enabled: isAdmin,
   })
 
   // Sortierte Benutzer: Admins > Offiziere > Sonderrollen (Pioneer/Kassenwart) > Mitglieder, dann alphabetisch
@@ -143,6 +154,37 @@ export default function UsersPage() {
     },
   })
 
+  const updateUserMutation = useMutation({
+    mutationFn: ({ userId, username, display_name }: { userId: number; username?: string; display_name?: string }) =>
+      apiClient.patch(`/api/users/${userId}`, { username, display_name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      setEditUserModal(null)
+    },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  // Merge-Vorschläge Mutations
+  const approveMergeMutation = useMutation({
+    mutationFn: (mergeId: number) => apiClient.post(`/api/users/pending-merges/${mergeId}/approve`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-merges'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  const rejectMergeMutation = useMutation({
+    mutationFn: (mergeId: number) => apiClient.post(`/api/users/pending-merges/${mergeId}/reject`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-merges'] })
+    },
+  })
+
   const handleSaveRole = () => {
     if (editingUser && newRole) {
       updateRoleMutation.mutate({ userId: editingUser.id, role: newRole })
@@ -186,6 +228,21 @@ export default function UsersPage() {
     } catch {
       setUserAliases([])
     }
+  }
+
+  const openEditUserModal = (u: User) => {
+    setEditUserModal(u)
+    setEditUsername(u.username)
+    setEditDisplayName(u.display_name || '')
+  }
+
+  const handleSaveUser = () => {
+    if (!editUserModal) return
+    updateUserMutation.mutate({
+      userId: editUserModal.id,
+      username: editUsername !== editUserModal.username ? editUsername : undefined,
+      display_name: editDisplayName !== (editUserModal.display_name || '') ? editDisplayName : undefined,
+    })
   }
 
   return (
@@ -239,7 +296,7 @@ export default function UsersPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className={`w-3 h-3 rounded-full ${roleColors.member}`} />
-            <span>Mitglied - Kann sehen</span>
+            <span>Viper - Staffelmitglied</span>
           </div>
           <div className="flex items-center gap-2">
             <span className={`w-3 h-3 rounded-full ${roleColors.officer}`} />
@@ -259,6 +316,91 @@ export default function UsersPage() {
           </div>
         </div>
       </div>
+
+      {/* Merge-Vorschläge (nur für Admins) */}
+      {isAdmin && pendingMerges && pendingMerges.length > 0 && (
+        <div className="card mb-8 border-l-4 border-l-purple-500">
+          <div className="flex items-center gap-3 mb-4">
+            <GitMerge className="text-purple-500" size={24} />
+            <h2 className="text-lg font-bold">Merge-Vorschläge ({pendingMerges.length})</h2>
+          </div>
+          <p className="text-sm text-gray-400 mb-4">
+            Diese Benutzer haben sich mit Discord angemeldet und könnten zu existierenden Benutzern gehören.
+          </p>
+          <div className="space-y-3">
+            {pendingMerges.map((merge) => (
+              <div key={merge.id} className="p-4 bg-gray-800/50 rounded-lg border border-purple-500/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    {/* Discord User */}
+                    <div className="text-center">
+                      {merge.discord_user.avatar ? (
+                        <img src={merge.discord_user.avatar} alt="" className="w-12 h-12 rounded-full mx-auto mb-1" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-blue-700 flex items-center justify-center mx-auto mb-1">
+                          <UserIcon size={24} className="text-white" />
+                        </div>
+                      )}
+                      <p className="text-sm font-medium">{merge.discord_user.display_name || merge.discord_user.username}</p>
+                      <p className="text-xs text-blue-400">Discord</p>
+                    </div>
+
+                    {/* Arrow */}
+                    <div className="text-gray-500">
+                      <GitMerge size={24} />
+                    </div>
+
+                    {/* Existing User */}
+                    <div className="text-center">
+                      <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center mx-auto mb-1">
+                        <UserIcon size={24} className="text-gray-400" />
+                      </div>
+                      <p className="text-sm font-medium">{merge.existing_user.display_name || merge.existing_user.username}</p>
+                      <p className="text-xs text-gray-400">Importiert</p>
+                    </div>
+
+                    {/* Match Reason */}
+                    <div className="ml-4">
+                      <span className="px-2 py-1 bg-purple-900/30 border border-purple-700 rounded text-xs text-purple-300">
+                        {merge.match_reason === 'username_match' && 'Username stimmt überein'}
+                        {merge.match_reason === 'display_name_match' && 'Name stimmt überein'}
+                        {merge.match_reason === 'alias_match' && 'Alias stimmt überein'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        if (window.confirm(
+                          `"${merge.discord_user.display_name || merge.discord_user.username}" mit "${merge.existing_user.display_name || merge.existing_user.username}" zusammenführen?\n\n` +
+                          `Der Discord-Benutzer übernimmt alle Daten (Inventar, Loot, etc.) vom importierten Benutzer.`
+                        )) {
+                          approveMergeMutation.mutate(merge.id)
+                        }
+                      }}
+                      disabled={approveMergeMutation.isPending}
+                      className="btn bg-emerald-600 hover:bg-emerald-700 flex items-center gap-2"
+                    >
+                      <Check size={16} />
+                      Zusammenführen
+                    </button>
+                    <button
+                      onClick={() => rejectMergeMutation.mutate(merge.id)}
+                      disabled={rejectMergeMutation.isPending}
+                      className="btn bg-gray-700 hover:bg-gray-600 flex items-center gap-2"
+                    >
+                      <XCircle size={16} />
+                      Ablehnen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Benutzer-Liste */}
       <div className="card">
@@ -342,6 +484,16 @@ export default function UsersPage() {
 
                       {isAdmin && u.id !== currentUser?.id && (
                         <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEditUserModal(u)
+                            }}
+                            className="p-2 text-gray-400 hover:text-blue-400 hover:bg-gray-700 rounded-lg"
+                            title="Benutzer bearbeiten"
+                          >
+                            <Edit3 size={20} />
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -531,6 +683,70 @@ export default function UsersPage() {
                 className="btn btn-primary"
               >
                 <Plus size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Benutzer-Bearbeiten Modal */}
+      {editUserModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="card max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">Benutzer bearbeiten</h2>
+              <button
+                onClick={() => setEditUserModal(null)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="label">Anzeigename</label>
+                <input
+                  type="text"
+                  value={editDisplayName}
+                  onChange={(e) => setEditDisplayName(e.target.value)}
+                  className="input"
+                  placeholder="Anzeigename"
+                />
+              </div>
+
+              <div>
+                <label className="label">Username (intern)</label>
+                <input
+                  type="text"
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  className="input"
+                  placeholder="Username"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Wird für System-Referenzen und Aliase verwendet
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setEditUserModal(null)}
+                className="btn btn-secondary flex-1"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={handleSaveUser}
+                disabled={
+                  updateUserMutation.isPending ||
+                  (!editUsername.trim()) ||
+                  (editUsername === editUserModal.username && editDisplayName === (editUserModal.display_name || ''))
+                }
+                className="btn btn-primary flex-1"
+              >
+                {updateUserMutation.isPending ? 'Wird gespeichert...' : 'Speichern'}
               </button>
             </div>
           </div>

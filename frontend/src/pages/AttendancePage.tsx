@@ -53,6 +53,7 @@ export default function AttendancePage() {
   // Loot-Gast erstellen
   const [creatingGuestFor, setCreatingGuestFor] = useState<string | null>(null)
   const [guestUsername, setGuestUsername] = useState('')
+  const [guestDisplayName, setGuestDisplayName] = useState('')
 
   const canCreate = user?.role !== 'member'
   const isAdmin = user?.role === 'admin'
@@ -130,6 +131,7 @@ export default function AttendancePage() {
 
       setCreatingGuestFor(null)
       setGuestUsername('')
+      setGuestDisplayName('')
     },
   })
 
@@ -1008,6 +1010,7 @@ export default function AttendancePage() {
                                 onClick={() => {
                                   setCreatingGuestFor(name)
                                   setGuestUsername(name.toLowerCase().replace(/[^a-z0-9_]/g, '_'))
+                                  setGuestDisplayName(name)
                                   setOcrAssignments((prev) => ({
                                     ...prev,
                                     [name]: { userId: null, saveAsAlias: false },
@@ -1042,15 +1045,28 @@ export default function AttendancePage() {
                             <div className="mt-3 p-3 bg-purple-900/20 border border-purple-700 rounded space-y-3">
                               <p className="text-sm text-purple-300 font-medium">Neuen Loot-Gast erstellen</p>
                               <div>
-                                <label className="text-xs text-gray-400">Username</label>
+                                <label className="text-xs text-gray-400">Anzeigename</label>
+                                <input
+                                  type="text"
+                                  value={guestDisplayName}
+                                  onChange={(e) => setGuestDisplayName(e.target.value)}
+                                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm mt-1"
+                                  placeholder="z.B. Horthy"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-400">Username (intern)</label>
                                 <input
                                   type="text"
                                   value={guestUsername}
                                   onChange={(e) => setGuestUsername(e.target.value)}
                                   className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm mt-1"
-                                  placeholder="z.B. max_mustermann"
+                                  placeholder="z.B. horthy"
                                 />
                               </div>
+                              <p className="text-xs text-gray-500">
+                                OCR-Alias: "{name}" wird automatisch gespeichert
+                              </p>
                               <div className="flex gap-2">
                                 <button
                                   onClick={() => setCreatingGuestFor(null)}
@@ -1061,10 +1077,10 @@ export default function AttendancePage() {
                                 <button
                                   onClick={() => createUserRequestMutation.mutate({
                                     username: guestUsername,
-                                    display_name: name,
+                                    display_name: guestDisplayName,
                                     detected_name: name
                                   })}
-                                  disabled={!guestUsername || createUserRequestMutation.isPending}
+                                  disabled={!guestUsername || !guestDisplayName || createUserRequestMutation.isPending}
                                   className="btn btn-primary text-sm flex-1 !bg-purple-600 hover:!bg-purple-500"
                                 >
                                   {createUserRequestMutation.isPending ? 'Erstelle...' : 'Loot-Gast erstellen'}

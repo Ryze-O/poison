@@ -1,10 +1,11 @@
 from typing import List
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, PendingMerge
 from app.schemas.user import UserResponse, UserUpdate
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
@@ -14,6 +15,20 @@ class UserMergeRequest(BaseModel):
     """Request zum Zusammenführen zweier User."""
     source_user_id: int  # Wird gelöscht
     target_user_id: int  # Behält alle Daten
+
+
+class PendingMergeResponse(BaseModel):
+    """Response für Merge-Vorschläge."""
+    id: int
+    discord_user: UserResponse
+    existing_user: UserResponse
+    match_reason: str
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 
 router = APIRouter()
 
@@ -91,6 +106,18 @@ async def update_user(
         if user.id != current_user.id:
             check_role(current_user, UserRole.ADMIN)
         user.display_name = user_update.display_name
+
+    # Username darf nur Admin ändern
+    if user_update.username is not None:
+        check_role(current_user, UserRole.ADMIN)
+        # Prüfen ob Username bereits vergeben
+        existing = db.query(User).filter(User.username == user_update.username, User.id != user_id).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username bereits vergeben"
+            )
+        user.username = user_update.username
 
     # Rollen dürfen nur Admins ändern
     if user_update.role is not None:
@@ -374,3 +401,176 @@ async def merge_users(
         "message": f"Benutzer '{source_username}' wurde mit '{target.username}' zusammengeführt",
         "target_user": UserResponse.model_validate(target)
     }
+
+
+@router.get("/pending-merges", response_model=List[PendingMergeResponse])
+async def get_pending_merges(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt alle offenen Merge-Vorschläge zurück. Nur Admins."""
+    check_role(current_user, UserRole.ADMIN)
+
+    pending = db.query(PendingMerge).filter(PendingMerge.status == "pending").all()
+
+    # Manuell die Relationships laden und Response erstellen
+    result = []
+    for p in pending:
+        discord_user = db.query(User).filter(User.id == p.discord_user_id).first()
+        existing_user = db.query(User).filter(User.id == p.existing_user_id).first()
+        if discord_user and existing_user:
+            result.append(PendingMergeResponse(
+                id=p.id,
+                discord_user=UserResponse.model_validate(discord_user),
+                existing_user=UserResponse.model_validate(existing_user),
+                match_reason=p.match_reason,
+                status=p.status,
+                created_at=p.created_at
+            ))
+
+    return result
+
+
+@router.post("/pending-merges/{merge_id}/approve")
+async def approve_pending_merge(
+    merge_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Genehmigt einen Merge-Vorschlag.
+    Der Discord-User übernimmt alle Daten vom existierenden User.
+    """
+    check_role(current_user, UserRole.ADMIN)
+
+    pending = db.query(PendingMerge).filter(PendingMerge.id == merge_id).first()
+    if not pending:
+        raise HTTPException(status_code=404, detail="Merge-Vorschlag nicht gefunden")
+
+    if pending.status != "pending":
+        raise HTTPException(status_code=400, detail="Merge-Vorschlag wurde bereits bearbeitet")
+
+    discord_user = db.query(User).filter(User.id == pending.discord_user_id).first()
+    existing_user = db.query(User).filter(User.id == pending.existing_user_id).first()
+
+    if not discord_user or not existing_user:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+
+    # Alle Referenzen vom existierenden User auf Discord-User übertragen
+    from app.models.inventory import Inventory, InventoryTransfer
+    from app.models.treasury import TreasuryTransaction
+    from app.models.attendance import AttendanceRecord, AttendanceSession
+    from app.models.loot import LootSession, LootDistribution
+
+    # Inventar übertragen
+    db.query(Inventory).filter(Inventory.user_id == existing_user.id).update(
+        {Inventory.user_id: discord_user.id}
+    )
+
+    # Inventar-Transfers
+    db.query(InventoryTransfer).filter(InventoryTransfer.from_user_id == existing_user.id).update(
+        {InventoryTransfer.from_user_id: discord_user.id}
+    )
+    db.query(InventoryTransfer).filter(InventoryTransfer.to_user_id == existing_user.id).update(
+        {InventoryTransfer.to_user_id: discord_user.id}
+    )
+
+    # Treasury-Transaktionen
+    db.query(TreasuryTransaction).filter(TreasuryTransaction.created_by_id == existing_user.id).update(
+        {TreasuryTransaction.created_by_id: discord_user.id}
+    )
+
+    # Anwesenheits-Records
+    db.query(AttendanceRecord).filter(AttendanceRecord.user_id == existing_user.id).update(
+        {AttendanceRecord.user_id: discord_user.id}
+    )
+
+    # Anwesenheits-Sessions (created_by)
+    db.query(AttendanceSession).filter(AttendanceSession.created_by_id == existing_user.id).update(
+        {AttendanceSession.created_by_id: discord_user.id}
+    )
+
+    # Loot-Sessions (created_by)
+    db.query(LootSession).filter(LootSession.created_by_id == existing_user.id).update(
+        {LootSession.created_by_id: discord_user.id}
+    )
+
+    # Loot-Verteilungen
+    db.query(LootDistribution).filter(LootDistribution.user_id == existing_user.id).update(
+        {LootDistribution.user_id: discord_user.id}
+    )
+
+    # Aliase vom existierenden User übernehmen
+    existing_aliases = discord_user.aliases.split(',') if discord_user.aliases else []
+    existing_aliases = [a.strip() for a in existing_aliases if a.strip()]
+    if existing_user.username not in existing_aliases:
+        existing_aliases.append(existing_user.username)
+    if existing_user.display_name and existing_user.display_name not in existing_aliases:
+        existing_aliases.append(existing_user.display_name)
+    if existing_user.aliases:
+        for alias in existing_user.aliases.split(','):
+            alias = alias.strip()
+            if alias and alias not in existing_aliases:
+                existing_aliases.append(alias)
+    discord_user.aliases = ','.join(existing_aliases) if existing_aliases else None
+
+    # Rolle vom existierenden User übernehmen (falls höher)
+    role_hierarchy = {
+        UserRole.GUEST: -1,
+        UserRole.LOOT_GUEST: 0,
+        UserRole.MEMBER: 1,
+        UserRole.OFFICER: 2,
+        UserRole.TREASURER: 3,
+        UserRole.ADMIN: 4,
+    }
+    if role_hierarchy.get(existing_user.role, 0) > role_hierarchy.get(discord_user.role, 0):
+        discord_user.role = existing_user.role
+
+    # Pioneer/Kassenwart-Status übernehmen
+    if existing_user.is_pioneer:
+        discord_user.is_pioneer = True
+    if existing_user.is_treasurer:
+        discord_user.is_treasurer = True
+
+    # Display-Name übernehmen falls nicht vorhanden
+    if not discord_user.display_name and existing_user.display_name:
+        discord_user.display_name = existing_user.display_name
+
+    # Existierenden User löschen
+    existing_username = existing_user.username
+    db.delete(existing_user)
+
+    # Merge-Vorschlag als erledigt markieren
+    pending.status = "approved"
+    pending.resolved_at = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(discord_user)
+
+    return {
+        "message": f"Benutzer '{existing_username}' wurde mit '{discord_user.username}' zusammengeführt",
+        "user": UserResponse.model_validate(discord_user)
+    }
+
+
+@router.post("/pending-merges/{merge_id}/reject")
+async def reject_pending_merge(
+    merge_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Lehnt einen Merge-Vorschlag ab."""
+    check_role(current_user, UserRole.ADMIN)
+
+    pending = db.query(PendingMerge).filter(PendingMerge.id == merge_id).first()
+    if not pending:
+        raise HTTPException(status_code=404, detail="Merge-Vorschlag nicht gefunden")
+
+    if pending.status != "pending":
+        raise HTTPException(status_code=400, detail="Merge-Vorschlag wurde bereits bearbeitet")
+
+    pending.status = "rejected"
+    pending.resolved_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {"message": "Merge-Vorschlag abgelehnt"}

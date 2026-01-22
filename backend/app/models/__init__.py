@@ -1,4 +1,4 @@
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, PendingMerge
 from app.models.attendance import AttendanceSession, AttendanceRecord
 from app.models.component import Component, SCLocation
 from app.models.location import Location
@@ -11,6 +11,7 @@ from app.models.officer_account import OfficerAccount, OfficerTransaction
 __all__ = [
     "User",
     "UserRole",
+    "PendingMerge",
     "AttendanceSession",
     "AttendanceRecord",
     "Component",

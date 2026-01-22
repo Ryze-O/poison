@@ -270,3 +270,13 @@ export interface OfficerAccountsSummary {
   total_balance: number
   accounts: OfficerAccount[]
 }
+
+// Merge-Vorschläge (Discord-User mit existierendem User zusammenführen)
+export interface PendingMerge {
+  id: number
+  discord_user: User
+  existing_user: User
+  match_reason: 'username_match' | 'display_name_match' | 'alias_match'
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string
+}

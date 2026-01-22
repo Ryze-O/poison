@@ -15,6 +15,7 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
+    username: Optional[str] = None
     display_name: Optional[str] = None
     role: Optional[UserRole] = None
     is_pioneer: Optional[bool] = None
