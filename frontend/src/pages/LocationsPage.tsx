@@ -254,7 +254,7 @@ export default function LocationsPage() {
                             {getTypeIcon(location.location_type)}
                             <div className="min-w-0">
                               <p className="font-medium truncate">{location.name}</p>
-                              <p className="text-xs text-krt-orange/70">
+                              <p className="text-xs text-krt-orange dark:text-krt-orange/80">
                                 {location.location_type || 'Custom'}
                                 {location.is_predefined && ' • SC'}
                               </p>
