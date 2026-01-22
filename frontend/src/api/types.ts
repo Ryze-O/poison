@@ -10,6 +10,7 @@ export interface User {
   avatar: string | null
   role: UserRole
   is_pioneer: boolean  // Pioneer: verantwortlich für Versorgung
+  is_treasurer: boolean  // Kassenwart: verwaltet Teil der Staffelkasse
   created_at: string
 }
 

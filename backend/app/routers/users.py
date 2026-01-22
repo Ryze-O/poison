@@ -102,6 +102,11 @@ async def update_user(
         check_role(current_user, UserRole.ADMIN)
         user.is_pioneer = user_update.is_pioneer
 
+    # Kassenwart-Status darf nur Admin ändern
+    if user_update.is_treasurer is not None:
+        check_role(current_user, UserRole.ADMIN)
+        user.is_treasurer = user_update.is_treasurer
+
     db.commit()
     db.refresh(user)
     return user

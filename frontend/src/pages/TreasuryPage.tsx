@@ -548,10 +548,10 @@ export default function TreasuryPage() {
                   <option value="">Kassenwart wählen...</option>
                   {allUsers
                     ?.filter((u) => !officerAccounts?.accounts.some((a) => a.user.id === u.id))
-                    .filter((u) => u.role === 'treasurer' || u.role === 'admin')
+                    .filter((u) => u.is_treasurer || u.role === 'admin')
                     .map((u) => (
                       <option key={u.id} value={u.id}>
-                        {u.display_name || u.username} ({u.role === 'admin' ? 'Admin' : 'Kassenwart'})
+                        {u.display_name || u.username} {u.role === 'admin' && '(Admin)'}
                       </option>
                     ))}
                 </select>

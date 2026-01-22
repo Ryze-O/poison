@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Shield, User as UserIcon, Compass, Trash2, Link2, X, Plus, Tag } from 'lucide-react'
+import { Shield, User as UserIcon, Compass, Trash2, Link2, X, Plus, Tag, Wallet } from 'lucide-react'
 import type { User, UserRole } from '../api/types'
 
 const roleLabels: Record<UserRole, string> = {
@@ -38,6 +38,35 @@ export default function UsersPage() {
     queryFn: () => apiClient.get('/api/users').then((r) => r.data),
   })
 
+  // Sortierte Benutzer: Admins > Offiziere > Sonderrollen (Pioneer/Kassenwart) > Mitglieder, dann alphabetisch
+  const sortedUsers = useMemo(() => {
+    if (!users) return []
+
+    const roleOrder: Record<UserRole, number> = {
+      admin: 0,
+      treasurer: 1,
+      officer: 2,
+      member: 3,
+    }
+
+    return [...users].sort((a, b) => {
+      // 1. Nach Rolle sortieren
+      const roleCompare = roleOrder[a.role] - roleOrder[b.role]
+      if (roleCompare !== 0) return roleCompare
+
+      // 2. Bei gleicher Rolle: Sonderrollen (Pioneer/Kassenwart) zuerst
+      const aHasFlag = a.is_pioneer || a.is_treasurer
+      const bHasFlag = b.is_pioneer || b.is_treasurer
+      if (aHasFlag && !bHasFlag) return -1
+      if (!aHasFlag && bHasFlag) return 1
+
+      // 3. Alphabetisch nach Display-Name oder Username
+      const aName = (a.display_name || a.username).toLowerCase()
+      const bName = (b.display_name || b.username).toLowerCase()
+      return aName.localeCompare(bName, 'de')
+    })
+  }, [users])
+
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: number; role: UserRole }) =>
       apiClient.patch(`/api/users/${userId}`, { role }),
@@ -51,6 +80,14 @@ export default function UsersPage() {
   const togglePioneerMutation = useMutation({
     mutationFn: ({ userId, is_pioneer }: { userId: number; is_pioneer: boolean }) =>
       apiClient.patch(`/api/users/${userId}`, { is_pioneer }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+  })
+
+  const toggleTreasurerMutation = useMutation({
+    mutationFn: ({ userId, is_treasurer }: { userId: number; is_treasurer: boolean }) =>
+      apiClient.patch(`/api/users/${userId}`, { is_treasurer }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
     },
@@ -108,6 +145,10 @@ export default function UsersPage() {
 
   const handleTogglePioneer = (u: User) => {
     togglePioneerMutation.mutate({ userId: u.id, is_pioneer: !u.is_pioneer })
+  }
+
+  const handleToggleTreasurer = (u: User) => {
+    toggleTreasurerMutation.mutate({ userId: u.id, is_treasurer: !u.is_treasurer })
   }
 
   const handleDeleteUser = (u: User) => {
@@ -208,7 +249,7 @@ export default function UsersPage() {
       {/* Benutzer-Liste */}
       <div className="card">
         <div className="space-y-3">
-          {users?.map((u) => {
+          {sortedUsers.map((u) => {
             const isSelected = mergeSource?.id === u.id
 
             return (
@@ -263,6 +304,13 @@ export default function UsersPage() {
                     </span>
                   )}
 
+                  {u.is_treasurer && (
+                    <span className="px-3 py-1 rounded-full text-sm bg-amber-600 text-white flex items-center gap-1">
+                      <Wallet size={14} />
+                      Kassenwart
+                    </span>
+                  )}
+
                   {!mergeMode && (
                     <>
                       {isOfficer && (
@@ -293,6 +341,20 @@ export default function UsersPage() {
                             title={u.is_pioneer ? 'Pioneer-Status entfernen' : 'Als Pioneer markieren'}
                           >
                             <Compass size={20} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleToggleTreasurer(u)
+                            }}
+                            className={`p-2 rounded-lg transition-colors ${
+                              u.is_treasurer
+                                ? 'text-amber-500 bg-amber-500/20 hover:bg-amber-500/30'
+                                : 'text-gray-400 hover:text-amber-500 hover:bg-gray-700'
+                            }`}
+                            title={u.is_treasurer ? 'Kassenwart-Status entfernen' : 'Als Kassenwart markieren'}
+                          >
+                            <Wallet size={20} />
                           </button>
                           <button
                             onClick={(e) => {
