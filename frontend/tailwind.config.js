@@ -62,6 +62,21 @@ export default {
       outlineColor: {
         DEFAULT: '#E85A24',
       },
+      boxShadow: {
+        'sm': 'var(--shadow-sm)',
+        'md': 'var(--shadow-md)',
+        'lg': 'var(--shadow-lg)',
+        'inner': 'var(--shadow-inner)',
+        'element': 'var(--shadow-element)',
+        'glow-orange': 'var(--shadow-glow-orange)',
+      },
+      borderRadius: {
+        'xl': '0.875rem',
+        '2xl': '1rem',
+      },
+      backdropBlur: {
+        'xs': '2px',
+      },
     },
   },
   plugins: [],

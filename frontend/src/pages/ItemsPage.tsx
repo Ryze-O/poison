@@ -300,7 +300,7 @@ export default function ItemsPage() {
                               {items.map((item) => (
                                 <div
                                   key={item.id}
-                                  className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg"
+                                  className="list-item flex items-center justify-between"
                                 >
                                   <div className="min-w-0 flex-1">
                                     <p className="font-medium truncate">{item.name}</p>
