@@ -14,28 +14,30 @@ export default {
           'orange-dark': '#C94A1A',
           'orange-light': '#F26522',
         },
-        // Grautöne für Dark Mode
-        'dark': {
-          '50': '#fafafa',
-          '100': '#f5f5f5',
-          '200': '#e5e5e5',
-          '300': '#d4d4d4',
-          '400': '#a3a3a3',
-          '500': '#737373',
-          '600': '#525252',
-          '700': '#404040',
-          '800': '#262626',
-          '850': '#1f1f1f',
-          '900': '#171717',
-          '950': '#0a0a0a',
+        // Überschreibe die Standard-Grau-Palette mit neutralen Grautönen (kein Blau!)
+        'gray': {
+          50: '#fafafa',
+          100: '#f5f5f5',
+          200: '#e5e5e5',
+          300: '#d4d4d4',
+          400: '#a3a3a3',
+          500: '#737373',
+          600: '#525252',
+          700: '#404040',
+          800: '#262626',
+          900: '#171717',
+          950: '#0a0a0a',
         },
-        // Semantische Farben
+        // Semantische Farben (ersetzen sc-red, sc-green etc.)
         'success': '#22c55e',
         'error': '#ef4444',
         'warning': '#f59e0b',
+        // Legacy aliases für bestehenden Code
+        'sc-red': '#ef4444',
+        'sc-green': '#22c55e',
+        'sc-gold': '#f59e0b',
       },
       backgroundColor: {
-        // Theme-spezifische Hintergründe
         'page': 'var(--bg-page)',
         'card': 'var(--bg-card)',
         'card-hover': 'var(--bg-card-hover)',
