@@ -7,6 +7,7 @@ import type { User, UserRole } from '../api/types'
 
 const roleLabels: Record<UserRole, string> = {
   guest: 'Gast',
+  loot_guest: 'Loot-Gast',
   member: 'Mitglied',
   officer: 'Offizier',
   treasurer: 'Kassenwart',
@@ -15,6 +16,7 @@ const roleLabels: Record<UserRole, string> = {
 
 const roleColors: Record<UserRole, string> = {
   guest: 'bg-yellow-600',
+  loot_guest: 'bg-purple-600',
   member: 'bg-gray-600',
   officer: 'bg-krt-orange',
   treasurer: 'bg-krt-gold',
@@ -49,7 +51,8 @@ export default function UsersPage() {
       treasurer: 1,
       officer: 2,
       member: 3,
-      guest: 4,
+      loot_guest: 4,
+      guest: 5,
     }
 
     return [...users].sort((a, b) => {
@@ -225,10 +228,14 @@ export default function UsersPage() {
       {/* Rollen-Legende */}
       <div className="card mb-8">
         <h2 className="text-lg font-bold mb-4">Rollen-Übersicht</h2>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="flex items-center gap-2">
             <span className={`w-3 h-3 rounded-full ${roleColors.guest}`} />
             <span>Gast - Wartet auf Freischaltung</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`w-3 h-3 rounded-full ${roleColors.loot_guest}`} />
+            <span>Loot-Gast - Kann Loot erhalten</span>
           </div>
           <div className="flex items-center gap-2">
             <span className={`w-3 h-3 rounded-full ${roleColors.member}`} />

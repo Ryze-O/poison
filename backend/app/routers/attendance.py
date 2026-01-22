@@ -132,65 +132,41 @@ async def create_user_request(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Erstellt einen Antrag für einen neuen User.
-    Admins können direkt User anlegen, andere erstellen Anträge.
+    Erstellt einen Loot-Gast User.
+    Offiziere und Admins können direkt LOOT_GUEST User anlegen.
     """
     check_role(current_user, UserRole.OFFICER)
 
-    # Admin kann direkt User anlegen
-    if current_user.role == UserRole.ADMIN:
-        # Prüfe ob Username bereits existiert
-        existing = db.query(User).filter(User.username == request_data.username).first()
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"User '{request_data.username}' existiert bereits"
-            )
-
-        # User direkt anlegen
-        new_user = User(
-            username=request_data.username,
-            display_name=request_data.display_name,
-            role=UserRole.MEMBER,
-            aliases=request_data.detected_name  # OCR-Name als erster Alias
-        )
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-
-        # Dummy-Response mit "approved" Status
-        return {
-            "id": 0,
-            "username": new_user.username,
-            "display_name": new_user.display_name,
-            "detected_name": request_data.detected_name,
-            "requested_by": current_user,
-            "status": "approved",
-            "created_at": new_user.created_at
-        }
-
-    # Prüfe ob bereits ein Antrag für diesen Username existiert
-    existing_request = db.query(UserRequest).filter(
-        UserRequest.username == request_data.username,
-        UserRequest.status == "pending"
-    ).first()
-    if existing_request:
+    # Prüfe ob Username bereits existiert
+    existing = db.query(User).filter(User.username == request_data.username).first()
+    if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Es existiert bereits ein Antrag für '{request_data.username}'"
+            detail=f"User '{request_data.username}' existiert bereits"
         )
 
-    # Antrag erstellen
-    user_request = UserRequest(
+    # Loot-Gast direkt anlegen (Offiziere und Admins)
+    new_user = User(
         username=request_data.username,
         display_name=request_data.display_name,
-        detected_name=request_data.detected_name,
-        requested_by_id=current_user.id
+        role=UserRole.LOOT_GUEST,  # Loot-Gast statt Member
+        aliases=request_data.detected_name  # OCR-Name als erster Alias
     )
-    db.add(user_request)
+    db.add(new_user)
     db.commit()
-    db.refresh(user_request)
-    return user_request
+    db.refresh(new_user)
+
+    # Response mit "approved" Status und user_id
+    return {
+        "id": 0,
+        "username": new_user.username,
+        "display_name": new_user.display_name,
+        "detected_name": request_data.detected_name,
+        "requested_by": current_user,
+        "status": "approved",
+        "created_at": new_user.created_at,
+        "user_id": new_user.id
+    }
 
 
 @router.post("/user-requests/{request_id}/approve")
@@ -226,11 +202,11 @@ async def approve_user_request(
             detail=f"User '{user_request.username}' existiert bereits"
         )
 
-    # User anlegen
+    # User anlegen als Loot-Gast
     new_user = User(
         username=user_request.username,
         display_name=user_request.display_name,
-        role=UserRole.MEMBER,
+        role=UserRole.LOOT_GUEST,
         aliases=user_request.detected_name
     )
     db.add(new_user)

@@ -50,6 +50,9 @@ export default function AttendancePage() {
   const [editSelectedUsers, setEditSelectedUsers] = useState<number[]>([])
   // OCR-Zuordnungen für nicht erkannte Namen
   const [ocrAssignments, setOcrAssignments] = useState<Record<string, { userId: number | null; saveAsAlias: boolean }>>({})
+  // Loot-Gast erstellen
+  const [creatingGuestFor, setCreatingGuestFor] = useState<string | null>(null)
+  const [guestUsername, setGuestUsername] = useState('')
 
   const canCreate = user?.role !== 'member'
   const isAdmin = user?.role === 'admin'
@@ -101,6 +104,13 @@ export default function AttendancePage() {
       apiClient.post('/api/attendance/user-requests', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      // OCR-Daten neu laden, damit der neue User dort auftaucht
+      if (editingSession) {
+        queryClient.invalidateQueries({ queryKey: ['session', editingSession.id, 'ocr'] })
+      }
+      setCreatingGuestFor(null)
+      setGuestUsername('')
     },
   })
 
@@ -935,6 +945,7 @@ export default function AttendancePage() {
                                   ...prev,
                                   [name]: { userId, saveAsAlias: prev[name]?.saveAsAlias || false },
                                 }))
+                                setCreatingGuestFor(null)
                               }}
                               className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm"
                             >
@@ -947,7 +958,25 @@ export default function AttendancePage() {
                                   </option>
                                 ))}
                             </select>
+                            {/* Loot-Gast erstellen Button */}
+                            {creatingGuestFor !== name && canCreate && (
+                              <button
+                                onClick={() => {
+                                  setCreatingGuestFor(name)
+                                  setGuestUsername(name.toLowerCase().replace(/[^a-z0-9_]/g, '_'))
+                                  setOcrAssignments((prev) => ({
+                                    ...prev,
+                                    [name]: { userId: null, saveAsAlias: false },
+                                  }))
+                                }}
+                                className="p-2 text-purple-400 hover:text-purple-300 hover:bg-purple-900/30 rounded"
+                                title="Loot-Gast erstellen"
+                              >
+                                <UserPlus size={18} />
+                              </button>
+                            )}
                           </div>
+                          {/* Alias-Checkbox */}
                           {ocrAssignments[name]?.userId && (
                             <label className="flex items-center gap-2 text-sm text-gray-400 ml-[112px]">
                               <input
@@ -963,6 +992,41 @@ export default function AttendancePage() {
                               />
                               Als Alias speichern
                             </label>
+                          )}
+                          {/* Inline-Formular für Loot-Gast */}
+                          {creatingGuestFor === name && (
+                            <div className="mt-3 p-3 bg-purple-900/20 border border-purple-700 rounded space-y-3">
+                              <p className="text-sm text-purple-300 font-medium">Neuen Loot-Gast erstellen</p>
+                              <div>
+                                <label className="text-xs text-gray-400">Username</label>
+                                <input
+                                  type="text"
+                                  value={guestUsername}
+                                  onChange={(e) => setGuestUsername(e.target.value)}
+                                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm mt-1"
+                                  placeholder="z.B. max_mustermann"
+                                />
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => setCreatingGuestFor(null)}
+                                  className="btn btn-secondary text-sm flex-1"
+                                >
+                                  Abbrechen
+                                </button>
+                                <button
+                                  onClick={() => createUserRequestMutation.mutate({
+                                    username: guestUsername,
+                                    display_name: name,
+                                    detected_name: name
+                                  })}
+                                  disabled={!guestUsername || createUserRequestMutation.isPending}
+                                  className="btn btn-primary text-sm flex-1 !bg-purple-600 hover:!bg-purple-500"
+                                >
+                                  {createUserRequestMutation.isPending ? 'Erstelle...' : 'Loot-Gast erstellen'}
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </div>
                       ))}
