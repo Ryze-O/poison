@@ -32,7 +32,7 @@ def get_oauth_url(state: str) -> str:
         "client_id": settings.discord_client_id,
         "redirect_uri": settings.discord_redirect_uri,
         "response_type": "code",
-        "scope": "identify",
+        "scope": "identify guilds",
         "state": state,
     }
     query = "&".join(f"{k}={v}" for k, v in params.items())
@@ -79,3 +79,20 @@ async def get_discord_user(access_token: str) -> Optional[DiscordUser]:
             global_name=data.get("global_name"),
             avatar=data.get("avatar"),
         )
+
+
+async def get_user_guilds(access_token: str) -> list[dict]:
+    """Ruft die Server-Liste des Users ab."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{DISCORD_API_BASE}/users/@me/guilds",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if response.status_code != 200:
+            return []
+        return response.json()
+
+
+def is_member_of_guild(guilds: list[dict], guild_id: str) -> bool:
+    """Prüft ob User Mitglied eines bestimmten Servers ist."""
+    return any(g["id"] == guild_id for g in guilds)

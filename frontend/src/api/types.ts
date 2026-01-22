@@ -1,5 +1,5 @@
 // Benutzer-Rollen
-export type UserRole = 'member' | 'officer' | 'treasurer' | 'admin'
+export type UserRole = 'guest' | 'member' | 'officer' | 'treasurer' | 'admin'
 
 // Benutzer
 export interface User {

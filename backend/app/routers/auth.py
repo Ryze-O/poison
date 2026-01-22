@@ -9,7 +9,7 @@ from app.database import get_db
 from app.config import get_settings
 from app.models.user import User, UserRole, GuestToken
 from app.schemas.user import UserResponse, GuestTokenCreate, GuestTokenResponse, GuestLoginResponse
-from app.auth.discord import get_oauth_url, exchange_code, get_discord_user
+from app.auth.discord import get_oauth_url, exchange_code, get_discord_user, get_user_guilds, is_member_of_guild
 from app.auth.jwt import create_access_token, get_current_user
 from app.auth.dependencies import check_role
 
@@ -56,6 +56,13 @@ async def callback(code: str, state: str, db: Session = Depends(get_db)):
             detail="Fehler beim Abrufen der Discord-Benutzerdaten"
         )
 
+    # Guild-Prüfung wenn konfiguriert
+    if settings.required_guild_id:
+        guilds = await get_user_guilds(discord_token)
+        if not is_member_of_guild(guilds, settings.required_guild_id):
+            error_url = f"{settings.frontend_url}/auth/error?reason=not_member"
+            return RedirectResponse(url=error_url)
+
     # Benutzer in DB suchen oder anlegen
     user = db.query(User).filter(User.discord_id == discord_user.id).first()
     is_new_user = user is None
@@ -71,7 +78,7 @@ async def callback(code: str, state: str, db: Session = Depends(get_db)):
             username=discord_user.username,
             display_name=discord_user.global_name,
             avatar=discord_user.avatar_url,
-            role=UserRole.ADMIN if is_admin else UserRole.MEMBER,
+            role=UserRole.ADMIN if is_admin else UserRole.GUEST,
         )
         db.add(user)
         db.commit()

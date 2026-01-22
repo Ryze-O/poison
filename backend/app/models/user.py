@@ -7,6 +7,7 @@ import enum
 
 class UserRole(str, enum.Enum):
     """Benutzer-Rollen mit aufsteigenden Berechtigungen."""
+    GUEST = "guest"            # Kann fast nichts sehen (wartet auf Freischaltung)
     MEMBER = "member"          # Kann nur sehen
     OFFICER = "officer"        # Kann Loot erfassen, eigenes Lager verwalten
     TREASURER = "treasurer"    # Wie Officer + Kasse verwalten
@@ -33,6 +34,7 @@ class User(Base):
     def has_permission(self, required_role: UserRole) -> bool:
         """Prüft ob der Benutzer mindestens die angegebene Rolle hat."""
         role_hierarchy = {
+            UserRole.GUEST: -1,
             UserRole.MEMBER: 0,
             UserRole.OFFICER: 1,
             UserRole.TREASURER: 2,

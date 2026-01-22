@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Admin Discord ID (wird automatisch Admin bei erstem Login)
     admin_discord_id: str = ""
 
+    # Discord Guild-Beschränkung (leer = keine Beschränkung)
+    required_guild_id: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

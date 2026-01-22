@@ -3,6 +3,8 @@ import { useAuthStore } from './hooks/useAuth'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import AuthCallback from './pages/AuthCallback'
+import AuthErrorPage from './pages/AuthErrorPage'
+import GuestPendingPage from './pages/GuestPendingPage'
 import DashboardPage from './pages/DashboardPage'
 import AttendancePage from './pages/AttendancePage'
 import LootPage from './pages/LootPage'
@@ -16,7 +18,7 @@ import AdminPage from './pages/AdminPage'
 import GuestLoginPage from './pages/GuestLoginPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuthStore()
+  const { isAuthenticated, isLoading, user } = useAuthStore()
 
   if (isLoading) {
     return (
@@ -30,6 +32,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />
   }
 
+  // Guest-User sehen nur die Warte-Seite
+  if (user?.role === 'guest') {
+    return <GuestPendingPage />
+  }
+
   return <>{children}</>
 }
 
@@ -38,6 +45,7 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/success" element={<AuthCallback />} />
+      <Route path="/auth/error" element={<AuthErrorPage />} />
       <Route path="/guest/:token" element={<GuestLoginPage />} />
 
       <Route
