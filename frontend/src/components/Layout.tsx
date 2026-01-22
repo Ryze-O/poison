@@ -30,15 +30,15 @@ import clsx from 'clsx'
 const mainNavItems = [
   { to: '/', icon: Home, label: 'Dashboard' },
   { to: '/attendance', icon: ClipboardList, label: 'Staffelabende' },
-  { to: '/loot', icon: Gift, label: 'Loot' },
+  { to: '/loot', icon: Gift, label: 'Freeplay (Loot)' },
   { to: '/inventory', icon: Package, label: 'Lager' },
   { to: '/treasury', icon: Wallet, label: 'Kasse' },
+  { to: '/components', icon: Search, label: 'Component Browser' },
 ]
 
 // Datenbank-Navigation (nur für Offiziere+)
 const databaseNavItems = [
   { to: '/items', icon: Boxes, label: 'Items' },
-  { to: '/components', icon: Search, label: 'Component Browser' },
   { to: '/locations', icon: MapPin, label: 'Standorte' },
   { to: '/users', icon: Users, label: 'Benutzer' },
 ]

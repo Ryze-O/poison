@@ -73,9 +73,9 @@ function App() {
         <Route path="loot" element={<LootPage />} />
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="treasury" element={<TreasuryPage />} />
+        <Route path="components" element={<ComponentBrowserPage />} />
         {/* Datenbank-Seiten (nur Offiziere+) */}
         <Route path="items" element={<OfficerRoute><ItemsPage /></OfficerRoute>} />
-        <Route path="components" element={<OfficerRoute><ComponentBrowserPage /></OfficerRoute>} />
         <Route path="locations" element={<OfficerRoute><LocationsPage /></OfficerRoute>} />
         <Route path="users" element={<OfficerRoute><UsersPage /></OfficerRoute>} />
         <Route path="admin" element={<AdminPage />} />
