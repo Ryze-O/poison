@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.config import get_settings
 from app.database import engine, Base
-from app.routers import auth, users, components, inventory, treasury, attendance, loot, locations, sc_import, data_import
+from app.routers import auth, users, components, inventory, treasury, attendance, loot, locations, sc_import, data_import, officer_accounts
 
 settings = get_settings()
 
@@ -41,6 +41,7 @@ app.include_router(components.router, prefix="/api/items", tags=["Items"])
 app.include_router(components.router, prefix="/api/components", tags=["Items (Legacy)"])  # Alias für Kompatibilität
 app.include_router(inventory.router, prefix="/api/inventory", tags=["Lager"])
 app.include_router(treasury.router, prefix="/api/treasury", tags=["Kasse"])
+app.include_router(officer_accounts.router, prefix="/api/officer-accounts", tags=["Offizier-Konten"])
 app.include_router(attendance.router, prefix="/api/attendance", tags=["Anwesenheit"])
 app.include_router(loot.router, prefix="/api/loot", tags=["Loot"])
 app.include_router(locations.router, prefix="/api/locations", tags=["Standorte"])

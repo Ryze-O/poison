@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.treasury import Treasury, TreasuryTransaction, TransactionType
+from app.models.officer_account import OfficerAccount, OfficerTransaction
 from app.schemas.treasury import TreasuryResponse, TransactionCreate, TransactionUpdate, TransactionResponse, CSVImportResponse
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
@@ -65,6 +66,7 @@ async def create_transaction(
         )
 
     treasury = get_or_create_treasury(db)
+    officer_account = None
 
     # Betrag je nach Typ anpassen
     actual_amount = transaction.amount
@@ -76,12 +78,29 @@ async def create_transaction(
                 detail="Nicht genug Geld in der Kasse"
             )
 
+        # Bei Ausgabe: Kassenwart-Konto prüfen und abbuchen
+        if transaction.officer_account_id:
+            officer_account = db.query(OfficerAccount).filter(
+                OfficerAccount.id == transaction.officer_account_id
+            ).first()
+            if not officer_account:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Kassenwart-Konto nicht gefunden"
+                )
+            if officer_account.balance < transaction.amount:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Nicht genug Guthaben auf dem Kassenwart-Konto. Verfügbar: {officer_account.balance} aUEC"
+                )
+
     # Transaktion erstellen
     db_transaction = TreasuryTransaction(
         amount=actual_amount,
         transaction_type=transaction.transaction_type,
         description=transaction.description,
         category=transaction.category,
+        officer_account_id=transaction.officer_account_id,
         created_by_id=current_user.id
     )
     db.add(db_transaction)
@@ -89,8 +108,28 @@ async def create_transaction(
     # Kassenstand aktualisieren
     treasury.current_balance += actual_amount
 
+    # Bei Ausgabe mit Kassenwart-Konto: Betrag abziehen und Transaktion dokumentieren
+    if officer_account:
+        officer_account.balance -= transaction.amount
+
+        # OfficerTransaction zur Dokumentation erstellen
+        officer_tx = OfficerTransaction(
+            officer_account_id=officer_account.id,
+            amount=-transaction.amount,
+            description=f"Ausgabe: {transaction.description}",
+            treasury_transaction_id=None,  # Wird nach commit gesetzt
+            created_by_id=current_user.id
+        )
+        db.add(officer_tx)
+
     db.commit()
     db.refresh(db_transaction)
+
+    # Treasury Transaction ID in OfficerTransaction nachträglich setzen
+    if officer_account:
+        officer_tx.treasury_transaction_id = db_transaction.id
+        db.commit()
+
     return db_transaction
 
 

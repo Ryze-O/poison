@@ -241,3 +241,31 @@ export interface GuestToken {
   created_at: string
   created_by_username: string | null
 }
+
+// Offizier-Konten (individuelle Kontostände)
+export interface OfficerAccount {
+  id: number
+  user: User
+  balance: number
+  created_at: string
+  updated_at: string | null
+}
+
+export interface OfficerTransaction {
+  id: number
+  officer_account_id: number
+  amount: number
+  description: string
+  treasury_transaction_id: number | null
+  created_by: User
+  created_at: string
+}
+
+export interface OfficerAccountWithTransactions extends OfficerAccount {
+  transactions: OfficerTransaction[]
+}
+
+export interface OfficerAccountsSummary {
+  total_balance: number
+  accounts: OfficerAccount[]
+}

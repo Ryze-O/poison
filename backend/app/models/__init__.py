@@ -6,6 +6,7 @@ from app.models.loot import LootSession, LootItem, LootDistribution
 from app.models.inventory import Inventory, InventoryTransfer
 from app.models.inventory_log import InventoryLog, InventoryAction
 from app.models.treasury import Treasury, TreasuryTransaction
+from app.models.officer_account import OfficerAccount, OfficerTransaction
 
 __all__ = [
     "User",
@@ -24,4 +25,6 @@ __all__ = [
     "InventoryAction",
     "Treasury",
     "TreasuryTransaction",
+    "OfficerAccount",
+    "OfficerTransaction",
 ]

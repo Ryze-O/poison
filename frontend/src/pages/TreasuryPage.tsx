@@ -2,8 +2,8 @@ import { useState, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, Edit3, Trash2, X, Upload, TrendingUp, TrendingDown, Filter, ChevronLeft, ChevronRight } from 'lucide-react'
-import type { Treasury, Transaction, TransactionType, CSVImportResponse } from '../api/types'
+import { Plus, Edit3, Trash2, X, Upload, TrendingUp, TrendingDown, Filter, ChevronLeft, ChevronRight, Users, UserPlus, ArrowRightLeft } from 'lucide-react'
+import type { Treasury, Transaction, TransactionType, CSVImportResponse, OfficerAccountsSummary, User } from '../api/types'
 
 const ITEMS_PER_PAGE = 50
 
@@ -32,12 +32,28 @@ export default function TreasuryPage() {
     type: 'income' as TransactionType,
     description: '',
     category: '',
+    officer_account_id: '' as string,
   })
 
   // Filter und Pagination
   const [filterCategory, setFilterCategory] = useState<string>('')
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all')
   const [currentPage, setCurrentPage] = useState(1)
+
+  // Offizier-Konten State
+  const [showAccountForm, setShowAccountForm] = useState(false)
+  const [showTransferForm, setShowTransferForm] = useState(false)
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
+  const [accountFormData, setAccountFormData] = useState({
+    user_id: '',
+    initial_balance: '',
+  })
+  const [transferFormData, setTransferFormData] = useState({
+    from_account_id: '',
+    to_account_id: '',
+    amount: '',
+    description: '',
+  })
 
   const canManage = user?.role === 'treasurer' || user?.role === 'admin'
   const isAdmin = user?.role === 'admin'
@@ -52,6 +68,20 @@ export default function TreasuryPage() {
     queryKey: ['treasury', 'transactions'],
     queryFn: () => apiClient.get('/api/treasury/transactions?limit=1000').then((r) => r.data),
     enabled: canManage,
+  })
+
+  // Offizier-Konten
+  const { data: officerAccounts } = useQuery<OfficerAccountsSummary>({
+    queryKey: ['officer-accounts'],
+    queryFn: () => apiClient.get('/api/officer-accounts').then((r) => r.data),
+    enabled: canManage,
+  })
+
+  // Alle User (für Konto-Erstellung)
+  const { data: allUsers } = useQuery<User[]>({
+    queryKey: ['users'],
+    queryFn: () => apiClient.get('/api/users').then((r) => r.data),
+    enabled: isAdmin && showAccountForm,
   })
 
   // Gefilterte und sortierte Transaktionen (nach Datum absteigend)
@@ -113,9 +143,11 @@ export default function TreasuryPage() {
       transaction_type: TransactionType
       description: string
       category?: string
+      officer_account_id?: number
     }) => apiClient.post('/api/treasury/transactions', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['treasury'] })
+      queryClient.invalidateQueries({ queryKey: ['officer-accounts'] })
       setShowForm(false)
       resetForm()
     },
@@ -182,6 +214,55 @@ export default function TreasuryPage() {
     },
   })
 
+  // Offizier-Konto Mutations
+  const createAccountMutation = useMutation({
+    mutationFn: (data: { user_id: number; initial_balance: number }) =>
+      apiClient.post('/api/officer-accounts', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['officer-accounts'] })
+      setShowAccountForm(false)
+      setAccountFormData({ user_id: '', initial_balance: '' })
+    },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/api/officer-accounts/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['officer-accounts'] })
+    },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  const transferMutation = useMutation({
+    mutationFn: (data: { from_account_id: number; to_account_id: number; amount: number; description: string }) =>
+      apiClient.post('/api/officer-accounts/transfer', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['officer-accounts'] })
+      setShowTransferForm(false)
+      setTransferFormData({ from_account_id: '', to_account_id: '', amount: '', description: '' })
+    },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  const setBalanceMutation = useMutation({
+    mutationFn: ({ id, balance }: { id: number; balance: number }) =>
+      apiClient.patch(`/api/officer-accounts/${id}/set-balance?balance=${balance}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['officer-accounts'] })
+      setSelectedAccountId(null)
+    },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -208,6 +289,7 @@ export default function TreasuryPage() {
       type: 'income',
       description: '',
       category: '',
+      officer_account_id: '',
     })
   }
 
@@ -218,6 +300,7 @@ export default function TreasuryPage() {
       type: tx.transaction_type,
       description: tx.description,
       category: tx.category || '',
+      officer_account_id: '',
     })
   }
 
@@ -228,6 +311,7 @@ export default function TreasuryPage() {
       transaction_type: formData.type,
       description: formData.description,
       category: formData.category || undefined,
+      officer_account_id: formData.officer_account_id ? parseInt(formData.officer_account_id) : undefined,
     })
   }
 
@@ -337,6 +421,362 @@ export default function TreasuryPage() {
         </div>
       </div>
 
+      {/* Kassenwart-Kontostände */}
+      {canManage && (
+        <div className="card mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Users size={20} className="text-krt-orange" />
+              Kassenwart-Kontostände
+            </h2>
+            <div className="flex items-center gap-2">
+              {officerAccounts && officerAccounts.accounts.length > 1 && (
+                <button
+                  onClick={() => setShowTransferForm(true)}
+                  className="btn btn-secondary flex items-center gap-2 text-sm"
+                >
+                  <ArrowRightLeft size={16} />
+                  Transfer
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={() => setShowAccountForm(true)}
+                  className="btn btn-secondary flex items-center gap-2 text-sm"
+                >
+                  <UserPlus size={16} />
+                  Konto
+                </button>
+              )}
+            </div>
+          </div>
+
+          {officerAccounts && officerAccounts.accounts.length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {officerAccounts.accounts.map((account) => (
+                  <div
+                    key={account.id}
+                    className="element p-4 flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      {account.user.avatar ? (
+                        <img
+                          src={account.user.avatar}
+                          alt={account.user.username}
+                          className="w-10 h-10 rounded-full"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-lg font-bold">
+                          {(account.user.display_name || account.user.username).charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-medium">
+                          {account.user.display_name || account.user.username}
+                        </p>
+                        <p className="text-xs text-krt-orange">
+                          Kassenwart
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-mono font-bold ${account.balance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatAmount(account.balance)} aUEC
+                      </p>
+                      {isAdmin && (
+                        <button
+                          onClick={() => setSelectedAccountId(account.id)}
+                          className="text-xs text-gray-400 hover:text-krt-orange"
+                        >
+                          Bearbeiten
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-700 flex justify-between items-center">
+                <span className="text-gray-400">Gesamt bei Kassenwarten:</span>
+                <span className="font-mono font-bold text-lg text-krt-orange">
+                  {formatAmount(officerAccounts.total_balance)} aUEC
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-6">
+              <p className="text-gray-400">
+                {isAdmin
+                  ? 'Noch keine Kassenwart-Konten vorhanden. Klicke auf "Konto" um ein Konto zu erstellen.'
+                  : 'Noch keine Kassenwart-Konten vorhanden.'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Neues Offizier-Konto erstellen */}
+      {showAccountForm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="card max-w-md w-full">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold">Neues Kassenwart-Konto</h2>
+              <button onClick={() => setShowAccountForm(false)} className="text-gray-400 hover:text-white">
+                <X size={24} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                createAccountMutation.mutate({
+                  user_id: parseInt(accountFormData.user_id),
+                  initial_balance: parseFloat(accountFormData.initial_balance) || 0,
+                })
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="label">Kassenwart</label>
+                <select
+                  value={accountFormData.user_id}
+                  onChange={(e) => setAccountFormData({ ...accountFormData, user_id: e.target.value })}
+                  className="input"
+                  required
+                >
+                  <option value="">Kassenwart wählen...</option>
+                  {allUsers
+                    ?.filter((u) => !officerAccounts?.accounts.some((a) => a.user.id === u.id))
+                    .filter((u) => u.role === 'treasurer' || u.role === 'admin')
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.display_name || u.username} ({u.role === 'admin' ? 'Admin' : 'Kassenwart'})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Anfangsstand (aUEC)</label>
+                <input
+                  type="number"
+                  value={accountFormData.initial_balance}
+                  onChange={(e) => setAccountFormData({ ...accountFormData, initial_balance: e.target.value })}
+                  placeholder="0"
+                  className="input"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAccountForm(false)}
+                  className="btn btn-secondary flex-1"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="submit"
+                  disabled={createAccountMutation.isPending}
+                  className="btn btn-primary flex-1"
+                >
+                  {createAccountMutation.isPending ? 'Erstelle...' : 'Erstellen'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer zwischen Kassenwart-Konten */}
+      {showTransferForm && officerAccounts && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="card max-w-md w-full">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold">Transfer zwischen Kassenwarten</h2>
+              <button onClick={() => setShowTransferForm(false)} className="text-gray-400 hover:text-white">
+                <X size={24} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                transferMutation.mutate({
+                  from_account_id: parseInt(transferFormData.from_account_id),
+                  to_account_id: parseInt(transferFormData.to_account_id),
+                  amount: parseFloat(transferFormData.amount),
+                  description: transferFormData.description,
+                })
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="label">Von Konto</label>
+                <select
+                  value={transferFormData.from_account_id}
+                  onChange={(e) => setTransferFormData({ ...transferFormData, from_account_id: e.target.value })}
+                  className="input"
+                  required
+                >
+                  <option value="">Sender wählen...</option>
+                  {officerAccounts.accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.user.display_name || a.user.username} ({formatAmount(a.balance)} aUEC)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label">An Konto</label>
+                <select
+                  value={transferFormData.to_account_id}
+                  onChange={(e) => setTransferFormData({ ...transferFormData, to_account_id: e.target.value })}
+                  className="input"
+                  required
+                >
+                  <option value="">Empfänger wählen...</option>
+                  {officerAccounts.accounts
+                    .filter((a) => a.id.toString() !== transferFormData.from_account_id)
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.user.display_name || a.user.username}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Betrag (aUEC)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={transferFormData.amount}
+                  onChange={(e) => setTransferFormData({ ...transferFormData, amount: e.target.value })}
+                  placeholder="z.B. 5000000"
+                  className="input"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="label">Beschreibung</label>
+                <input
+                  type="text"
+                  value={transferFormData.description}
+                  onChange={(e) => setTransferFormData({ ...transferFormData, description: e.target.value })}
+                  placeholder="z.B. Überweisung Staffelkasse"
+                  className="input"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowTransferForm(false)}
+                  className="btn btn-secondary flex-1"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="submit"
+                  disabled={transferMutation.isPending}
+                  className="btn btn-primary flex-1"
+                >
+                  {transferMutation.isPending ? 'Überweise...' : 'Überweisen'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Kontostand bearbeiten Modal */}
+      {selectedAccountId && officerAccounts && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="card max-w-md w-full">
+            {(() => {
+              const account = officerAccounts.accounts.find((a) => a.id === selectedAccountId)
+              if (!account) return null
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold">
+                      Konto: {account.user.display_name || account.user.username}
+                    </h2>
+                    <button onClick={() => setSelectedAccountId(null)} className="text-gray-400 hover:text-white">
+                      <X size={24} />
+                    </button>
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const input = (e.target as HTMLFormElement).elements.namedItem('balance') as HTMLInputElement
+                      setBalanceMutation.mutate({
+                        id: selectedAccountId,
+                        balance: parseFloat(input.value),
+                      })
+                    }}
+                    className="space-y-4"
+                  >
+                    <div>
+                      <label className="label">Aktueller Stand</label>
+                      <p className="text-2xl font-mono font-bold text-krt-orange mb-4">
+                        {formatAmount(account.balance)} aUEC
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="label">Neuer Stand (aUEC)</label>
+                      <input
+                        type="number"
+                        name="balance"
+                        defaultValue={account.balance}
+                        className="input"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Konto von ${account.user.display_name || account.user.username} wirklich löschen?`)) {
+                            deleteAccountMutation.mutate(selectedAccountId)
+                            setSelectedAccountId(null)
+                          }
+                        }}
+                        className="btn btn-secondary !text-red-400 hover:!bg-red-500/20"
+                      >
+                        Löschen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAccountId(null)}
+                        className="btn btn-secondary flex-1"
+                      >
+                        Abbrechen
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={setBalanceMutation.isPending}
+                        className="btn btn-primary flex-1"
+                      >
+                        {setBalanceMutation.isPending ? 'Speichern...' : 'Speichern'}
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Neue Transaktion Form */}
       {showForm && (
         <div className="card mb-6">
@@ -407,6 +847,28 @@ export default function TreasuryPage() {
                 </select>
               </div>
             </div>
+
+            {/* Kassenwart-Auswahl bei Ausgaben */}
+            {formData.type === 'expense' && officerAccounts && officerAccounts.accounts.length > 0 && (
+              <div>
+                <label className="label">Von Kassenwart-Konto abbuchen</label>
+                <select
+                  value={formData.officer_account_id}
+                  onChange={(e) => setFormData({ ...formData, officer_account_id: e.target.value })}
+                  className="input"
+                >
+                  <option value="">-- Kein Konto (Staffelkasse) --</option>
+                  {officerAccounts.accounts.map(account => (
+                    <option key={account.id} value={account.id}>
+                      {account.user.display_name || account.user.username} ({formatAmount(account.balance)} aUEC)
+                    </option>
+                  ))}
+                </select>
+                <p className="text-sm text-gray-400 mt-1">
+                  Optional: Wähle ein Kassenwart-Konto, von dem der Betrag abgezogen werden soll.
+                </p>
+              </div>
+            )}
 
             <div>
               <label className="label">Beschreibung / Event</label>

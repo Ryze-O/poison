@@ -30,6 +30,9 @@ class TreasuryTransaction(Base):
     description = Column(Text, nullable=False)
     category = Column(String(100), nullable=True)  # z.B. "Einzahlung", "Schiff Fitting", "Beschaffung Schiff"
 
+    # Bei Ausgaben: von welchem Kassenwart-Konto wurde abgebucht
+    officer_account_id = Column(Integer, ForeignKey("officer_accounts.id"), nullable=True)
+
     # Erweiterte Felder aus dem Bank-Spreadsheet
     sc_version = Column(String(20), nullable=True)  # z.B. "4.0", "4.0.1", "4.1"
     item_reference = Column(String(100), nullable=True)  # Schiff/Ausrüstung: "Polaris", "Sabre", etc.
@@ -42,3 +45,4 @@ class TreasuryTransaction(Base):
 
     # Relationships
     created_by = relationship("User")
+    officer_account = relationship("OfficerAccount")

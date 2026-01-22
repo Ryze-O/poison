@@ -19,6 +19,8 @@ class TransactionCreate(BaseModel):
     transaction_type: TransactionType
     description: str
     category: Optional[str] = None
+    # Bei Ausgaben: von welchem Kassenwart-Konto abziehen
+    officer_account_id: Optional[int] = None
     # Erweiterte Felder aus dem Bank-Spreadsheet
     sc_version: Optional[str] = None
     item_reference: Optional[str] = None
@@ -46,6 +48,8 @@ class TransactionResponse(BaseModel):
     transaction_type: TransactionType
     description: str
     category: Optional[str]
+    # Kassenwart-Konto (bei Ausgaben)
+    officer_account_id: Optional[int] = None
     # Erweiterte Felder
     sc_version: Optional[str] = None
     item_reference: Optional[str] = None
