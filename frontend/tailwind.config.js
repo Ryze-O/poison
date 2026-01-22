@@ -15,6 +15,7 @@ export default {
           'orange-light': '#F26522',
         },
         // Überschreibe die Standard-Grau-Palette mit neutralen Grautönen (kein Blau!)
+        // Angepasst für besseren Kontrast
         'gray': {
           50: '#fafafa',
           100: '#f5f5f5',
@@ -23,10 +24,10 @@ export default {
           400: '#a3a3a3',
           500: '#737373',
           600: '#525252',
-          700: '#404040',
-          800: '#262626',
-          900: '#171717',
-          950: '#0a0a0a',
+          700: '#3d3d3d',
+          800: '#2d2d2d',  // Heller für besseren Kontrast auf dunklen Cards
+          900: '#1a1a1a',
+          950: '#0f0f0f',
         },
         // Semantische Farben (ersetzen sc-red, sc-green etc.)
         'success': '#22c55e',
@@ -43,6 +44,8 @@ export default {
         'card-hover': 'var(--bg-card-hover)',
         'input': 'var(--bg-input)',
         'sidebar': 'var(--bg-sidebar)',
+        'element': 'var(--bg-element)',
+        'element-hover': 'var(--bg-element-hover)',
       },
       textColor: {
         'primary': 'var(--text-primary)',
