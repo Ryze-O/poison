@@ -1,8 +1,9 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, Trash2, Search, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, Search, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import type { Component } from '../api/types'
 
 // Item ist ein Alias für Component (DB-Tabelle bleibt components)
@@ -10,6 +11,7 @@ type Item = Component
 
 export default function ItemsPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('')
@@ -301,10 +303,13 @@ export default function ItemsPage() {
                               {items.map((item) => (
                                 <div
                                   key={item.id}
-                                  className="element p-3 flex items-center justify-between"
+                                  onClick={() => navigate(`/components?search=${encodeURIComponent(item.name)}`)}
+                                  className="element p-3 flex items-center justify-between cursor-pointer hover:border-krt-orange/30 group"
                                 >
                                   <div className="min-w-0 flex-1">
-                                    <p className="font-medium truncate">{item.name}</p>
+                                    <p className="font-medium truncate group-hover:text-krt-orange transition-colors">
+                                      {item.name}
+                                    </p>
                                     <p className="text-xs text-krt-orange dark:text-krt-orange/70 truncate">
                                       {[
                                         item.manufacturer,
@@ -315,19 +320,22 @@ export default function ItemsPage() {
                                         .join(' • ') || (item.is_predefined ? 'SC-Daten' : '')}
                                     </p>
                                   </div>
-                                  {canDelete && !item.is_predefined && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        if (confirm(`"${item.name}" wirklich löschen?`)) {
-                                          deleteMutation.mutate(item.id)
-                                        }
-                                      }}
-                                      className="p-2 text-gray-400 hover:text-sc-red rounded-lg flex-shrink-0"
-                                    >
-                                      <Trash2 size={18} />
-                                    </button>
-                                  )}
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    <ExternalLink size={14} className="text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    {canDelete && !item.is_predefined && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          if (confirm(`"${item.name}" wirklich löschen?`)) {
+                                            deleteMutation.mutate(item.id)
+                                          }
+                                        }}
+                                        className="p-2 text-gray-400 hover:text-sc-red rounded-lg"
+                                      >
+                                        <Trash2 size={18} />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               ))}
                             </div>

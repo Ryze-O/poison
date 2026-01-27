@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
@@ -13,8 +14,9 @@ import {
   ChevronRight,
   RefreshCw,
   MapPin,
+  Package,
 } from 'lucide-react'
-import type { Component, ComponentDetail, ItemPrice, UEXSyncStats } from '../api/types'
+import type { Component, ComponentDetail, ItemPrice, UEXSyncStats, InventoryItem, User } from '../api/types'
 
 // Formatiert aUEC Preise
 const formatPrice = (price: number | null): string => {
@@ -42,16 +44,28 @@ const gradeColors: Record<string, string> = {
 
 export default function ComponentBrowserPage() {
   const queryClient = useQueryClient()
-  const [search, setSearch] = useState('')
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const [search, setSearch] = useState(searchParams.get('search') || '')
   const [selectedComponent, setSelectedComponent] = useState<Component | null>(null)
   const [categoryFilter, setCategoryFilter] = useState('')
   const [subCategoryFilter, setSubCategoryFilter] = useState('')
+
+  // URL-Parameter synchronisieren
+  useEffect(() => {
+    const urlSearch = searchParams.get('search')
+    if (urlSearch && urlSearch !== search) {
+      setSearch(urlSearch)
+    }
+  }, [searchParams])
 
   // Admin check für UEX Sync
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
   const isAdmin = effectiveRole === 'admin'
 
   // Suche nach Komponenten (mit optionalem Kategorie-Filter)
+  // Aktiviert wenn: mindestens 2 Zeichen ODER Kategorie ausgewählt
+  const hasSearchCriteria = search.length >= 2 || !!categoryFilter
   const { data: searchResults, isLoading: isSearching } = useQuery<Component[]>({
     queryKey: ['component-search', search, categoryFilter],
     queryFn: () => {
@@ -59,7 +73,7 @@ export default function ComponentBrowserPage() {
       if (categoryFilter) url += `&category=${encodeURIComponent(categoryFilter)}`
       return apiClient.get(url).then(r => r.data)
     },
-    enabled: search.length >= 2,
+    enabled: hasSearchCriteria,
   })
 
   // Alle Kategorien laden
@@ -98,6 +112,32 @@ export default function ComponentBrowserPage() {
     queryFn: () => apiClient.get('/api/sc/uex/stats').then(r => r.data),
     retry: false,
   })
+
+  // Alle Inventare laden (für Pioneer-Check)
+  const { data: allInventory } = useQuery<InventoryItem[]>({
+    queryKey: ['inventory', 'all'],
+    queryFn: () => apiClient.get('/api/inventory').then(r => r.data),
+  })
+
+  // Officers/Pioneers laden
+  const { data: officers } = useQuery<User[]>({
+    queryKey: ['officers'],
+    queryFn: () => apiClient.get('/api/users/officers').then(r => r.data),
+  })
+
+  // Prüfen welche Pioneers dieses Item haben
+  const pioneersWithItem = selectedComponent && allInventory && officers
+    ? officers
+        .filter(o => o.is_pioneer)
+        .map(pioneer => {
+          const pioneerItems = allInventory.filter(
+            inv => inv.user_id === pioneer.id && inv.component.id === selectedComponent.id
+          )
+          const totalQty = pioneerItems.reduce((sum, i) => sum + i.quantity, 0)
+          return totalQty > 0 ? { pioneer, quantity: totalQty } : null
+        })
+        .filter(Boolean) as { pioneer: User; quantity: number }[]
+    : []
 
   // UEX Sync Mutation
   const syncUEXMutation = useMutation({
@@ -206,7 +246,7 @@ export default function ComponentBrowserPage() {
           </select>
         </div>
         <p className="mt-2 text-sm text-gray-500">
-          Fuzzy-Suche: "TS2" findet auch "TS-2" | Min. 2 Zeichen
+          Fuzzy-Suche: "TS2" findet auch "TS-2" | Min. 2 Zeichen oder Kategorie wählen
         </p>
       </div>
 
@@ -219,9 +259,9 @@ export default function ComponentBrowserPage() {
             {filteredResults && <span className="text-gray-500 font-normal">({filteredResults.length})</span>}
           </h2>
 
-          {search.length < 2 ? (
+          {!hasSearchCriteria ? (
             <div className="card text-center py-8">
-              <p className="text-gray-400">Gib mindestens 2 Zeichen ein um zu suchen.</p>
+              <p className="text-gray-400">Gib mindestens 2 Zeichen ein oder wähle eine Kategorie.</p>
             </div>
           ) : isSearching ? (
             <div className="card text-center py-8">
@@ -229,29 +269,48 @@ export default function ComponentBrowserPage() {
             </div>
           ) : filteredResults && filteredResults.length > 0 ? (
             <div className="space-y-2 max-h-[600px] overflow-y-auto">
-              {filteredResults.map((comp) => (
-                <button
-                  key={comp.id}
-                  onClick={() => setSelectedComponent(comp)}
-                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                    selectedComponent?.id === comp.id
-                      ? 'bg-krt-orange/20 border-krt-orange'
-                      : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{comp.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {comp.manufacturer && <span>{comp.manufacturer} · </span>}
-                        {comp.sub_category}
-                        {comp.size && <span> · S{comp.size}</span>}
-                      </p>
+              {filteredResults.map((comp) => {
+                // Prüfen ob ein Pioneer dieses Item hat
+                const hasPioneerStock = allInventory && officers
+                  ? officers
+                      .filter(o => o.is_pioneer)
+                      .some(pioneer =>
+                        allInventory.some(inv => inv.user_id === pioneer.id && inv.component.id === comp.id && inv.quantity > 0)
+                      )
+                  : false
+
+                return (
+                  <button
+                    key={comp.id}
+                    onClick={() => setSelectedComponent(comp)}
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                      selectedComponent?.id === comp.id
+                        ? 'bg-krt-orange/20 border-krt-orange'
+                        : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium flex items-center gap-2">
+                          {comp.name}
+                          {hasPioneerStock && (
+                            <span className="inline-flex items-center gap-1 text-xs bg-krt-orange/20 text-krt-orange px-1.5 py-0.5 rounded" title="Im Pioneer-Lager verfügbar">
+                              <Package size={10} />
+                              Lager
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-sm text-gray-500 truncate">
+                          {comp.manufacturer && <span>{comp.manufacturer} · </span>}
+                          {comp.sub_category}
+                          {comp.size && <span> · S{comp.size}</span>}
+                        </p>
+                      </div>
+                      <ChevronRight size={18} className="text-gray-500 flex-shrink-0" />
                     </div>
-                    <ChevronRight size={18} className="text-gray-500" />
-                  </div>
-                </button>
-              ))}
+                  </button>
+                )
+              })}
             </div>
           ) : (
             <div className="card text-center py-8">
@@ -472,6 +531,43 @@ export default function ComponentBrowserPage() {
                   Daten von <a href="https://uexcorp.space" target="_blank" rel="noopener noreferrer" className="text-krt-orange hover:underline">UEX</a>
                 </p>
               </div>
+
+              {/* Pioneer Inventar */}
+              {pioneersWithItem.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-sm font-bold text-krt-orange mb-2 flex items-center gap-2">
+                    <Package size={16} />
+                    Im Pioneer-Lager verfügbar
+                  </h4>
+                  <div className="space-y-2">
+                    {pioneersWithItem.map(({ pioneer, quantity }) => (
+                      <button
+                        key={pioneer.id}
+                        onClick={() => navigate('/inventory')}
+                        className="w-full flex items-center justify-between p-2 bg-krt-orange/10 border border-krt-orange/30 rounded-lg hover:bg-krt-orange/20 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          {pioneer.avatar ? (
+                            <img src={pioneer.avatar} alt="" className="w-6 h-6 rounded-full" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs">
+                              {pioneer.username?.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="text-sm font-medium">
+                            {pioneer.display_name || pioneer.username}
+                          </span>
+                          <span className="text-xs bg-gray-700/50 px-1.5 py-0.5 rounded text-gray-400">Pioneer</span>
+                        </div>
+                        <span className="text-sm text-krt-orange font-medium">{quantity}x</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Klicke um zum Lager zu gelangen und das Item anzufragen.
+                  </p>
+                </div>
+              )}
 
               {/* Typ Info */}
               <div className="text-xs text-gray-500 pt-3 border-t border-gray-700">
