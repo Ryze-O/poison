@@ -199,8 +199,9 @@ async def get_component_details(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Holt detaillierte Komponenten-Daten von der SC Wiki API.
-    Speichert size, grade und item_class in der DB.
+    Gibt detaillierte Komponenten-Daten zurück.
+    Nutzt primär die in der DB gespeicherten Stats (vom SC-Import).
+    Fällt bei fehlenden Daten auf Live-API-Call zurück.
     """
     component = db.query(Component).filter(Component.id == component_id).first()
     if not component:
@@ -221,98 +222,125 @@ async def get_component_details(
         item_class=component.item_class
     )
 
-    # Wenn keine SC UUID, können wir keine Details abrufen
-    if not component.sc_uuid:
-        return response
+    # Prüfen ob wir gespeicherte Stats haben
+    sc_type = component.sc_type or ""
 
-    # SC Wiki API abrufen
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            api_response = await client.get(f"{SC_API_BASE}/items/{component.sc_uuid}")
+    # Shield Stats aus DB
+    if sc_type in ("Shield", "ShieldGenerator") and component.shield_hp:
+        response.shield = ShieldStats(
+            max_shield_health=component.shield_hp,
+            max_shield_regen=component.shield_regen,
+            decay_ratio=None,
+            downed_delay=None,
+            damage_delay=None
+        )
 
-            if api_response.status_code != 200:
-                return response
+    # Power Stats aus DB
+    if component.power_base or component.power_draw:
+        response.power = PowerStats(
+            power_base=component.power_base,
+            power_draw=component.power_draw,
+            em_min=None,
+            em_max=None
+        )
 
-            data = api_response.json().get("data", {})
+    # Cooler Stats aus DB
+    if sc_type == "Cooler" and component.cooling_rate:
+        response.cooler = CoolerStats(
+            cooling_rate=component.cooling_rate,
+            suppression_ir_factor=None,
+            suppression_heat_factor=None
+        )
 
-            # Basisdaten aktualisieren
-            if data.get("size") is not None:
-                component.size = data["size"]
-                response.size = data["size"]
+    # Quantum Drive Stats aus DB
+    if sc_type == "QuantumDrive" and (component.quantum_speed or component.quantum_range):
+        response.quantum_drive = QuantumDriveStats(
+            quantum_speed=component.quantum_speed,
+            quantum_spool_time=None,
+            quantum_cooldown_time=None,
+            quantum_range=component.quantum_range,
+            quantum_fuel_requirement=component.quantum_fuel_rate
+        )
 
-            if data.get("grade"):
-                component.grade = data["grade"]
-                response.grade = data["grade"]
+    # Raw Stats mit unseren gespeicherten Daten
+    response.raw_stats = {}
+    if component.durability:
+        response.raw_stats["durability"] = {"health": component.durability}
+    if component.volume:
+        response.raw_stats["dimension"] = {"volume": component.volume}
+    if component.class_name:
+        response.raw_stats["class_name"] = component.class_name
+    if component.shop_locations:
+        response.raw_stats["shop_locations"] = component.shop_locations
 
-            if data.get("class"):
-                component.item_class = data["class"]
-                response.item_class = data["class"]
+    # Wenn wir keine gespeicherten Stats haben UND eine SC UUID existiert,
+    # versuchen wir die API (nur als Fallback)
+    has_any_stats = (response.shield or response.cooler or
+                     response.power or response.quantum_drive)
 
-            # Hersteller aus description_data
-            if data.get("manufacturer_description"):
-                manufacturer = data["manufacturer_description"]
-                if manufacturer and manufacturer != "Unknown Manufacturer":
-                    component.manufacturer = manufacturer
-                    response.manufacturer = manufacturer
+    if not has_any_stats and component.sc_uuid:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                api_response = await client.get(f"{SC_API_BASE}/items/{component.sc_uuid}")
 
-            # Beschreibung
-            desc = data.get("description")
-            if desc:
-                if isinstance(desc, dict):
-                    response.description = desc.get("en_EN") or desc.get("de_DE")
-                elif isinstance(desc, str):
-                    response.description = desc
+                if api_response.status_code == 200:
+                    data = api_response.json().get("data", {})
 
-            # Typ-spezifische Stats
-            sc_type = component.sc_type or data.get("type", "")
+                    # Beschreibung holen
+                    desc = data.get("description")
+                    if desc:
+                        if isinstance(desc, dict):
+                            response.description = desc.get("en_EN") or desc.get("de_DE")
+                        elif isinstance(desc, str):
+                            response.description = desc
 
-            if sc_type in ("Shield", "ShieldGenerator") and data.get("shield"):
-                shield_data = data["shield"]
-                regen_delay = shield_data.get("regen_delay", {})
-                response.shield = ShieldStats(
-                    max_shield_health=shield_data.get("max_shield_health"),
-                    max_shield_regen=shield_data.get("max_shield_regen"),
-                    decay_ratio=shield_data.get("decay_ratio"),
-                    downed_delay=regen_delay.get("downed"),
-                    damage_delay=regen_delay.get("damage")
-                )
+                    # Stats aus API holen
+                    if sc_type in ("Shield", "ShieldGenerator") and data.get("shield"):
+                        shield_data = data["shield"]
+                        regen_delay = shield_data.get("regen_delay", {})
+                        response.shield = ShieldStats(
+                            max_shield_health=shield_data.get("max_shield_health"),
+                            max_shield_regen=shield_data.get("max_shield_regen"),
+                            decay_ratio=shield_data.get("decay_ratio"),
+                            downed_delay=regen_delay.get("downed"),
+                            damage_delay=regen_delay.get("damage")
+                        )
 
-            if data.get("power"):
-                power_data = data["power"]
-                response.power = PowerStats(
-                    power_base=power_data.get("power_base"),
-                    power_draw=power_data.get("power_draw"),
-                    em_min=power_data.get("em_min"),
-                    em_max=power_data.get("em_max")
-                )
+                    if data.get("power"):
+                        power_data = data["power"]
+                        response.power = PowerStats(
+                            power_base=power_data.get("power_base"),
+                            power_draw=power_data.get("power_draw"),
+                            em_min=power_data.get("em_min"),
+                            em_max=power_data.get("em_max")
+                        )
 
-            if sc_type == "Cooler" and data.get("cooler"):
-                cooler_data = data["cooler"]
-                response.cooler = CoolerStats(
-                    cooling_rate=cooler_data.get("cooling_rate"),
-                    suppression_ir_factor=cooler_data.get("suppression_ir_factor"),
-                    suppression_heat_factor=cooler_data.get("suppression_heat_factor")
-                )
+                    if sc_type == "Cooler" and data.get("cooler"):
+                        cooler_data = data["cooler"]
+                        response.cooler = CoolerStats(
+                            cooling_rate=cooler_data.get("cooling_rate"),
+                            suppression_ir_factor=cooler_data.get("suppression_ir_factor"),
+                            suppression_heat_factor=cooler_data.get("suppression_heat_factor")
+                        )
 
-            if sc_type == "QuantumDrive" and data.get("quantum"):
-                quantum_data = data["quantum"]
-                response.quantum_drive = QuantumDriveStats(
-                    quantum_speed=quantum_data.get("quantum_speed"),
-                    quantum_spool_time=quantum_data.get("quantum_spool_time"),
-                    quantum_cooldown_time=quantum_data.get("quantum_cooldown_time"),
-                    quantum_range=quantum_data.get("quantum_range"),
-                    quantum_fuel_requirement=quantum_data.get("quantum_fuel_requirement")
-                )
+                    if sc_type == "QuantumDrive" and data.get("quantum"):
+                        quantum_data = data["quantum"]
+                        response.quantum_drive = QuantumDriveStats(
+                            quantum_speed=quantum_data.get("quantum_speed"),
+                            quantum_spool_time=quantum_data.get("quantum_spool_time"),
+                            quantum_cooldown_time=quantum_data.get("quantum_cooldown_time"),
+                            quantum_range=quantum_data.get("quantum_range"),
+                            quantum_fuel_requirement=quantum_data.get("quantum_fuel_requirement")
+                        )
 
-            # Raw Stats für Debugging/erweiterte Anzeige
-            raw_keys = ["shield", "power", "heat", "distortion", "durability", "cooler", "quantum"]
-            response.raw_stats = {k: data.get(k) for k in raw_keys if data.get(k)}
+                    # Raw Stats erweitern
+                    raw_keys = ["shield", "power", "heat", "distortion", "durability", "cooler", "quantum"]
+                    for k in raw_keys:
+                        if data.get(k):
+                            response.raw_stats[k] = data[k]
 
-            # DB aktualisieren
-            db.commit()
-
-    except Exception as e:
-        # Bei Fehler einfach ohne Details zurückgeben
-        pass
+        except Exception:
+            # Bei API-Fehler einfach mit lokalen Daten weitermachen
+            pass
 
     return response

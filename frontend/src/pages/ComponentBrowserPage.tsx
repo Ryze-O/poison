@@ -315,6 +315,10 @@ export default function ComponentBrowserPage() {
                           {comp.sub_category}
                           {comp.size && <span> · S{comp.size}</span>}
                         </p>
+                        {/* Ref-Code */}
+                        {comp.class_name && (
+                          <p className="text-xs text-gray-600 font-mono truncate">{comp.class_name}</p>
+                        )}
                       </div>
                       <ChevronRight size={18} className="text-gray-500 flex-shrink-0" />
                     </div>
@@ -353,6 +357,12 @@ export default function ComponentBrowserPage() {
                   <p className="text-gray-400">
                     {componentDetail.manufacturer || 'Unbekannter Hersteller'}
                   </p>
+                  {/* Ref-Code (class_name) */}
+                  {componentDetail.raw_stats?.class_name && (
+                    <p className="text-xs text-gray-500 font-mono mt-1">
+                      {componentDetail.raw_stats.class_name as string}
+                    </p>
+                  )}
                 </div>
                 <button
                   onClick={() => setSelectedComponent(null)}
@@ -498,6 +508,27 @@ export default function ComponentBrowserPage() {
                       <p className="text-xs text-gray-500">Fuel Rate</p>
                       <p className="font-medium">{componentDetail.quantum_drive.quantum_fuel_requirement?.toFixed(4) ?? '-'}</p>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Technische Daten (Durability, Volume) */}
+              {(componentDetail.raw_stats?.durability || componentDetail.raw_stats?.dimension) && (
+                <div className="mb-4">
+                  <h4 className="text-sm font-bold text-gray-400 mb-2">Technische Daten</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {componentDetail.raw_stats?.durability && (
+                      <div className="p-2 bg-gray-800/50 rounded">
+                        <p className="text-xs text-gray-500">Durability</p>
+                        <p className="font-medium">{formatNumber((componentDetail.raw_stats.durability as {health?: number}).health)} HP</p>
+                      </div>
+                    )}
+                    {componentDetail.raw_stats?.dimension && (
+                      <div className="p-2 bg-gray-800/50 rounded">
+                        <p className="text-xs text-gray-500">Volume</p>
+                        <p className="font-medium">{formatNumber((componentDetail.raw_stats.dimension as {volume?: number}).volume)} µSCU</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
