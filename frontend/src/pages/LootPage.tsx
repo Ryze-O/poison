@@ -181,12 +181,16 @@ export default function LootPage() {
     )
   }, [attendanceSession])
 
-  // User sortiert: Anwesende zuerst, dann Rest
-  const sortedUsers = useMemo((): { attendees: User[]; nonAttendees: User[] } => {
-    if (!allUsers) return { attendees: [], nonAttendees: [] }
-    const attendees = allUsers.filter(u => attendeeIds.has(u.id))
-    const nonAttendees = allUsers.filter(u => !attendeeIds.has(u.id))
-    return { attendees, nonAttendees }
+  // User sortiert: Pioneers zuerst, dann Anwesende, dann Rest
+  const sortedUsers = useMemo((): { pioneers: User[]; attendees: User[]; nonAttendees: User[] } => {
+    if (!allUsers) return { pioneers: [], attendees: [], nonAttendees: [] }
+    // Pioneers zuerst (unabhängig von Anwesenheit)
+    const pioneers = allUsers.filter(u => u.is_pioneer)
+    // Anwesende (ohne Pioneers)
+    const attendees = allUsers.filter(u => attendeeIds.has(u.id) && !u.is_pioneer)
+    // Rest (nicht anwesend und keine Pioneers)
+    const nonAttendees = allUsers.filter(u => !attendeeIds.has(u.id) && !u.is_pioneer)
+    return { pioneers, attendees, nonAttendees }
   }, [allUsers, attendeeIds])
 
   // Locations für Verteilungs-Dialog laden
@@ -1011,6 +1015,15 @@ export default function LootPage() {
                                       className="input flex-1 text-sm"
                                     >
                                       <option value="">-- User wählen --</option>
+                                      {sortedUsers.pioneers.length > 0 && (
+                                        <optgroup label="Pioneer">
+                                          {sortedUsers.pioneers.map((u) => (
+                                            <option key={u.id} value={u.id}>
+                                              {u.display_name || u.username}
+                                            </option>
+                                          ))}
+                                        </optgroup>
+                                      )}
                                       {sortedUsers.attendees.length > 0 && (
                                         <optgroup label="Anwesend">
                                           {sortedUsers.attendees.map((u) => (
@@ -1021,7 +1034,7 @@ export default function LootPage() {
                                         </optgroup>
                                       )}
                                       {sortedUsers.nonAttendees.length > 0 && (
-                                        <optgroup label={sortedUsers.attendees.length > 0 ? "Nicht anwesend" : "Alle User"}>
+                                        <optgroup label="Sonstige">
                                           {sortedUsers.nonAttendees.map((u) => (
                                             <option key={u.id} value={u.id}>
                                               {u.display_name || u.username}
@@ -1455,6 +1468,15 @@ export default function LootPage() {
                                 className="input flex-1"
                               >
                                 <option value="">-- User wählen --</option>
+                                {sortedUsers.pioneers.length > 0 && (
+                                  <optgroup label="Pioneer">
+                                    {sortedUsers.pioneers.map((u) => (
+                                      <option key={u.id} value={u.id}>
+                                        {u.display_name || u.username}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
                                 {sortedUsers.attendees.length > 0 && (
                                   <optgroup label="Anwesend">
                                     {sortedUsers.attendees.map((u) => (
@@ -1465,7 +1487,7 @@ export default function LootPage() {
                                   </optgroup>
                                 )}
                                 {sortedUsers.nonAttendees.length > 0 && (
-                                  <optgroup label={sortedUsers.attendees.length > 0 ? "Nicht anwesend" : "Alle User"}>
+                                  <optgroup label="Sonstige">
                                     {sortedUsers.nonAttendees.map((u) => (
                                       <option key={u.id} value={u.id}>
                                         {u.display_name || u.username}
@@ -1777,7 +1799,35 @@ export default function LootPage() {
                         </p>
                       </div>
 
-                      {/* Teilnehmer-Checkboxen - Anwesende zuerst */}
+                      {/* Teilnehmer-Checkboxen - Pioneers, dann Anwesende, dann Sonstige */}
+                      {sortedUsers.pioneers.length > 0 && (
+                        <div className="mb-2">
+                          <p className="text-xs text-krt-orange font-medium mb-1">Pioneer:</p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                            {sortedUsers.pioneers.map((u) => (
+                              <label
+                                key={u.id}
+                                className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                                  wantsLoot[u.id] ? 'bg-green-900/30 border border-green-700' : 'bg-gray-700/50 border border-gray-600'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={wantsLoot[u.id] || false}
+                                  onChange={(e) => setWantsLoot({ ...wantsLoot, [u.id]: e.target.checked })}
+                                  className="rounded"
+                                />
+                                <span className={wantsLoot[u.id] ? 'text-green-400' : 'text-gray-400'}>
+                                  {u.display_name || u.username}
+                                </span>
+                                {wantsLoot[u.id] && perPerson > 0 && (
+                                  <span className="ml-auto text-green-500 text-sm">→{perPerson}x</span>
+                                )}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {sortedUsers.attendees.length > 0 && (
                         <div className="mb-2">
                           <p className="text-xs text-emerald-500 font-medium mb-1">Anwesend:</p>
@@ -1808,9 +1858,7 @@ export default function LootPage() {
                       )}
                       {sortedUsers.nonAttendees.length > 0 && (
                         <div className="mb-3">
-                          <p className="text-xs text-gray-500 font-medium mb-1">
-                            {sortedUsers.attendees.length > 0 ? 'Nicht anwesend:' : 'Alle User:'}
-                          </p>
+                          <p className="text-xs text-gray-500 font-medium mb-1">Sonstige:</p>
                           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                             {sortedUsers.nonAttendees.map((u) => (
                               <label
@@ -1871,9 +1919,9 @@ export default function LootPage() {
                         </p>
                       </div>
 
-                      {/* Pioneer-Auswahl (nur Offiziere+) - Anwesende zuerst */}
+                      {/* Pioneer-Auswahl - Pioneers zuerst, dann Anwesende, dann Sonstige */}
                       <div className="mb-3">
-                        <label className="label">Pioneer auswählen (Offizier+)</label>
+                        <label className="label">Pioneer auswählen</label>
                         <select
                           value={selectedPioneer || ''}
                           onChange={(e) => setSelectedPioneers({
@@ -1884,10 +1932,20 @@ export default function LootPage() {
                         >
                           <option value="">-- Pioneer wählen --</option>
                           {(() => {
-                            const attendingOfficers = officers.filter(u => attendeeIds.has(u.id))
-                            const nonAttendingOfficers = officers.filter(u => !attendeeIds.has(u.id))
+                            const pioneers = officers.filter(u => u.is_pioneer)
+                            const attendingOfficers = officers.filter(u => attendeeIds.has(u.id) && !u.is_pioneer)
+                            const nonAttendingOfficers = officers.filter(u => !attendeeIds.has(u.id) && !u.is_pioneer)
                             return (
                               <>
+                                {pioneers.length > 0 && (
+                                  <optgroup label="Pioneer">
+                                    {pioneers.map((u) => (
+                                      <option key={u.id} value={u.id}>
+                                        {u.display_name || u.username} ({u.role})
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
                                 {attendingOfficers.length > 0 && (
                                   <optgroup label="Anwesend">
                                     {attendingOfficers.map((u) => (
@@ -1898,7 +1956,7 @@ export default function LootPage() {
                                   </optgroup>
                                 )}
                                 {nonAttendingOfficers.length > 0 && (
-                                  <optgroup label={attendingOfficers.length > 0 ? "Nicht anwesend" : "Alle Offiziere"}>
+                                  <optgroup label="Sonstige">
                                     {nonAttendingOfficers.map((u) => (
                                       <option key={u.id} value={u.id}>
                                         {u.display_name || u.username} ({u.role})
