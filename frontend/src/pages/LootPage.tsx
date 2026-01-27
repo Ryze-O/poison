@@ -30,7 +30,6 @@ const normalizeForSearch = (str: string): string => {
 }
 
 export default function LootPage() {
-  const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const [expandedSession, setExpandedSession] = useState<number | null>(null)
   const [editingSession, setEditingSession] = useState<LootSession | null>(null)
