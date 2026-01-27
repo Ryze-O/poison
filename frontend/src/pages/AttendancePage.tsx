@@ -173,6 +173,19 @@ export default function AttendancePage() {
     },
   })
 
+  // Session wieder öffnen (Admin only)
+  const reopenMutation = useMutation({
+    mutationFn: (sessionId: number) =>
+      apiClient.post(`/api/attendance/${sessionId}/reopen`),
+    onSuccess: (_, sessionId) => {
+      queryClient.invalidateQueries({ queryKey: ['attendance'] })
+      // Wenn das Modal offen ist, Session-Daten aktualisieren
+      if (editingSession && editingSession.id === sessionId) {
+        setEditingSession({ ...editingSession, is_confirmed: false })
+      }
+    },
+  })
+
   const createLootSessionMutation = useMutation({
     mutationFn: (attendanceSessionId: number) =>
       apiClient.post('/api/loot', { attendance_session_id: attendanceSessionId }),
@@ -819,6 +832,18 @@ export default function AttendancePage() {
                       {session.is_confirmed ? 'Ansehen' : 'Bearbeiten'}
                     </button>
 
+                    {/* Wieder öffnen (Admin only) */}
+                    {isAdmin && session.is_confirmed && (
+                      <button
+                        onClick={() => reopenMutation.mutate(session.id)}
+                        disabled={reopenMutation.isPending}
+                        className="btn bg-amber-600 hover:bg-amber-700 text-sm flex items-center gap-2"
+                      >
+                        <Edit3 size={16} />
+                        {reopenMutation.isPending ? 'Wird geöffnet...' : 'Wieder öffnen'}
+                      </button>
+                    )}
+
                     {/* Loot-Session erstellen */}
                     {!session.has_loot_session && (
                       <button
@@ -861,6 +886,16 @@ export default function AttendancePage() {
                   <span className="text-sm font-normal text-green-500 flex items-center gap-1">
                     <CheckCircle size={16} /> Bestätigt
                   </span>
+                )}
+                {/* Wieder öffnen Button im Modal (Admin only) */}
+                {isAdmin && editingSession.is_confirmed && (
+                  <button
+                    onClick={() => reopenMutation.mutate(editingSession.id)}
+                    disabled={reopenMutation.isPending}
+                    className="ml-2 btn bg-amber-600 hover:bg-amber-700 text-sm py-1 px-3"
+                  >
+                    {reopenMutation.isPending ? 'Öffne...' : 'Wieder öffnen'}
+                  </button>
                 )}
               </h2>
               <button onClick={closeEditModal} className="text-gray-400 hover:text-white">
@@ -991,23 +1026,22 @@ export default function AttendancePage() {
                               </button>
                             )}
                           </div>
-                          {/* Alias-Checkbox */}
-                          {ocrAssignments[name]?.userId && (
-                            <label className="flex items-center gap-2 text-sm text-gray-400 ml-[112px]">
-                              <input
-                                type="checkbox"
-                                checked={ocrAssignments[name]?.saveAsAlias || false}
-                                onChange={(e) => {
-                                  setOcrAssignments((prev) => ({
-                                    ...prev,
-                                    [name]: { ...prev[name], saveAsAlias: e.target.checked },
-                                  }))
-                                }}
-                                className="rounded bg-gray-700 border-gray-600"
-                              />
-                              Als Alias speichern
-                            </label>
-                          )}
+                          {/* Alias-Checkbox - immer sichtbar, disabled wenn kein User ausgewählt */}
+                          <label className={`flex items-center gap-2 text-sm ml-[112px] ${ocrAssignments[name]?.userId ? 'text-gray-400' : 'text-gray-600 opacity-50'}`}>
+                            <input
+                              type="checkbox"
+                              checked={ocrAssignments[name]?.saveAsAlias || false}
+                              disabled={!ocrAssignments[name]?.userId}
+                              onChange={(e) => {
+                                setOcrAssignments((prev) => ({
+                                  ...prev,
+                                  [name]: { ...prev[name], saveAsAlias: e.target.checked },
+                                }))
+                              }}
+                              className="rounded bg-gray-700 border-gray-600 disabled:opacity-50"
+                            />
+                            Als Alias speichern
+                          </label>
                           {/* Inline-Formular für Loot-Gast */}
                           {creatingGuestFor === name && (
                             <div className="mt-3 p-3 bg-purple-900/20 border border-purple-700 rounded space-y-3">

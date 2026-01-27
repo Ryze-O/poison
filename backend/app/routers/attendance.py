@@ -496,10 +496,39 @@ async def update_session(
         session.notes = update_data.notes
     if update_data.is_confirmed is not None:
         session.is_confirmed = update_data.is_confirmed
-        # Bei Bestätigung: Screenshot löschen um Speicher zu sparen
-        if update_data.is_confirmed:
-            session.screenshot_data = None
+        # Screenshot wird NICHT mehr automatisch gelöscht - für Archiv/Nachvollziehbarkeit
+        # Bei Bedarf kann der Screenshot manuell über DELETE /{session_id}/screenshot gelöscht werden
 
+    db.commit()
+    db.refresh(session)
+    return session_to_response(session)
+
+
+@router.post("/{session_id}/reopen", response_model=AttendanceSessionResponse)
+async def reopen_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Öffnet eine bestätigte Session wieder zur Bearbeitung. Nur Admins."""
+    check_role(current_user, UserRole.ADMIN)
+
+    session = db.query(AttendanceSession).filter(
+        AttendanceSession.id == session_id
+    ).first()
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session nicht gefunden"
+        )
+
+    if not session.is_confirmed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session ist bereits offen"
+        )
+
+    session.is_confirmed = False
     db.commit()
     db.refresh(session)
     return session_to_response(session)

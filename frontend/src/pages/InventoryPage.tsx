@@ -51,6 +51,7 @@ export default function InventoryPage() {
   const [transferTo, setTransferTo] = useState<number | null>(null)
   const [transferAmount, setTransferAmount] = useState(1)
   const [transferToLocation, setTransferToLocation] = useState<number | null>(null)
+  const [transferConfirming, setTransferConfirming] = useState(false)
   const [addModal, setAddModal] = useState(false)
   const [bulkMoveModal, setBulkMoveModal] = useState(false)
   const [bulkFromLocation, setBulkFromLocation] = useState<number | null>(null)
@@ -161,6 +162,7 @@ export default function InventoryPage() {
       setTransferTo(null)
       setTransferAmount(1)
       setTransferToLocation(null)
+      setTransferConfirming(false)
     },
   })
 
@@ -590,85 +592,135 @@ export default function InventoryPage() {
             <h2 className="text-xl font-bold mb-4">
               {transferModal.component.name} transferieren
             </h2>
-            <p className="text-gray-400 mb-4">
-              Verfügbar: {transferModal.quantity}
-            </p>
 
-            <div className="space-y-4">
-              <div>
-                <label className="label">An wen?</label>
-                <select
-                  value={transferTo ?? ''}
-                  onChange={(e) => setTransferTo(Number(e.target.value))}
-                  className="input"
-                >
-                  <option value="">Benutzer wählen...</option>
-                  {officers
-                    ?.filter((o) => o.id !== user?.id)
-                    .map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.display_name || o.username}
-                      </option>
-                    ))}
-                </select>
-              </div>
+            {!transferConfirming ? (
+              // Schritt 1: Eingabe
+              <>
+                <p className="text-gray-400 mb-4">
+                  Verfügbar: {transferModal.quantity}
+                </p>
 
-              <div>
-                <label className="label">Ziel-Standort (optional)</label>
-                <select
-                  value={transferToLocation ?? ''}
-                  onChange={(e) => setTransferToLocation(e.target.value ? Number(e.target.value) : null)}
-                  className="input"
-                >
-                  <option value="">Kein Standort</option>
-                  {locations?.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="label">An wen?</label>
+                    <select
+                      value={transferTo ?? ''}
+                      onChange={(e) => setTransferTo(Number(e.target.value))}
+                      className="input"
+                    >
+                      <option value="">Benutzer wählen...</option>
+                      {officers
+                        ?.filter((o) => o.id !== user?.id)
+                        .map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.display_name || o.username}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
 
-              <div>
-                <label className="label">Menge</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={transferModal.quantity}
-                  value={transferAmount}
-                  onChange={(e) => setTransferAmount(Number(e.target.value))}
-                  className="input"
-                />
-              </div>
+                  <div>
+                    <label className="label">Ziel-Standort (optional)</label>
+                    <select
+                      value={transferToLocation ?? ''}
+                      onChange={(e) => setTransferToLocation(e.target.value ? Number(e.target.value) : null)}
+                      className="input"
+                    >
+                      <option value="">Kein Standort</option>
+                      {locations?.map((loc) => (
+                        <option key={loc.id} value={loc.id}>
+                          {loc.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setTransferModal(null)
-                    setTransferToLocation(null)
-                  }}
-                  className="btn btn-secondary flex-1"
-                >
-                  Abbrechen
-                </button>
-                <button
-                  onClick={() => {
-                    if (transferTo) {
-                      transferMutation.mutate({
-                        to_user_id: transferTo,
-                        component_id: transferModal.component.id,
-                        quantity: transferAmount,
-                        to_location_id: transferToLocation,
-                      })
-                    }
-                  }}
-                  disabled={!transferTo || transferMutation.isPending}
-                  className="btn btn-primary flex-1"
-                >
-                  {transferMutation.isPending ? 'Wird transferiert...' : 'Transferieren'}
-                </button>
-              </div>
-            </div>
+                  <div>
+                    <label className="label">Menge</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={transferModal.quantity}
+                      value={transferAmount}
+                      onChange={(e) => setTransferAmount(Number(e.target.value))}
+                      className="input"
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        setTransferModal(null)
+                        setTransferToLocation(null)
+                        setTransferConfirming(false)
+                      }}
+                      className="btn btn-secondary flex-1"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      onClick={() => setTransferConfirming(true)}
+                      disabled={!transferTo}
+                      className="btn btn-primary flex-1"
+                    >
+                      Weiter
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              // Schritt 2: Bestätigung
+              <>
+                <div className="p-4 bg-gray-800/50 rounded-lg mb-4 space-y-2">
+                  <p className="text-lg font-medium text-center">
+                    Transfer bestätigen
+                  </p>
+                  <div className="text-center space-y-1">
+                    <p className="text-krt-orange font-bold text-xl">
+                      {transferAmount}x {transferModal.component.name}
+                    </p>
+                    <p className="text-gray-400">an</p>
+                    <p className="font-medium text-lg">
+                      {officers?.find(o => o.id === transferTo)?.display_name ||
+                       officers?.find(o => o.id === transferTo)?.username}
+                    </p>
+                    {transferToLocation && (
+                      <>
+                        <p className="text-gray-400">nach</p>
+                        <p className="font-medium">
+                          {locations?.find(l => l.id === transferToLocation)?.name}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setTransferConfirming(false)}
+                    className="btn btn-secondary flex-1"
+                  >
+                    Zurück
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (transferTo) {
+                        transferMutation.mutate({
+                          to_user_id: transferTo,
+                          component_id: transferModal.component.id,
+                          quantity: transferAmount,
+                          to_location_id: transferToLocation,
+                        })
+                      }
+                    }}
+                    disabled={transferMutation.isPending}
+                    className="btn bg-green-600 hover:bg-green-700 flex-1"
+                  >
+                    {transferMutation.isPending ? 'Wird transferiert...' : 'Bestätigen'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
