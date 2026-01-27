@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { RefreshCw, Database, MapPin, Package, AlertCircle, CheckCircle, Upload, FileSpreadsheet, Wallet, Users, Link, Copy, Trash2, ToggleLeft, ToggleRight, Plus } from 'lucide-react'
+import { RefreshCw, Database, MapPin, Package, AlertCircle, CheckCircle, Upload, FileSpreadsheet, Wallet, Users, Link, Copy, Trash2, ToggleLeft, ToggleRight, Plus, Download, HardDrive } from 'lucide-react'
 import type { GuestToken, UserRole } from '../api/types'
 
 interface SCImportStats {
@@ -27,6 +27,16 @@ interface CSVImportResult {
   skipped?: number
   errors: string[]
   warnings?: string[]
+}
+
+interface DbStats {
+  users: number
+  inventory_items: number
+  treasury_transactions: number
+  attendance_sessions: number
+  loot_sessions: number
+  components: number
+  locations: number
 }
 
 export default function AdminPage() {
@@ -58,6 +68,13 @@ export default function AdminPage() {
   const { data: guestTokens } = useQuery<GuestToken[]>({
     queryKey: ['guest-tokens'],
     queryFn: () => apiClient.get('/api/auth/guest-tokens').then((r) => r.data),
+    enabled: isAdmin,
+  })
+
+  // Datenbank-Statistiken
+  const { data: dbStats } = useQuery<DbStats>({
+    queryKey: ['admin-db-stats'],
+    queryFn: () => apiClient.get('/api/admin/stats').then((r) => r.data),
     enabled: isAdmin,
   })
 
@@ -358,6 +375,116 @@ export default function AdminPage() {
                 </details>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Datenbank & Export Section */}
+      <div className="card mb-8">
+        <div className="flex items-center gap-3 mb-6">
+          <HardDrive className="text-krt-orange" size={24} />
+          <h2 className="text-xl font-bold">Datenbank & Export</h2>
+        </div>
+
+        <p className="text-gray-400 mb-6">
+          Lade die komplette Datenbank oder einzelne Tabellen als CSV herunter.
+          Nützlich für Backups oder Auswertungen in Excel.
+        </p>
+
+        {/* Database Download */}
+        <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-medium mb-1">Komplette Datenbank herunterladen</h3>
+              <p className="text-sm text-gray-400">
+                SQLite-Datei für lokale Sicherung oder Analyse mit DBeaver
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                const response = await apiClient.get('/api/admin/backup/database', { responseType: 'blob' })
+                const url = window.URL.createObjectURL(new Blob([response.data]))
+                const link = document.createElement('a')
+                link.href = url
+                link.setAttribute('download', `poison_backup_${new Date().toISOString().split('T')[0]}.db`)
+                document.body.appendChild(link)
+                link.click()
+                link.remove()
+              }}
+              className="btn btn-primary flex items-center gap-2"
+            >
+              <Download size={18} />
+              poison.db herunterladen
+            </button>
+          </div>
+        </div>
+
+        {/* CSV Exports */}
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-gray-400 mb-3">CSV-Export (Excel-kompatibel)</h3>
+          <div className="flex flex-wrap gap-3">
+            {[
+              { endpoint: 'users', label: 'Users', icon: Users },
+              { endpoint: 'inventory', label: 'Inventar', icon: Package },
+              { endpoint: 'treasury', label: 'Kasse', icon: Wallet },
+              { endpoint: 'attendance', label: 'Staffelabende', icon: FileSpreadsheet },
+              { endpoint: 'loot', label: 'Loot', icon: FileSpreadsheet },
+            ].map(({ endpoint, label, icon: Icon }) => (
+              <button
+                key={endpoint}
+                onClick={async () => {
+                  const response = await apiClient.get(`/api/admin/export/${endpoint}`, { responseType: 'blob' })
+                  const url = window.URL.createObjectURL(new Blob([response.data]))
+                  const link = document.createElement('a')
+                  link.href = url
+                  link.setAttribute('download', `${endpoint}_${new Date().toISOString().split('T')[0]}.csv`)
+                  document.body.appendChild(link)
+                  link.click()
+                  link.remove()
+                }}
+                className="btn bg-gray-700 hover:bg-gray-600 flex items-center gap-2"
+              >
+                <Icon size={16} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Database Stats */}
+        {dbStats && (
+          <div className="bg-gray-800/30 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-gray-400 mb-3">Datenbank-Statistiken</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 text-sm">
+              <div className="bg-gray-800/50 rounded p-2 text-center">
+                <p className="text-lg font-bold text-krt-orange">{dbStats.users}</p>
+                <p className="text-gray-500">Benutzer</p>
+              </div>
+              <div className="bg-gray-800/50 rounded p-2 text-center">
+                <p className="text-lg font-bold text-emerald-400">{dbStats.inventory_items}</p>
+                <p className="text-gray-500">Inventar</p>
+              </div>
+              <div className="bg-gray-800/50 rounded p-2 text-center">
+                <p className="text-lg font-bold text-yellow-400">{dbStats.treasury_transactions}</p>
+                <p className="text-gray-500">Transaktionen</p>
+              </div>
+              <div className="bg-gray-800/50 rounded p-2 text-center">
+                <p className="text-lg font-bold text-blue-400">{dbStats.attendance_sessions}</p>
+                <p className="text-gray-500">Staffelabende</p>
+              </div>
+              <div className="bg-gray-800/50 rounded p-2 text-center">
+                <p className="text-lg font-bold text-purple-400">{dbStats.loot_sessions}</p>
+                <p className="text-gray-500">Loot-Sessions</p>
+              </div>
+              <div className="bg-gray-800/50 rounded p-2 text-center">
+                <p className="text-lg font-bold text-gray-300">{dbStats.components}</p>
+                <p className="text-gray-500">Items</p>
+              </div>
+              <div className="bg-gray-800/50 rounded p-2 text-center">
+                <p className="text-lg font-bold text-gray-300">{dbStats.locations}</p>
+                <p className="text-gray-500">Standorte</p>
+              </div>
+            </div>
           </div>
         )}
       </div>
