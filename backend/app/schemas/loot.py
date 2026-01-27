@@ -10,6 +10,7 @@ from app.schemas.location import LocationResponse
 class LootDistributionCreate(BaseModel):
     user_id: int
     quantity: int
+    location_id: Optional[int] = None  # Wo einlagern
 
 
 class BatchDistributionCreate(BaseModel):

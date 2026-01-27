@@ -75,6 +75,16 @@ export default function InventoryPage() {
   } | null>(null)
   const [requestAmount, setRequestAmount] = useState(1)
   const [requestNotes, setRequestNotes] = useState('')
+  // Move Location Modal
+  const [moveModal, setMoveModal] = useState<{
+    itemId: number
+    componentName: string
+    quantity: number
+    currentLocationId: number | null
+    currentLocationName: string
+  } | null>(null)
+  const [moveToLocation, setMoveToLocation] = useState<number | null>(null)
+  const [moveQuantity, setMoveQuantity] = useState(1)
 
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
@@ -230,6 +240,24 @@ export default function InventoryPage() {
       setTransferAmount(1)
       setTransferToLocation(null)
       setTransferConfirming(false)
+    },
+  })
+
+  // Item an anderen Ort verschieben
+  const moveLocationMutation = useMutation({
+    mutationFn: ({ itemId, toLocationId, quantity }: { itemId: number; toLocationId?: number | null; quantity?: number }) => {
+      let url = `/api/inventory/${itemId}/move-location`
+      const params = new URLSearchParams()
+      if (toLocationId !== undefined && toLocationId !== null) params.append('to_location_id', toLocationId.toString())
+      if (quantity) params.append('quantity', quantity.toString())
+      const queryString = params.toString()
+      return apiClient.post(queryString ? `${url}?${queryString}` : url)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      setMoveModal(null)
+      setMoveToLocation(null)
+      setMoveQuantity(1)
     },
   })
 
@@ -877,6 +905,21 @@ export default function InventoryPage() {
                                             </div>
                                             <button
                                               onClick={() =>
+                                                setMoveModal({
+                                                  itemId: item.id,
+                                                  componentName: item.component.name,
+                                                  quantity: item.quantity,
+                                                  currentLocationId: item.location?.id ?? null,
+                                                  currentLocationName: item.location?.name ?? 'Ohne Standort',
+                                                })
+                                              }
+                                              className="p-1.5 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+                                              title="Standort ändern"
+                                            >
+                                              <MapPin size={14} />
+                                            </button>
+                                            <button
+                                              onClick={() =>
                                                 setTransferModal({
                                                   component: item.component,
                                                   quantity: item.quantity,
@@ -884,6 +927,7 @@ export default function InventoryPage() {
                                                 })
                                               }
                                               className="p-1.5 bg-krt-orange/20 text-krt-orange rounded hover:bg-krt-orange/30"
+                                              title="An andere Person transferieren"
                                             >
                                               <ArrowRight size={14} />
                                             </button>
@@ -1174,19 +1218,22 @@ export default function InventoryPage() {
                   </div>
 
                   <div>
-                    <label className="label">Ziel-Standort (optional)</label>
+                    <label className="label">Ziel-Standort *</label>
                     <select
                       value={transferToLocation ?? ''}
                       onChange={(e) => setTransferToLocation(e.target.value ? Number(e.target.value) : null)}
-                      className="input"
+                      className={`input ${!transferToLocation ? 'border-krt-orange' : ''}`}
                     >
-                      <option value="">Kein Standort</option>
+                      <option value="">-- Standort wählen * --</option>
                       {locations?.map((loc) => (
                         <option key={loc.id} value={loc.id}>
                           {loc.name}
                         </option>
                       ))}
                     </select>
+                    {!transferToLocation && (
+                      <p className="text-xs text-krt-orange mt-1">Bitte wähle einen Ziel-Standort</p>
+                    )}
                   </div>
 
                   <div>
@@ -1214,10 +1261,10 @@ export default function InventoryPage() {
                     </button>
                     <button
                       onClick={() => setTransferConfirming(true)}
-                      disabled={!transferTo}
+                      disabled={!transferTo || !transferToLocation}
                       className="btn btn-primary flex-1"
                     >
-                      Weiter
+                      {!transferToLocation ? 'Standort wählen' : 'Weiter'}
                     </button>
                   </div>
                 </div>
@@ -1368,6 +1415,83 @@ export default function InventoryPage() {
                   className="btn btn-primary flex-1"
                 >
                   {bulkMoveMutation.isPending ? 'Wird verschoben...' : 'Verschieben'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Single Item Move Modal */}
+      {moveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="card max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <MapPin size={24} className="text-krt-orange" />
+              Standort ändern
+            </h2>
+            <p className="text-gray-400 mb-4">
+              Verschiebe <span className="text-white font-medium">{moveModal.componentName}</span> an einen anderen Standort.
+            </p>
+
+            <div className="space-y-4">
+              <div className="p-3 bg-gray-800 rounded">
+                <p className="text-sm text-gray-400">Aktueller Standort:</p>
+                <p className="font-medium">{moveModal.currentLocationName}</p>
+                <p className="text-sm text-gray-400 mt-1">Verfügbar: {moveModal.quantity}x</p>
+              </div>
+
+              <div>
+                <label className="label">Menge verschieben</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={moveModal.quantity}
+                  value={moveQuantity}
+                  onChange={(e) => setMoveQuantity(Math.min(moveModal.quantity, Math.max(1, parseInt(e.target.value) || 1)))}
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label className="label">Neuer Standort *</label>
+                <select
+                  value={moveToLocation === null ? '' : moveToLocation}
+                  onChange={(e) => setMoveToLocation(e.target.value === '' ? null : Number(e.target.value))}
+                  className="input"
+                >
+                  <option value="">-- Neuen Standort wählen --</option>
+                  {locations?.filter(loc => loc.id !== moveModal.currentLocationId).map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name} {loc.system_name && `(${loc.system_name})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setMoveModal(null)
+                    setMoveToLocation(null)
+                    setMoveQuantity(1)
+                  }}
+                  className="btn btn-secondary flex-1"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => {
+                    moveLocationMutation.mutate({
+                      itemId: moveModal.itemId,
+                      toLocationId: moveToLocation,
+                      quantity: moveQuantity < moveModal.quantity ? moveQuantity : undefined,
+                    })
+                  }}
+                  disabled={!moveToLocation || moveLocationMutation.isPending}
+                  className="btn btn-primary flex-1"
+                >
+                  {moveLocationMutation.isPending ? 'Wird verschoben...' : 'Verschieben'}
                 </button>
               </div>
             </div>

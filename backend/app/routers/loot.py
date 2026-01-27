@@ -254,10 +254,11 @@ async def distribute_loot_item(
     )
     db.add(dist)
 
-    # Automatisch ins Inventar des Empfängers
+    # Automatisch ins Inventar des Empfängers (mit optionalem Standort)
     inventory = db.query(Inventory).filter(
         Inventory.user_id == distribution.user_id,
-        Inventory.component_id == item.component_id
+        Inventory.component_id == item.component_id,
+        Inventory.location_id == distribution.location_id
     ).first()
 
     if inventory:
@@ -266,7 +267,8 @@ async def distribute_loot_item(
         inventory = Inventory(
             user_id=distribution.user_id,
             component_id=item.component_id,
-            quantity=distribution.quantity
+            quantity=distribution.quantity,
+            location_id=distribution.location_id
         )
         db.add(inventory)
 
@@ -359,10 +361,12 @@ async def distribute_loot_batch(
 async def remove_loot_item(
     session_id: int,
     item_id: int,
+    force: bool = False,
+    revert_inventory: bool = True,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Entfernt ein Loot-Item. Nur wenn noch nicht verteilt. Nur Offiziere+."""
+    """Entfernt ein Loot-Item. Nur wenn noch nicht verteilt (oder force=True für Admins)."""
     check_role_or_pioneer(current_user, UserRole.OFFICER)
 
     item = db.query(LootItem).filter(
@@ -376,11 +380,32 @@ async def remove_loot_item(
         )
 
     if item.distributions:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Kann nicht gelöscht werden - bereits teilweise verteilt"
-        )
+        if not force:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Kann nicht gelöscht werden - bereits teilweise verteilt. Nutze force=true (nur Admin)."
+            )
+        # Force-Delete nur für Admins
+        check_role(current_user, UserRole.ADMIN)
+
+        # Optional: Inventar-Änderungen rückgängig machen
+        if revert_inventory:
+            for dist in item.distributions:
+                # Finde Inventar-Einträge des Users für diese Komponente
+                inventories = db.query(Inventory).filter(
+                    Inventory.user_id == dist.user_id,
+                    Inventory.component_id == item.component_id
+                ).all()
+                remaining_to_remove = dist.quantity
+                for inventory in inventories:
+                    if remaining_to_remove <= 0:
+                        break
+                    remove_amount = min(inventory.quantity, remaining_to_remove)
+                    inventory.quantity -= remove_amount
+                    remaining_to_remove -= remove_amount
+                    if inventory.quantity <= 0:
+                        db.delete(inventory)
 
     db.delete(item)
     db.commit()
-    return {"message": "Loot-Item entfernt"}
+    return {"message": "Loot-Item entfernt" + (" (inkl. Inventar-Korrektur)" if item.distributions and revert_inventory else "")}

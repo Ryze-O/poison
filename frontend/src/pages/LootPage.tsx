@@ -61,6 +61,7 @@ export default function LootPage() {
   const [distributingItem, setDistributingItem] = useState<LootItem | null>(null)
   const [distributeUserId, setDistributeUserId] = useState<number | null>(null)
   const [distributeQuantity, setDistributeQuantity] = useState(1)
+  const [distributeLocationId, setDistributeLocationId] = useState<number | null>(null)
 
   // Neuen Standort erstellen
   const [showNewLocationForm, setShowNewLocationForm] = useState(false)
@@ -291,10 +292,11 @@ export default function LootPage() {
 
   // Item löschen
   const deleteItemMutation = useMutation({
-    mutationFn: ({ sessionId, itemId }: { sessionId: number; itemId: number }) =>
-      apiClient.delete(`/api/loot/${sessionId}/items/${itemId}`),
+    mutationFn: ({ sessionId, itemId, force = false, revertInventory = true }: { sessionId: number; itemId: number; force?: boolean; revertInventory?: boolean }) =>
+      apiClient.delete(`/api/loot/${sessionId}/items/${itemId}?force=${force}&revert_inventory=${revertInventory}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loot'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
       // Session neu laden
       if (editingSession) {
         apiClient.get(`/api/loot/${editingSession.id}`).then((r) => setEditingSession(r.data))
@@ -304,13 +306,14 @@ export default function LootPage() {
 
   // Item verteilen (einzeln)
   const distributeMutation = useMutation({
-    mutationFn: ({ sessionId, itemId, userId, quantity }: { sessionId: number; itemId: number; userId: number; quantity: number }) =>
-      apiClient.post(`/api/loot/${sessionId}/items/${itemId}/distribute`, { user_id: userId, quantity }),
+    mutationFn: ({ sessionId, itemId, userId, quantity, locationId }: { sessionId: number; itemId: number; userId: number; quantity: number; locationId?: number }) =>
+      apiClient.post(`/api/loot/${sessionId}/items/${itemId}/distribute`, { user_id: userId, quantity, location_id: locationId || null }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loot'] })
       setDistributingItem(null)
       setDistributeUserId(null)
       setDistributeQuantity(1)
+      setDistributeLocationId(null)
       // Session neu laden
       if (editingSession) {
         apiClient.get(`/api/loot/${editingSession.id}`).then((r) => setEditingSession(r.data))
@@ -988,15 +991,29 @@ export default function LootPage() {
                                       Verteilen
                                     </button>
                                   )}
-                                  {canCreate && !session.is_completed && item.distributions.length === 0 && (
+                                  {canCreate && !session.is_completed && (item.distributions.length === 0 || isAdmin) && (
                                     <button
-                                      onClick={() => deleteItemMutation.mutate({
-                                        sessionId: session.id,
-                                        itemId: item.id
-                                      })}
+                                      onClick={() => {
+                                        const hasDistributions = item.distributions.length > 0
+                                        if (hasDistributions) {
+                                          if (window.confirm(`Dieses Item wurde bereits verteilt!\n\nMöchtest du es trotzdem löschen?\nDas Inventar der Empfänger wird korrigiert.`)) {
+                                            deleteItemMutation.mutate({
+                                              sessionId: session.id,
+                                              itemId: item.id,
+                                              force: true,
+                                              revertInventory: true
+                                            })
+                                          }
+                                        } else {
+                                          deleteItemMutation.mutate({
+                                            sessionId: session.id,
+                                            itemId: item.id
+                                          })
+                                        }
+                                      }}
                                       disabled={deleteItemMutation.isPending}
-                                      className="text-red-400 hover:text-red-300 p-1"
-                                      title="Entfernen"
+                                      className={`p-1 ${item.distributions.length > 0 ? 'text-orange-400 hover:text-orange-300' : 'text-red-400 hover:text-red-300'}`}
+                                      title={item.distributions.length > 0 ? "Entfernen (Admin: inkl. Inventar-Korrektur)" : "Entfernen"}
                                     >
                                       <Trash2 size={14} />
                                     </button>
@@ -1052,16 +1069,17 @@ export default function LootPage() {
                                     />
                                     <button
                                       onClick={() => {
-                                        if (distributeUserId) {
+                                        if (distributeUserId && distributeLocationId) {
                                           distributeMutation.mutate({
                                             sessionId: session.id,
                                             itemId: item.id,
                                             userId: distributeUserId,
                                             quantity: distributeQuantity,
+                                            locationId: distributeLocationId,
                                           })
                                         }
                                       }}
-                                      disabled={!distributeUserId || distributeMutation.isPending}
+                                      disabled={!distributeUserId || !distributeLocationId || distributeMutation.isPending}
                                       className="btn btn-primary py-1.5 px-2"
                                     >
                                       <Check size={14} />
@@ -1073,8 +1091,24 @@ export default function LootPage() {
                                       <X size={16} />
                                     </button>
                                   </div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <MapPin size={14} className="text-krt-orange" />
+                                    <select
+                                      value={distributeLocationId || ''}
+                                      onChange={(e) => setDistributeLocationId(e.target.value ? parseInt(e.target.value) : null)}
+                                      className="input flex-1 text-sm"
+                                    >
+                                      <option value="">-- Lagerort wählen * --</option>
+                                      {locations?.map((loc) => (
+                                        <option key={loc.id} value={loc.id}>
+                                          {loc.name} {loc.system_name && `(${loc.system_name})`}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
                                   <p className="text-xs text-gray-500">
                                     {remaining} von {item.quantity} verfügbar
+                                    {!distributeLocationId && <span className="text-krt-orange ml-2">* Lagerort erforderlich</span>}
                                   </p>
                                 </div>
                               )}
@@ -1441,15 +1475,29 @@ export default function LootPage() {
                                 Verteilen
                               </button>
                             )}
-                            {!editingSession.is_completed && item.distributions.length === 0 && (
+                            {!editingSession.is_completed && (item.distributions.length === 0 || isAdmin) && (
                               <button
-                                onClick={() => deleteItemMutation.mutate({
-                                  sessionId: editingSession.id,
-                                  itemId: item.id
-                                })}
+                                onClick={() => {
+                                  const hasDistributions = item.distributions.length > 0
+                                  if (hasDistributions) {
+                                    if (window.confirm(`Dieses Item wurde bereits verteilt!\n\nMöchtest du es trotzdem löschen?\nDas Inventar der Empfänger wird korrigiert.`)) {
+                                      deleteItemMutation.mutate({
+                                        sessionId: editingSession.id,
+                                        itemId: item.id,
+                                        force: true,
+                                        revertInventory: true
+                                      })
+                                    }
+                                  } else {
+                                    deleteItemMutation.mutate({
+                                      sessionId: editingSession.id,
+                                      itemId: item.id
+                                    })
+                                  }
+                                }}
                                 disabled={deleteItemMutation.isPending}
-                                className="text-red-400 hover:text-red-300 p-1"
-                                title="Entfernen"
+                                className={`p-1 ${item.distributions.length > 0 ? 'text-orange-400 hover:text-orange-300' : 'text-red-400 hover:text-red-300'}`}
+                                title={item.distributions.length > 0 ? "Entfernen (Admin: inkl. Inventar-Korrektur)" : "Entfernen"}
                               >
                                 <Trash2 size={16} />
                               </button>
@@ -1505,16 +1553,17 @@ export default function LootPage() {
                               />
                               <button
                                 onClick={() => {
-                                  if (distributeUserId) {
+                                  if (distributeUserId && distributeLocationId) {
                                     distributeMutation.mutate({
                                       sessionId: editingSession.id,
                                       itemId: item.id,
                                       userId: distributeUserId,
                                       quantity: distributeQuantity,
+                                      locationId: distributeLocationId,
                                     })
                                   }
                                 }}
-                                disabled={!distributeUserId || distributeMutation.isPending}
+                                disabled={!distributeUserId || !distributeLocationId || distributeMutation.isPending}
                                 className="btn btn-primary flex items-center gap-1"
                               >
                                 <Check size={16} />
@@ -1526,8 +1575,24 @@ export default function LootPage() {
                                 <X size={18} />
                               </button>
                             </div>
+                            <div className="flex items-center gap-2 mb-3">
+                              <MapPin size={14} className="text-krt-orange" />
+                              <select
+                                value={distributeLocationId || ''}
+                                onChange={(e) => setDistributeLocationId(e.target.value ? parseInt(e.target.value) : null)}
+                                className="input flex-1"
+                              >
+                                <option value="">-- Lagerort wählen * --</option>
+                                {locations?.map((loc) => (
+                                  <option key={loc.id} value={loc.id}>
+                                    {loc.name} {loc.system_name && `(${loc.system_name})`}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                             <p className="text-sm text-gray-500">
                               {remaining} von {item.quantity} verfügbar
+                              {!distributeLocationId && <span className="text-krt-orange ml-2">* Lagerort erforderlich</span>}
                             </p>
                           </div>
                         )}
@@ -1725,23 +1790,26 @@ export default function LootPage() {
             </div>
 
             {/* Standort-Auswahl (global) */}
-            <div className="mb-6 p-4 bg-gray-800/50 rounded-lg">
+            <div className="mb-6 p-4 bg-gray-800/50 rounded-lg border border-krt-orange/30">
               <label className="label flex items-center gap-2">
-                <MapPin size={16} />
-                Einlagerungsort für alle
+                <MapPin size={16} className="text-krt-orange" />
+                Einlagerungsort für alle *
               </label>
               <select
                 value={distributionLocation || ''}
                 onChange={(e) => setDistributionLocation(e.target.value ? parseInt(e.target.value) : null)}
-                className="input"
+                className={`input ${!distributionLocation ? 'border-krt-orange' : ''}`}
               >
-                <option value="">-- Kein Standort --</option>
+                <option value="">-- Lagerort wählen * --</option>
                 {(distributionLocations || locations)?.map((loc) => (
                   <option key={loc.id} value={loc.id}>
                     {loc.name} {loc.system_name && `(${loc.system_name})`}
                   </option>
                 ))}
               </select>
+              {!distributionLocation && (
+                <p className="text-xs text-krt-orange mt-1">Bitte wähle einen Lagerort, wo die Items eingelagert werden.</p>
+              )}
             </div>
 
             {/* Items zur Verteilung */}
@@ -1886,10 +1954,10 @@ export default function LootPage() {
 
                       <button
                         onClick={() => distributeItem(item)}
-                        disabled={recipients.length === 0 || perPerson === 0 || batchDistributeMutation.isPending}
+                        disabled={recipients.length === 0 || perPerson === 0 || !distributionLocation || batchDistributeMutation.isPending}
                         className="btn btn-primary w-full"
                       >
-                        {batchDistributeMutation.isPending ? 'Verteile...' : `Gleichmäßig verteilen (${perPerson}x an ${recipients.length} Personen)`}
+                        {batchDistributeMutation.isPending ? 'Verteile...' : !distributionLocation ? 'Bitte Lagerort wählen' : `Gleichmäßig verteilen (${perPerson}x an ${recipients.length} Personen)`}
                       </button>
                     </div>
                   )
@@ -1971,10 +2039,10 @@ export default function LootPage() {
 
                       <button
                         onClick={() => distributeItem(item)}
-                        disabled={!selectedPioneer || batchDistributeMutation.isPending}
+                        disabled={!selectedPioneer || !distributionLocation || batchDistributeMutation.isPending}
                         className="btn btn-primary w-full"
                       >
-                        {batchDistributeMutation.isPending ? 'Übergebe...' : `An Pioneer übergeben (${remaining}x)`}
+                        {batchDistributeMutation.isPending ? 'Übergebe...' : !distributionLocation ? 'Bitte Lagerort wählen' : `An Pioneer übergeben (${remaining}x)`}
                       </button>
                     </div>
                   )
@@ -1992,13 +2060,15 @@ export default function LootPage() {
               </button>
               <button
                 onClick={distributeAllAndComplete}
-                disabled={batchDistributeMutation.isPending || updateSessionMutation.isPending}
+                disabled={!distributionLocation || batchDistributeMutation.isPending || updateSessionMutation.isPending}
                 className="btn btn-primary flex items-center gap-2"
               >
                 <CheckCircle size={16} />
                 {batchDistributeMutation.isPending || updateSessionMutation.isPending
                   ? 'Verarbeite...'
-                  : 'Alles verteilen & abschließen'}
+                  : !distributionLocation
+                    ? 'Bitte Lagerort wählen'
+                    : 'Alles verteilen & abschließen'}
               </button>
             </div>
           </div>

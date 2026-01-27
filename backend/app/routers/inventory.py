@@ -336,6 +336,87 @@ async def bulk_move_location(
     }
 
 
+@router.post("/{item_id}/move-location")
+async def move_item_location(
+    item_id: int,
+    to_location_id: Optional[int] = None,
+    quantity: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Verschiebt ein Item (oder Teil davon) an einen anderen Standort. Nur Offiziere+."""
+    check_role(current_user, UserRole.OFFICER)
+
+    # Item finden
+    item = db.query(Inventory).filter(
+        Inventory.id == item_id,
+        Inventory.user_id == current_user.id,
+        Inventory.quantity > 0
+    ).first()
+
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item nicht gefunden oder gehört nicht dir"
+        )
+
+    # Ziel-Location prüfen (falls angegeben)
+    if to_location_id:
+        to_location = db.query(Location).filter(Location.id == to_location_id).first()
+        if not to_location:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Ziel-Standort nicht gefunden"
+            )
+
+    # Menge bestimmen (Standard: alles verschieben)
+    move_quantity = quantity if quantity else item.quantity
+    if move_quantity > item.quantity:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Nicht genug Items vorhanden. Verfügbar: {item.quantity}"
+        )
+
+    # Standort-Namen für Log
+    from_name = item.location.name if item.location else "Ohne Standort"
+    to_name = to_location.name if to_location_id and to_location else "Ohne Standort"
+
+    # Prüfen ob am Ziel bereits ein Eintrag existiert
+    existing = db.query(Inventory).filter(
+        Inventory.user_id == current_user.id,
+        Inventory.component_id == item.component_id,
+        Inventory.location_id == to_location_id
+    ).first()
+
+    if existing and existing.id != item.id:
+        # Zusammenführen
+        existing.quantity += move_quantity
+        item.quantity -= move_quantity
+        if item.quantity <= 0:
+            db.delete(item)
+    else:
+        # Teilen oder komplett verschieben
+        if move_quantity < item.quantity:
+            # Teilen: neuen Eintrag erstellen
+            new_item = Inventory(
+                user_id=current_user.id,
+                component_id=item.component_id,
+                location_id=to_location_id,
+                quantity=move_quantity
+            )
+            db.add(new_item)
+            item.quantity -= move_quantity
+        else:
+            # Komplett verschieben
+            item.location_id = to_location_id
+
+    db.commit()
+
+    return {
+        "message": f"{move_quantity}x {item.component.name} von '{from_name}' nach '{to_name}' verschoben"
+    }
+
+
 @router.post("/patch-reset")
 async def patch_reset(
     request: PatchResetRequest,
