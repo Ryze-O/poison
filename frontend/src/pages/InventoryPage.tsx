@@ -62,10 +62,25 @@ export default function InventoryPage() {
   const [patchKeptItems, setPatchKeptItems] = useState<Set<number>>(new Set())
   const [filterSubCategory, setFilterSubCategory] = useState<string>('')
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set())
+  const [editingUserId, setEditingUserId] = useState<number | null>(null)
 
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
   const canManage = effectiveRole !== 'member' && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
+  const isAdmin = effectiveRole === 'admin'
+
+  const toggleUser = (userId: number) => {
+    setExpandedUsers(prev => {
+      const next = new Set(prev)
+      if (next.has(userId)) {
+        next.delete(userId)
+      } else {
+        next.add(userId)
+      }
+      return next
+    })
+  }
 
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => {
@@ -145,6 +160,29 @@ export default function InventoryPage() {
   const removeMutation = useMutation({
     mutationFn: ({ componentId, quantity, locationId }: { componentId: number; quantity: number; locationId?: number | null }) => {
       let url = `/api/inventory/${componentId}/remove?quantity=${quantity}`
+      if (locationId) url += `&location_id=${locationId}`
+      return apiClient.post(url)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+    },
+  })
+
+  // Admin: Anderes User-Inventar bearbeiten
+  const adminAddMutation = useMutation({
+    mutationFn: ({ userId, componentId, quantity, locationId }: { userId: number; componentId: number; quantity: number; locationId?: number | null }) => {
+      let url = `/api/inventory/admin/${userId}/${componentId}/add?quantity=${quantity}`
+      if (locationId) url += `&location_id=${locationId}`
+      return apiClient.post(url)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+    },
+  })
+
+  const adminRemoveMutation = useMutation({
+    mutationFn: ({ userId, componentId, quantity, locationId }: { userId: number; componentId: number; quantity: number; locationId?: number | null }) => {
+      let url = `/api/inventory/admin/${userId}/${componentId}/remove?quantity=${quantity}`
       if (locationId) url += `&location_id=${locationId}`
       return apiClient.post(url)
     },
@@ -527,7 +565,7 @@ export default function InventoryPage() {
       <div className="card">
         <h2 className="text-xl font-bold mb-4">Alle Lager</h2>
         {officers && inventoryByUser ? (
-          <div className="space-y-6">
+          <div className="space-y-3">
             {officers.map((officer) => {
               const items = inventoryByUser[officer.id]?.filter((item) => {
                 const matchesSearch = item.component.name
@@ -542,40 +580,162 @@ export default function InventoryPage() {
                 return matchesSearch && matchesCategory && matchesLocation
               })
               if (!items || items.length === 0) return null
+
+              // Gruppiere nach Kategorie
+              const byCategory: Record<string, InventoryItem[]> = {}
+              items.forEach(item => {
+                const cat = item.component.category || 'Sonstige'
+                if (!byCategory[cat]) byCategory[cat] = []
+                byCategory[cat].push(item)
+              })
+
+              const isExpanded = expandedUsers.has(officer.id)
+              const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
+              const isEditing = editingUserId === officer.id
+
               return (
-                <div key={officer.id}>
-                  <h3 className="text-lg font-medium mb-3 flex items-center gap-2">
-                    {officer.avatar && (
-                      <img
-                        src={officer.avatar}
-                        alt=""
-                        className="w-6 h-6 rounded-full"
-                      />
-                    )}
-                    {officer.display_name || officer.username}
-                    {officer.id === user?.id && (
-                      <span className="text-xs text-gray-500">(Du)</span>
-                    )}
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-3 bg-gray-800/50 rounded-lg"
-                      >
-                        <p className="font-medium truncate">{item.component.name}</p>
-                        <div className="flex items-center justify-between">
-                          <p className="text-krt-orange">{item.quantity}x</p>
-                          {item.location && (
-                            <span className="flex items-center gap-1 text-xs text-gray-400">
-                              <MapPin size={10} />
-                              {item.location.name}
+                <div key={officer.id} className="border border-gray-700/50 rounded-lg overflow-hidden">
+                  {/* User Header - Collapsed View */}
+                  <button
+                    onClick={() => toggleUser(officer.id)}
+                    className="w-full flex items-center justify-between p-3 bg-gray-800/70 hover:bg-gray-800 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      {isExpanded ? (
+                        <ChevronDown size={18} className="text-krt-orange" />
+                      ) : (
+                        <ChevronRight size={18} className="text-gray-400" />
+                      )}
+                      {officer.avatar && (
+                        <img
+                          src={officer.avatar}
+                          alt=""
+                          className="w-6 h-6 rounded-full"
+                        />
+                      )}
+                      <span className="font-medium">
+                        {officer.display_name || officer.username}
+                        {officer.id === user?.id && (
+                          <span className="text-xs text-gray-500 ml-1">(Du)</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      {/* Kategorien-Tags (collapsed) */}
+                      {!isExpanded && (
+                        <div className="flex gap-1 flex-wrap justify-end">
+                          {Object.entries(byCategory).slice(0, 4).map(([cat, catItems]) => (
+                            <span
+                              key={cat}
+                              className="text-xs px-2 py-0.5 bg-gray-700/50 rounded text-gray-300"
+                            >
+                              {cat}: {catItems.reduce((s, i) => s + i.quantity, 0)}
+                            </span>
+                          ))}
+                          {Object.keys(byCategory).length > 4 && (
+                            <span className="text-xs px-2 py-0.5 bg-gray-700/50 rounded text-gray-400">
+                              +{Object.keys(byCategory).length - 4}
                             </span>
                           )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      )}
+                      <span className="text-sm text-gray-400 whitespace-nowrap">
+                        {totalItems} Items
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Expanded View */}
+                  {isExpanded && (
+                    <div className="p-4 space-y-4">
+                      {/* Admin Edit Toggle */}
+                      {isAdmin && officer.id !== user?.id && (
+                        <div className="flex justify-end">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setEditingUserId(isEditing ? null : officer.id)
+                            }}
+                            className={`btn text-sm ${isEditing ? 'btn-primary' : 'btn-secondary'}`}
+                          >
+                            {isEditing ? 'Bearbeiten beenden' : 'Lager bearbeiten'}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Kategorien */}
+                      {Object.entries(byCategory)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([category, catItems]) => (
+                          <div key={category}>
+                            <h4 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
+                              {category}
+                              <span className="ml-2 text-xs text-gray-500">
+                                ({catItems.reduce((sum, i) => sum + i.quantity, 0)})
+                              </span>
+                            </h4>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                              {catItems
+                                .sort((a, b) => a.component.name.localeCompare(b.component.name))
+                                .map((item) => (
+                                  <div
+                                    key={item.id}
+                                    className="p-3 bg-gray-800/30 rounded-lg"
+                                  >
+                                    <p className="font-medium text-sm truncate">{item.component.name}</p>
+                                    <div className="flex items-center justify-between mt-1">
+                                      {isEditing ? (
+                                        // Admin Edit Controls
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() =>
+                                              adminRemoveMutation.mutate({
+                                                userId: officer.id,
+                                                componentId: item.component.id,
+                                                quantity: 1,
+                                                locationId: item.location?.id,
+                                              })
+                                            }
+                                            disabled={item.quantity <= 0 || adminRemoveMutation.isPending}
+                                            className="p-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+                                          >
+                                            <Minus size={12} />
+                                          </button>
+                                          <span className="w-8 text-center text-sm font-bold text-krt-orange">
+                                            {item.quantity}
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              adminAddMutation.mutate({
+                                                userId: officer.id,
+                                                componentId: item.component.id,
+                                                quantity: 1,
+                                                locationId: item.location?.id,
+                                              })
+                                            }
+                                            disabled={adminAddMutation.isPending}
+                                            className="p-1 bg-gray-700 rounded hover:bg-gray-600"
+                                          >
+                                            <Plus size={12} />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <p className="text-krt-orange font-medium">{item.quantity}x</p>
+                                      )}
+                                      {item.location && (
+                                        <span className="flex items-center gap-1 text-xs text-gray-400">
+                                          <MapPin size={10} />
+                                          {item.location.name}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
               )
             })}

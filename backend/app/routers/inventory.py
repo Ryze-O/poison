@@ -706,3 +706,148 @@ async def get_transfers(
         (InventoryTransfer.from_user_id == current_user.id) |
         (InventoryTransfer.to_user_id == current_user.id)
     ).order_by(InventoryTransfer.created_at.desc()).all()
+
+
+# ============== Admin-Endpoints ==============
+
+@router.post("/admin/{user_id}/{component_id}/add")
+async def admin_add_to_inventory(
+    user_id: int,
+    component_id: int,
+    quantity: int = 1,
+    location_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Admin: Fügt Komponenten zum Lager eines anderen Users hinzu."""
+    check_role(current_user, UserRole.ADMIN)
+
+    if quantity <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Menge muss positiv sein"
+        )
+
+    # User prüfen
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer nicht gefunden"
+        )
+
+    # Komponente prüfen
+    component = db.query(Component).filter(Component.id == component_id).first()
+    if not component:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Komponente nicht gefunden"
+        )
+
+    # Location prüfen (falls angegeben)
+    if location_id:
+        location = db.query(Location).filter(Location.id == location_id).first()
+        if not location:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Standort nicht gefunden"
+            )
+
+    # Inventar-Eintrag suchen oder erstellen
+    inventory = db.query(Inventory).filter(
+        Inventory.user_id == user_id,
+        Inventory.component_id == component_id,
+        Inventory.location_id == location_id
+    ).first()
+
+    quantity_before = inventory.quantity if inventory else 0
+
+    if inventory:
+        inventory.quantity += quantity
+    else:
+        inventory = Inventory(
+            user_id=user_id,
+            component_id=component_id,
+            location_id=location_id,
+            quantity=quantity
+        )
+        db.add(inventory)
+        db.flush()
+
+    # Historie loggen
+    log_inventory_change(
+        db=db,
+        user_id=user_id,
+        component_id=component_id,
+        action=InventoryAction.ADD,
+        quantity=quantity,
+        quantity_before=quantity_before,
+        quantity_after=inventory.quantity,
+        related_user_id=current_user.id,
+        notes=f"Admin-Hinzufügung durch {current_user.display_name or current_user.username}"
+    )
+
+    db.commit()
+    db.refresh(inventory)
+    return {"message": f"{quantity}x {component.name} zu {target_user.display_name or target_user.username} hinzugefügt", "new_quantity": inventory.quantity}
+
+
+@router.post("/admin/{user_id}/{component_id}/remove")
+async def admin_remove_from_inventory(
+    user_id: int,
+    component_id: int,
+    quantity: int = 1,
+    location_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Admin: Entfernt Komponenten aus dem Lager eines anderen Users."""
+    check_role(current_user, UserRole.ADMIN)
+
+    if quantity <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Menge muss positiv sein"
+        )
+
+    # User prüfen
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer nicht gefunden"
+        )
+
+    inventory = db.query(Inventory).filter(
+        Inventory.user_id == user_id,
+        Inventory.component_id == component_id,
+        Inventory.location_id == location_id
+    ).first()
+
+    if not inventory or inventory.quantity < quantity:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nicht genug Komponenten auf Lager"
+        )
+
+    quantity_before = inventory.quantity
+    inventory.quantity -= quantity
+
+    # Historie loggen
+    log_inventory_change(
+        db=db,
+        user_id=user_id,
+        component_id=component_id,
+        action=InventoryAction.REMOVE,
+        quantity=-quantity,
+        quantity_before=quantity_before,
+        quantity_after=inventory.quantity,
+        related_user_id=current_user.id,
+        notes=f"Admin-Entfernung durch {current_user.display_name or current_user.username}"
+    )
+
+    db.commit()
+    db.refresh(inventory)
+
+    component = db.query(Component).filter(Component.id == component_id).first()
+    return {"message": f"{quantity}x {component.name} von {target_user.display_name or target_user.username} entfernt", "new_quantity": inventory.quantity}
