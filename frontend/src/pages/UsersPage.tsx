@@ -15,12 +15,12 @@ const roleLabels: Record<UserRole, string> = {
 }
 
 const roleColors: Record<UserRole, string> = {
-  guest: 'bg-yellow-600',
-  loot_guest: 'bg-purple-600',
+  guest: 'bg-gray-600',
+  loot_guest: 'bg-gray-500',
   member: 'bg-gray-600',
   officer: 'bg-krt-orange',
-  treasurer: 'bg-krt-gold',
-  admin: 'bg-red-600',
+  treasurer: 'bg-krt-orange',
+  admin: 'bg-krt-orange',
 }
 
 export default function UsersPage() {
@@ -321,9 +321,9 @@ export default function UsersPage() {
 
       {/* Merge-Vorschläge (nur für Admins) */}
       {isAdmin && pendingMerges && pendingMerges.length > 0 && (
-        <div className="card mb-8 border-l-4 border-l-purple-500">
+        <div className="card mb-8 border-l-4 border-l-gray-500">
           <div className="flex items-center gap-3 mb-4">
-            <GitMerge className="text-purple-500" size={24} />
+            <GitMerge className="text-gray-400" size={24} />
             <h2 className="text-lg font-bold">Merge-Vorschläge ({pendingMerges.length})</h2>
           </div>
           <p className="text-sm text-gray-400 mb-4">
@@ -331,7 +331,7 @@ export default function UsersPage() {
           </p>
           <div className="space-y-3">
             {pendingMerges.map((merge) => (
-              <div key={merge.id} className="p-4 bg-gray-800/50 rounded-lg border border-purple-500/30">
+              <div key={merge.id} className="p-4 bg-gray-800/50 rounded-lg border border-gray-600/30">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-6">
                     {/* Discord User */}
@@ -339,12 +339,12 @@ export default function UsersPage() {
                       {merge.discord_user.avatar ? (
                         <img src={merge.discord_user.avatar} alt="" className="w-12 h-12 rounded-full mx-auto mb-1" />
                       ) : (
-                        <div className="w-12 h-12 rounded-full bg-blue-700 flex items-center justify-center mx-auto mb-1">
+                        <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center mx-auto mb-1">
                           <UserIcon size={24} className="text-white" />
                         </div>
                       )}
                       <p className="text-sm font-medium">{merge.discord_user.display_name || merge.discord_user.username}</p>
-                      <p className="text-xs text-blue-400">Discord</p>
+                      <p className="text-xs text-gray-400">Discord</p>
                     </div>
 
                     {/* Arrow */}
@@ -363,7 +363,7 @@ export default function UsersPage() {
 
                     {/* Match Reason */}
                     <div className="ml-4">
-                      <span className="px-2 py-1 bg-purple-900/30 border border-purple-700 rounded text-xs text-purple-300">
+                      <span className="px-2 py-1 bg-gray-800/30 border border-gray-700 rounded text-xs text-gray-300">
                         {merge.match_reason === 'username_match' && 'Username stimmt überein'}
                         {merge.match_reason === 'display_name_match' && 'Name stimmt überein'}
                         {merge.match_reason === 'alias_match' && 'Alias stimmt überein'}
@@ -441,7 +441,7 @@ export default function UsersPage() {
                         <span className="ml-2 text-xs text-gray-400">(Du)</span>
                       )}
                       {!u.discord_id && (
-                        <span className="ml-2 text-xs text-yellow-500">(importiert)</span>
+                        <span className="ml-2 text-xs text-gray-500">(importiert)</span>
                       )}
                     </p>
                     <p className="text-sm text-gray-400">@{u.username}</p>
@@ -463,7 +463,7 @@ export default function UsersPage() {
                   )}
 
                   {u.is_treasurer && (
-                    <span className="px-3 py-1 rounded-full text-sm bg-amber-600 text-white flex items-center gap-1">
+                    <span className="px-3 py-1 rounded-full text-sm bg-krt-orange text-white flex items-center gap-1">
                       <Wallet size={14} />
                       Kassenwart
                     </span>
@@ -477,7 +477,7 @@ export default function UsersPage() {
                             e.stopPropagation()
                             openAliasEditor(u)
                           }}
-                          className="p-2 text-gray-400 hover:text-blue-400 hover:bg-gray-700 rounded-lg"
+                          className="p-2 text-gray-400 hover:text-gray-400 hover:bg-gray-700 rounded-lg"
                           title="Aliase verwalten"
                         >
                           <Tag size={20} />
@@ -491,7 +491,7 @@ export default function UsersPage() {
                               e.stopPropagation()
                               openEditUserModal(u)
                             }}
-                            className="p-2 text-gray-400 hover:text-blue-400 hover:bg-gray-700 rounded-lg"
+                            className="p-2 text-gray-400 hover:text-gray-400 hover:bg-gray-700 rounded-lg"
                             title="Benutzer bearbeiten"
                           >
                             <Edit3 size={20} />
@@ -517,8 +517,8 @@ export default function UsersPage() {
                             }}
                             className={`p-2 rounded-lg transition-colors ${
                               u.is_treasurer
-                                ? 'text-amber-500 bg-amber-500/20 hover:bg-amber-500/30'
-                                : 'text-gray-400 hover:text-amber-500 hover:bg-gray-700'
+                                ? 'text-krt-orange bg-krt-orange/20 hover:bg-krt-orange/30'
+                                : 'text-gray-400 hover:text-krt-orange hover:bg-gray-700'
                             }`}
                             title={u.is_treasurer ? 'Kassenwart-Status entfernen' : 'Als Kassenwart markieren'}
                           >

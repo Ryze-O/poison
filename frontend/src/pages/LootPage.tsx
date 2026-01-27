@@ -823,7 +823,7 @@ export default function LootPage() {
                         })}
                         {session.is_completed && (
                           <span title="Abgeschlossen">
-                            <CheckCircle size={18} className="text-green-500" />
+                            <CheckCircle size={18} className="text-white" />
                           </span>
                         )}
                       </h3>
@@ -844,7 +844,7 @@ export default function LootPage() {
                         von {session.created_by.display_name || session.created_by.username}
                       </span>
                       <div className="text-sm">
-                        <span className={totalDistributed === totalItems && totalItems > 0 ? 'text-green-500' : 'text-yellow-500'}>
+                        <span className={totalDistributed === totalItems && totalItems > 0 ? 'text-white' : 'text-gray-400'}>
                           {totalDistributed}/{totalItems} Items verteilt
                         </span>
                       </div>
@@ -972,7 +972,7 @@ export default function LootPage() {
                                   )}
                                 </div>
                                 <div className="flex items-center gap-3">
-                                  <span className={`text-sm ${remaining === 0 ? 'text-green-500' : 'text-yellow-500'}`}>
+                                  <span className={`text-sm ${remaining === 0 ? 'text-white' : 'text-gray-400'}`}>
                                     {distributed}/{item.quantity} verteilt
                                   </span>
                                   {canCreate && !session.is_completed && remaining > 0 && (
@@ -1122,7 +1122,7 @@ export default function LootPage() {
                                 data: { is_completed: false }
                               })}
                               disabled={updateSessionMutation.isPending}
-                              className="btn bg-yellow-600 hover:bg-yellow-700 text-sm flex items-center gap-2"
+                              className="btn bg-gray-600 hover:bg-gray-500 text-sm flex items-center gap-2"
                             >
                               <RotateCcw size={14} />
                               Wieder öffnen
@@ -1162,7 +1162,7 @@ export default function LootPage() {
                 <Package size={24} />
                 Loot-Session bearbeiten
                 {editingSession.is_completed && (
-                  <span className="text-sm font-normal text-green-500 flex items-center gap-1">
+                  <span className="text-sm font-normal text-white flex items-center gap-1">
                     <CheckCircle size={16} /> Abgeschlossen
                   </span>
                 )}
@@ -1426,7 +1426,7 @@ export default function LootPage() {
                             )}
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className={`text-sm ${remaining === 0 ? 'text-green-500' : 'text-yellow-500'}`}>
+                            <span className={`text-sm ${remaining === 0 ? 'text-white' : 'text-gray-400'}`}>
                               {distributed}/{item.quantity} verteilt
                             </span>
                             {!editingSession.is_completed && remaining > 0 && (
@@ -1577,7 +1577,7 @@ export default function LootPage() {
                         data: { is_completed: false }
                       })}
                       disabled={updateSessionMutation.isPending}
-                      className="btn bg-yellow-600 hover:bg-yellow-700 flex items-center gap-2"
+                      className="btn bg-gray-600 hover:bg-gray-500 flex items-center gap-2"
                     >
                       <RotateCcw size={16} />
                       Session wieder öffnen
@@ -1753,8 +1753,8 @@ export default function LootPage() {
 
                 if (remaining === 0) {
                   return (
-                    <div key={item.id} className="p-4 bg-green-900/20 rounded-lg border border-green-700">
-                      <div className="flex items-center gap-2 text-green-500">
+                    <div key={item.id} className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                      <div className="flex items-center gap-2 text-white">
                         <CheckCircle size={18} />
                         <span className="font-medium">{item.component.name}</span>
                         <span className="text-sm">- Vollständig verteilt</span>
@@ -1790,10 +1790,10 @@ export default function LootPage() {
                           {recipients.length > 0 ? (
                             <>
                               {perPerson}x an jeden der {recipients.length} Empfänger
-                              {leftover > 0 && <span className="text-yellow-500"> ({leftover} Rest)</span>}
+                              {leftover > 0 && <span className="text-gray-400"> ({leftover} Rest)</span>}
                             </>
                           ) : (
-                            <span className="text-yellow-500">Keine Empfänger ausgewählt</span>
+                            <span className="text-gray-400">Keine Empfänger ausgewählt</span>
                           )}
                         </p>
                       </div>
@@ -1807,7 +1807,7 @@ export default function LootPage() {
                               <label
                                 key={u.id}
                                 className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
-                                  wantsLoot[u.id] ? 'bg-green-900/30 border border-green-700' : 'bg-gray-700/50 border border-gray-600'
+                                  wantsLoot[u.id] ? 'bg-krt-orange/20 border border-krt-orange/50' : 'bg-gray-700/50 border border-gray-600'
                                 }`}
                               >
                                 <input
@@ -1816,11 +1816,11 @@ export default function LootPage() {
                                   onChange={(e) => setWantsLoot({ ...wantsLoot, [u.id]: e.target.checked })}
                                   className="rounded"
                                 />
-                                <span className={wantsLoot[u.id] ? 'text-green-400' : 'text-gray-400'}>
+                                <span className={wantsLoot[u.id] ? 'text-krt-orange' : 'text-gray-400'}>
                                   {u.display_name || u.username}
                                 </span>
                                 {wantsLoot[u.id] && perPerson > 0 && (
-                                  <span className="ml-auto text-green-500 text-sm">→{perPerson}x</span>
+                                  <span className="ml-auto text-white text-sm">→{perPerson}x</span>
                                 )}
                               </label>
                             ))}
@@ -1835,7 +1835,7 @@ export default function LootPage() {
                               <label
                                 key={u.id}
                                 className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
-                                  wantsLoot[u.id] ? 'bg-green-900/30 border border-green-700' : 'bg-gray-700/50 border border-gray-600'
+                                  wantsLoot[u.id] ? 'bg-krt-orange/20 border border-krt-orange/50' : 'bg-gray-700/50 border border-gray-600'
                                 }`}
                               >
                                 <input
@@ -1844,11 +1844,11 @@ export default function LootPage() {
                                   onChange={(e) => setWantsLoot({ ...wantsLoot, [u.id]: e.target.checked })}
                                   className="rounded"
                                 />
-                                <span className={wantsLoot[u.id] ? 'text-green-400' : 'text-gray-400'}>
+                                <span className={wantsLoot[u.id] ? 'text-krt-orange' : 'text-gray-400'}>
                                   {u.display_name || u.username}
                                 </span>
                                 {wantsLoot[u.id] && perPerson > 0 && (
-                                  <span className="ml-auto text-green-500 text-sm">→{perPerson}x</span>
+                                  <span className="ml-auto text-white text-sm">→{perPerson}x</span>
                                 )}
                               </label>
                             ))}
@@ -1863,7 +1863,7 @@ export default function LootPage() {
                               <label
                                 key={u.id}
                                 className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
-                                  wantsLoot[u.id] ? 'bg-green-900/30 border border-green-700' : 'bg-gray-700/50 border border-gray-600'
+                                  wantsLoot[u.id] ? 'bg-krt-orange/20 border border-krt-orange/50' : 'bg-gray-700/50 border border-gray-600'
                                 }`}
                               >
                                 <input
@@ -1872,11 +1872,11 @@ export default function LootPage() {
                                   onChange={(e) => setWantsLoot({ ...wantsLoot, [u.id]: e.target.checked })}
                                   className="rounded"
                                 />
-                                <span className={wantsLoot[u.id] ? 'text-green-400' : 'text-gray-400'}>
+                                <span className={wantsLoot[u.id] ? 'text-krt-orange' : 'text-gray-400'}>
                                   {u.display_name || u.username}
                                 </span>
                                 {wantsLoot[u.id] && perPerson > 0 && (
-                                  <span className="ml-auto text-green-500 text-sm">→{perPerson}x</span>
+                                  <span className="ml-auto text-white text-sm">→{perPerson}x</span>
                                 )}
                               </label>
                             ))}
@@ -1911,9 +1911,9 @@ export default function LootPage() {
                         </div>
                       </div>
 
-                      <div className="bg-yellow-900/20 p-3 rounded mb-3">
+                      <div className="bg-gray-800/50 p-3 rounded border border-gray-700 mb-3">
                         <p className="text-sm">
-                          <span className="text-yellow-500 font-medium">Einzelstück:</span>{' '}
+                          <span className="text-gray-400 font-medium">Einzelstück:</span>{' '}
                           Geht komplett an einen Pioneer zur späteren Verteilung
                         </p>
                       </div>

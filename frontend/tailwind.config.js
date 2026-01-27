@@ -14,6 +14,11 @@ export default {
           'orange-dark': '#C94A1A',
           'orange-light': '#F26522',
         },
+        // Poison Neon-Grün für Branding
+        'poison': {
+          'neon': '#39FF14',
+          'glow': '#32CD32',
+        },
         // Custom Gray Palette - Neutral mit leichtem Cool-Tone für Tech-Look
         // Optimiert für besseren Kontrast auf dunklen Backgrounds
         'gray': {
@@ -69,6 +74,7 @@ export default {
         'inner': 'var(--shadow-inner)',
         'element': 'var(--shadow-element)',
         'glow-orange': 'var(--shadow-glow-orange)',
+        'glow-neon': '0 0 10px rgba(57, 255, 20, 0.5), 0 0 20px rgba(57, 255, 20, 0.3)',
       },
       borderRadius: {
         'xl': '0.875rem',

@@ -90,8 +90,17 @@ export default function Layout() {
                 <p className="text-xs text-krt-orange tracking-widest">DAS KARTELL</p>
               </div>
             </div>
+            {/* POISON Branding */}
+            <div className="mt-3 flex items-center justify-center">
+              <span
+                className="text-[10px] font-mono tracking-[0.3em] text-poison-neon/70"
+                style={{ textShadow: '0 0 8px rgba(57, 255, 20, 0.4)' }}
+              >
+                POISON
+              </span>
+            </div>
             {/* Orange Akzent-Linie */}
-            <div className="mt-4 h-px bg-gradient-to-r from-krt-orange via-krt-orange to-transparent" />
+            <div className="mt-3 h-px bg-gradient-to-r from-krt-orange via-krt-orange to-transparent" />
           </div>
 
           {/* Navigation */}
@@ -194,7 +203,7 @@ export default function Layout() {
                 className={clsx(
                   'w-full flex items-center gap-3 px-4 py-2 mb-4 rounded-lg transition-colors',
                   isInPreviewMode
-                    ? 'bg-purple-600/20 text-purple-400 border border-purple-500 shadow-[0_0_20px_rgba(139,92,246,0.15)]'
+                    ? 'bg-gray-700/50 text-white border border-dashed border-gray-500'
                     : 'text-gray-400 hover:bg-card-hover hover:text-white'
                 )}
                 title={isInPreviewMode ? 'Vorschaumodus beenden' : 'Als Viper ansehen'}
@@ -211,13 +220,13 @@ export default function Layout() {
                   alt={user.username}
                   className={clsx(
                     'w-10 h-10 rounded-full ring-2',
-                    isInPreviewMode ? 'ring-purple-500' : 'ring-default'
+                    isInPreviewMode ? 'ring-gray-500 ring-dashed' : 'ring-default'
                   )}
                 />
               ) : (
                 <div className={clsx(
                   'w-10 h-10 rounded-full bg-card flex items-center justify-center ring-2',
-                  isInPreviewMode ? 'ring-purple-500' : 'ring-default'
+                  isInPreviewMode ? 'ring-gray-500' : 'ring-default'
                 )}>
                   {user?.username?.charAt(0).toUpperCase()}
                 </div>
@@ -228,7 +237,7 @@ export default function Layout() {
                 </p>
                 <p className={clsx(
                   'text-xs capitalize',
-                  isInPreviewMode ? 'text-purple-400' : 'text-krt-orange'
+                  isInPreviewMode ? 'text-gray-400 italic' : 'text-krt-orange'
                 )}>
                   {isInPreviewMode ? `Vorschau: Viper` : user?.role}
                 </p>
@@ -257,12 +266,12 @@ export default function Layout() {
       <main className="flex-1 p-6 lg:p-8 lg:ml-64 overflow-auto relative">
         {/* Vorschaumodus Banner */}
         {isInPreviewMode && (
-          <div className="fixed top-0 left-0 right-0 lg:left-64 z-50 bg-purple-600 text-white py-2 px-4 flex items-center justify-center gap-4">
+          <div className="fixed top-0 left-0 right-0 lg:left-64 z-50 bg-gray-800 border-b border-dashed border-gray-600 text-gray-300 py-2 px-4 flex items-center justify-center gap-4">
             <Eye size={18} />
             <span className="text-sm font-medium">Vorschaumodus aktiv - Du siehst die Seite als Viper (Mitglied)</span>
             <button
               onClick={() => setPreviewRole(null)}
-              className="ml-4 px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-sm transition-colors"
+              className="ml-4 px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors"
             >
               Beenden
             </button>

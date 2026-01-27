@@ -6,9 +6,9 @@ import { ClipboardList, Package, Wallet, Users, Gift, MapPin, CheckCircle, X, Ex
 import type { Treasury, AttendanceSession, InventoryItem, LootSession, SessionType } from '../api/types'
 
 const SESSION_TYPE_CONFIG: Record<SessionType, { label: string; labelPlural: string; color: string; bgColor: string; icon: typeof ClipboardList }> = {
-  staffelabend: { label: 'Staffelabend', labelPlural: 'Staffelabende', color: 'emerald-500', bgColor: 'emerald-500/20', icon: ClipboardList },
-  loot_run: { label: 'Loot-Run', labelPlural: 'Loot-Runs', color: 'amber-500', bgColor: 'amber-500/20', icon: Target },
-  freeplay: { label: 'Freeplay', labelPlural: 'Freeplay-Sessions', color: 'blue-500', bgColor: 'blue-500/20', icon: Gamepad2 },
+  staffelabend: { label: 'Staffelabend', labelPlural: 'Staffelabende', color: 'krt-orange', bgColor: 'krt-orange/20', icon: ClipboardList },
+  loot_run: { label: 'Loot-Run', labelPlural: 'Loot-Runs', color: 'gray-400', bgColor: 'gray-600/20', icon: Target },
+  freeplay: { label: 'Freeplay', labelPlural: 'Freeplay-Sessions', color: 'gray-400', bgColor: 'gray-600/20', icon: Gamepad2 },
 }
 
 export default function DashboardPage() {
@@ -67,7 +67,7 @@ export default function DashboardPage() {
               month: 'short',
             })}
             {session.is_confirmed && (
-              <CheckCircle size={14} className="text-green-500" />
+              <CheckCircle size={14} className="text-gray-400" />
             )}
           </p>
           {session.notes && (
@@ -139,10 +139,10 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="card border-l-4 border-l-emerald-500">
+        <div className="card border-l-4 border-l-gray-500">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-500/20 rounded-lg">
-              <ClipboardList className="text-emerald-500" size={24} />
+            <div className="p-3 bg-gray-600/20 rounded-lg">
+              <ClipboardList className="text-gray-400" size={24} />
             </div>
             <div>
               <p className="text-gray-400 text-sm">Letzte Session</p>
@@ -155,10 +155,10 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="card border-l-4 border-l-amber-500">
+        <div className="card border-l-4 border-l-gray-500">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-amber-500/20 rounded-lg">
-              <Gift className="text-amber-500" size={24} />
+            <div className="p-3 bg-gray-600/20 rounded-lg">
+              <Gift className="text-gray-400" size={24} />
             </div>
             <div>
               <p className="text-gray-400 text-sm">Loot (letzte 5)</p>
@@ -170,10 +170,10 @@ export default function DashboardPage() {
         </div>
 
         {canManage && (
-          <div className="card border-l-4 border-l-purple-500">
+          <div className="card border-l-4 border-l-gray-500">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-purple-500/20 rounded-lg">
-                <Package className="text-purple-400" size={24} />
+              <div className="p-3 bg-gray-600/20 rounded-lg">
+                <Package className="text-gray-400" size={24} />
               </div>
               <div>
                 <p className="text-gray-400 text-sm">Mein Lager</p>
@@ -198,7 +198,7 @@ export default function DashboardPage() {
       {/* Letzte Loot-Sessions (Items) */}
       <div className="card">
         <div className="flex items-center gap-3 mb-4">
-          <Gift className="text-amber-500" size={20} />
+          <Gift className="text-gray-400" size={20} />
           <h2 className="text-xl font-bold">Letzte Loot-Verteilungen</h2>
         </div>
         {lootSessions && lootSessions.length > 0 ? (
@@ -224,7 +224,7 @@ export default function DashboardPage() {
                         month: 'short',
                       })}
                       {session.is_completed && (
-                        <CheckCircle size={14} className="text-green-500" />
+                        <CheckCircle size={14} className="text-gray-400" />
                       )}
                     </p>
                     <div className="flex items-center gap-2 text-sm text-gray-400">
@@ -241,7 +241,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="text-right">
                     <p className={`font-medium flex items-center gap-1 justify-end ${
-                      totalDistributed === totalItems && totalItems > 0 ? 'text-green-500' : 'text-amber-500'
+                      totalDistributed === totalItems && totalItems > 0 ? 'text-white' : 'text-gray-400'
                     }`}>
                       <Package size={14} />
                       {totalDistributed}/{totalItems}
@@ -316,7 +316,7 @@ export default function DashboardPage() {
               {/* Status-Badges */}
               <div className="flex flex-wrap gap-2">
                 {selectedSession.is_confirmed && (
-                  <span className="px-3 py-1 bg-green-600/30 text-green-400 rounded-full text-sm flex items-center gap-1">
+                  <span className="px-3 py-1 bg-gray-600/30 text-gray-300 rounded-full text-sm flex items-center gap-1">
                     <CheckCircle size={14} />
                     Bestätigt
                   </span>

@@ -464,8 +464,8 @@ export default function AttendancePage() {
 
       {/* Pending User Requests (nur für Admins) */}
       {isAdmin && pendingRequests && pendingRequests.length > 0 && (
-        <div className="card mb-8 border-2 border-yellow-600">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-yellow-500">
+        <div className="card mb-8 border-2 border-gray-600">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-400">
             <UserPlus size={24} />
             Offene User-Anträge ({pendingRequests.length})
           </h2>
@@ -582,7 +582,7 @@ export default function AttendancePage() {
                 {/* Zugeordnete Namen */}
                 {scanResult.matched.length > 0 && (
                   <div>
-                    <p className="text-sm text-green-500 mb-2 flex items-center gap-2">
+                    <p className="text-sm text-gray-300 mb-2 flex items-center gap-2">
                       <Check size={16} />
                       Automatisch zugeordnet:
                     </p>
@@ -592,7 +592,7 @@ export default function AttendancePage() {
                         return (
                           <span
                             key={m.user_id}
-                            className="px-3 py-1 bg-green-900/30 border border-green-700 rounded-full text-sm text-green-300"
+                            className="px-3 py-1 bg-gray-800/30 border border-gray-700 rounded-full text-sm text-gray-300"
                           >
                             {matchedUser?.display_name || matchedUser?.username || m.detected_name}
                           </span>
@@ -605,7 +605,7 @@ export default function AttendancePage() {
                 {/* Nicht zugeordnete Namen - Manuelle Zuordnung */}
                 {unmatchedAssignments.length > 0 && (
                   <div>
-                    <p className="text-sm text-yellow-500 mb-3 flex items-center gap-2">
+                    <p className="text-sm text-gray-400 mb-3 flex items-center gap-2">
                       <UserPlus size={16} />
                       Nicht zugeordnet - Bitte manuell zuweisen:
                     </p>
@@ -616,7 +616,7 @@ export default function AttendancePage() {
                           className="flex flex-col gap-2 p-3 bg-gray-800/50 rounded-lg"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="text-yellow-400 font-mono min-w-32">{item.name}</span>
+                            <span className="text-gray-400 font-mono min-w-32">{item.name}</span>
 
                             {!item.createNewUser ? (
                               <>
@@ -789,7 +789,7 @@ export default function AttendancePage() {
                       Staffelabend
                     </span>
                     {session.is_confirmed && (
-                      <span title="Bestätigt"><CheckCircle size={18} className="text-green-500" /></span>
+                      <span title="Bestätigt"><CheckCircle size={18} className="text-gray-300" /></span>
                     )}
                     {session.has_loot_session && (
                       <span title="Hat Loot-Session"><Package size={18} className="text-krt-orange" /></span>
@@ -837,7 +837,7 @@ export default function AttendancePage() {
                       <button
                         onClick={() => reopenMutation.mutate(session.id)}
                         disabled={reopenMutation.isPending}
-                        className="btn bg-amber-600 hover:bg-amber-700 text-sm flex items-center gap-2"
+                        className="btn bg-gray-600 hover:bg-gray-500 text-sm flex items-center gap-2"
                       >
                         <Edit3 size={16} />
                         {reopenMutation.isPending ? 'Wird geöffnet...' : 'Wieder öffnen'}
@@ -883,7 +883,7 @@ export default function AttendancePage() {
                 <Edit3 size={24} />
                 Session bearbeiten
                 {editingSession.is_confirmed && (
-                  <span className="text-sm font-normal text-green-500 flex items-center gap-1">
+                  <span className="text-sm font-normal text-gray-300 flex items-center gap-1">
                     <CheckCircle size={16} /> Bestätigt
                   </span>
                 )}
@@ -892,7 +892,7 @@ export default function AttendancePage() {
                   <button
                     onClick={() => reopenMutation.mutate(editingSession.id)}
                     disabled={reopenMutation.isPending}
-                    className="ml-2 btn bg-amber-600 hover:bg-amber-700 text-sm py-1 px-3"
+                    className="ml-2 btn bg-gray-600 hover:bg-gray-500 text-sm py-1 px-3"
                   >
                     {reopenMutation.isPending ? 'Öffne...' : 'Wieder öffnen'}
                   </button>
@@ -945,7 +945,7 @@ export default function AttendancePage() {
                           }
                         }}
                         disabled={deleteScreenshotMutation.isPending}
-                        className="mt-3 w-full btn bg-green-600 hover:bg-green-700 flex items-center justify-center gap-2"
+                        className="mt-3 w-full btn bg-krt-orange hover:bg-krt-orange-dark flex items-center justify-center gap-2"
                       >
                         <Check size={16} />
                         {deleteScreenshotMutation.isPending ? 'Wird gelöscht...' : 'Alle Teilnehmer übernommen'}
@@ -957,7 +957,7 @@ export default function AttendancePage() {
                 {/* OCR-Daten: Automatisch zugeordnet */}
                 {editOcrData && editOcrData.matched.length > 0 && (
                   <div>
-                    <p className="text-sm text-green-500 mb-2 flex items-center gap-2">
+                    <p className="text-sm text-gray-300 mb-2 flex items-center gap-2">
                       <Check size={16} />
                       OCR automatisch zugeordnet ({editOcrData.matched.length}):
                     </p>
@@ -965,7 +965,7 @@ export default function AttendancePage() {
                       {editOcrData.matched.map((m) => (
                         <span
                           key={m.user_id}
-                          className="px-3 py-1 bg-green-900/30 border border-green-700 rounded-full text-sm text-green-300"
+                          className="px-3 py-1 bg-gray-800/30 border border-gray-700 rounded-full text-sm text-gray-300"
                         >
                           {m.display_name || m.username} ← "{m.detected_name}"
                         </span>
@@ -977,7 +977,7 @@ export default function AttendancePage() {
                 {/* OCR-Daten: Nicht zugeordnet - Interaktiv */}
                 {editOcrData && editOcrData.unmatched.length > 0 && (
                   <div>
-                    <p className="text-sm text-yellow-500 mb-3 flex items-center gap-2">
+                    <p className="text-sm text-gray-400 mb-3 flex items-center gap-2">
                       <UserPlus size={16} />
                       OCR nicht zugeordnet ({editOcrData.unmatched.length}):
                     </p>
@@ -985,7 +985,7 @@ export default function AttendancePage() {
                       {editOcrData.unmatched.map((name) => (
                         <div key={name} className="p-3 bg-gray-800 rounded-lg border border-gray-700">
                           <div className="flex items-center gap-3 mb-2">
-                            <span className="text-yellow-300 font-medium min-w-[100px] text-sm">"{name}"</span>
+                            <span className="text-gray-300 font-medium min-w-[100px] text-sm">"{name}"</span>
                             <select
                               value={ocrAssignments[name]?.userId || ''}
                               onChange={(e) => {
@@ -1019,7 +1019,7 @@ export default function AttendancePage() {
                                     [name]: { userId: null, saveAsAlias: false },
                                   }))
                                 }}
-                                className="p-2 text-purple-400 hover:text-purple-300 hover:bg-purple-900/30 rounded"
+                                className="p-2 text-gray-400 hover:text-gray-300 hover:bg-gray-800/30 rounded"
                                 title="Loot-Gast erstellen"
                               >
                                 <UserPlus size={18} />
@@ -1044,8 +1044,8 @@ export default function AttendancePage() {
                           </label>
                           {/* Inline-Formular für Loot-Gast */}
                           {creatingGuestFor === name && (
-                            <div className="mt-3 p-3 bg-purple-900/20 border border-purple-700 rounded space-y-3">
-                              <p className="text-sm text-purple-300 font-medium">Neuen Loot-Gast erstellen</p>
+                            <div className="mt-3 p-3 bg-gray-800/30 border border-gray-700 rounded space-y-3">
+                              <p className="text-sm text-gray-300 font-medium">Neuen Loot-Gast erstellen</p>
                               <div>
                                 <label className="text-xs text-gray-400">Anzeigename</label>
                                 <input
@@ -1083,7 +1083,7 @@ export default function AttendancePage() {
                                     detected_name: name
                                   })}
                                   disabled={!guestUsername || !guestDisplayName || createUserRequestMutation.isPending}
-                                  className="btn btn-primary text-sm flex-1 !bg-purple-600 hover:!bg-purple-500"
+                                  className="btn btn-primary text-sm flex-1 !bg-gray-600 hover:!bg-gray-500"
                                 >
                                   {createUserRequestMutation.isPending ? 'Erstelle...' : 'Loot-Gast erstellen'}
                                 </button>
@@ -1172,8 +1172,8 @@ export default function AttendancePage() {
             <div className="mt-6 pt-4 border-t border-gray-700">
               {/* Bestätigungs-Hinweis */}
               {!editingSession.is_confirmed && editingSession.records.length > 0 && (
-                <div className="p-3 bg-blue-900/20 border border-blue-700 rounded-lg mb-4">
-                  <p className="text-blue-400 text-sm">
+                <div className="p-3 bg-gray-800/30 border border-gray-700 rounded-lg mb-4">
+                  <p className="text-gray-400 text-sm">
                     <strong>Tipp:</strong> Sobald alle Teilnehmer erfasst sind, kannst du die Session bestätigen.
                   </p>
                 </div>

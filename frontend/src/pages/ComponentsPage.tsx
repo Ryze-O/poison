@@ -150,8 +150,8 @@ export default function ComponentsPage() {
 
       {/* Sync Status Meldung */}
       {syncUEXMutation.isSuccess && (
-        <div className="card mb-6 bg-green-900/30 border-green-600/50">
-          <p className="text-green-400">
+        <div className="card mb-6 bg-gray-800/30 border-gray-600/50">
+          <p className="text-gray-300">
             UEX Sync erfolgreich! {(syncUEXMutation.data as { data: UEXSyncStats })?.data?.items_matched || 0} Items aktualisiert.
           </p>
         </div>
@@ -349,10 +349,10 @@ export default function ComponentsPage() {
                                   {componentPrices.map((price) => (
                                     <tr key={price.id} className="border-b border-gray-800 last:border-0">
                                       <td className="py-2 pr-4">{price.terminal_name}</td>
-                                      <td className="py-2 pr-4 text-right text-green-400">
+                                      <td className="py-2 pr-4 text-right text-gray-300">
                                         {formatPrice(price.price_buy)}
                                       </td>
-                                      <td className="py-2 text-right text-yellow-400">
+                                      <td className="py-2 text-right text-gray-400">
                                         {formatPrice(price.price_sell)}
                                       </td>
                                     </tr>

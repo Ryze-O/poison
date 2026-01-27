@@ -288,7 +288,7 @@ export default function AdminPage() {
 
             <div className="bg-gray-800/50 rounded-lg p-4">
               <div className="flex items-center gap-3 mb-2">
-                <Database className="text-purple-500" size={20} />
+                <Database className="text-gray-400" size={20} />
                 <span className="text-gray-400">SC Version</span>
               </div>
               <p className="text-2xl font-bold">{stats.sc_version || '-'}</p>
@@ -461,19 +461,19 @@ export default function AdminPage() {
                 <p className="text-gray-500">Benutzer</p>
               </div>
               <div className="bg-gray-800/50 rounded p-2 text-center">
-                <p className="text-lg font-bold text-emerald-400">{dbStats.inventory_items}</p>
+                <p className="text-lg font-bold text-gray-200">{dbStats.inventory_items}</p>
                 <p className="text-gray-500">Inventar</p>
               </div>
               <div className="bg-gray-800/50 rounded p-2 text-center">
-                <p className="text-lg font-bold text-yellow-400">{dbStats.treasury_transactions}</p>
+                <p className="text-lg font-bold text-gray-200">{dbStats.treasury_transactions}</p>
                 <p className="text-gray-500">Transaktionen</p>
               </div>
               <div className="bg-gray-800/50 rounded p-2 text-center">
-                <p className="text-lg font-bold text-blue-400">{dbStats.attendance_sessions}</p>
+                <p className="text-lg font-bold text-gray-200">{dbStats.attendance_sessions}</p>
                 <p className="text-gray-500">Staffelabende</p>
               </div>
               <div className="bg-gray-800/50 rounded p-2 text-center">
-                <p className="text-lg font-bold text-purple-400">{dbStats.loot_sessions}</p>
+                <p className="text-lg font-bold text-gray-200">{dbStats.loot_sessions}</p>
                 <p className="text-gray-500">Loot-Sessions</p>
               </div>
               <div className="bg-gray-800/50 rounded p-2 text-center">
@@ -790,9 +790,9 @@ export default function AdminPage() {
                     <div className="flex items-center gap-3">
                       <span className="font-medium">{token.name}</span>
                       <span className={`px-2 py-0.5 rounded text-xs ${
-                        token.role === 'admin' ? 'bg-red-900/50 text-red-400' :
-                        token.role === 'treasurer' ? 'bg-yellow-900/50 text-yellow-400' :
-                        token.role === 'officer' ? 'bg-blue-900/50 text-blue-400' :
+                        token.role === 'admin' ? 'bg-krt-orange/30 text-krt-orange' :
+                        token.role === 'treasurer' ? 'bg-krt-orange/20 text-krt-orange/80' :
+                        token.role === 'officer' ? 'bg-krt-orange/20 text-krt-orange/80' :
                         'bg-gray-700 text-gray-400'
                       }`}>
                         {token.role}

@@ -29,11 +29,11 @@ const actionLabels: Record<InventoryAction, string> = {
 }
 
 const actionColors: Record<InventoryAction, string> = {
-  add: 'text-sc-green',
-  remove: 'text-sc-red',
-  loot: 'text-sc-gold',
+  add: 'text-white',
+  remove: 'text-gray-500',
+  loot: 'text-krt-orange',
   transfer_in: 'text-krt-orange',
-  transfer_out: 'text-purple-400',
+  transfer_out: 'text-gray-400',
 }
 
 export default function InventoryPage() {
@@ -410,7 +410,7 @@ export default function InventoryPage() {
                   }
                   setPatchModal(true)
                 }}
-                className="btn bg-amber-600 hover:bg-amber-500 flex items-center gap-2"
+                className="btn bg-gray-600 hover:bg-gray-500 flex items-center gap-2"
                 title="Nach einem Patch: Items abgleichen und neue Homelocation setzen"
               >
                 <Package size={20} />
@@ -533,7 +533,7 @@ export default function InventoryPage() {
                       .map((request) => (
                         <div
                           key={request.id}
-                          className="flex items-center justify-between p-3 bg-amber-900/20 border border-amber-600/30 rounded-lg"
+                          className="flex items-center justify-between p-3 bg-gray-800/50 border border-gray-600/30 rounded-lg"
                         >
                           <div>
                             <p className="font-medium">
@@ -544,7 +544,7 @@ export default function InventoryPage() {
                               {request.owner.id !== user?.id && (
                                 <>
                                   {' '}von{' '}
-                                  <span className="text-purple-400">{request.owner.display_name || request.owner.username}</span>
+                                  <span className="text-gray-300">{request.owner.display_name || request.owner.username}</span>
                                 </>
                               )}
                             </p>
@@ -567,7 +567,7 @@ export default function InventoryPage() {
                             <button
                               onClick={() => approveRequestMutation.mutate(request.id)}
                               disabled={approveRequestMutation.isPending}
-                              className="p-2 bg-green-600/20 text-green-400 rounded hover:bg-green-600/30"
+                              className="p-2 bg-krt-orange/20 text-krt-orange rounded hover:bg-krt-orange/30"
                               title="Bestätigen"
                             >
                               <Check size={18} />
@@ -582,7 +582,7 @@ export default function InventoryPage() {
               {/* Erhalt bestätigen (als Empfänger) - WICHTIG! */}
               {transferRequests.filter(r => r.requester.id === user?.id && r.status === 'awaiting_receipt').length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium text-green-400 mb-2 border-b border-green-700/50 pb-1">
+                  <h3 className="text-sm font-medium text-gray-300 mb-2 border-b border-gray-700/50 pb-1">
                     ✓ Erhalt bestätigen
                   </h3>
                   <div className="space-y-2">
@@ -591,7 +591,7 @@ export default function InventoryPage() {
                       .map((request) => (
                         <div
                           key={request.id}
-                          className="flex items-center justify-between p-3 bg-green-900/20 border border-green-600/30 rounded-lg"
+                          className="flex items-center justify-between p-3 bg-gray-800/30 border border-gray-600/30 rounded-lg"
                         >
                           <div>
                             <p className="font-medium">
@@ -599,7 +599,7 @@ export default function InventoryPage() {
                               {' '}von{' '}
                               <span className="text-krt-orange">{request.owner.display_name || request.owner.username}</span>
                             </p>
-                            <p className="text-xs text-green-400 mt-1">
+                            <p className="text-xs text-gray-300 mt-1">
                               Besitzer hat freigegeben - bitte Erhalt bestätigen
                             </p>
                           </div>
@@ -619,7 +619,7 @@ export default function InventoryPage() {
               {/* Admin: Erhalt für inaktive User bestätigen */}
               {isAdmin && transferRequests.filter(r => r.requester.id !== user?.id && r.status === 'awaiting_receipt').length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium text-purple-400 mb-2 border-b border-purple-700/50 pb-1">
+                  <h3 className="text-sm font-medium text-gray-300 mb-2 border-b border-gray-700/50 pb-1">
                     Admin: Erhalt für andere bestätigen
                   </h3>
                   <div className="space-y-2">
@@ -628,13 +628,13 @@ export default function InventoryPage() {
                       .map((request) => (
                         <div
                           key={request.id}
-                          className="flex items-center justify-between p-3 bg-purple-900/20 border border-purple-600/30 rounded-lg"
+                          className="flex items-center justify-between p-3 bg-gray-800/30 border border-gray-600/30 rounded-lg"
                         >
                           <div>
                             <p className="font-medium">
                               <span className="text-white">{request.quantity}x {request.component.name}</span>
                               {' '}→{' '}
-                              <span className="text-purple-400">{request.requester.display_name || request.requester.username}</span>
+                              <span className="text-gray-300">{request.requester.display_name || request.requester.username}</span>
                             </p>
                             <p className="text-xs text-gray-400 mt-1">
                               Von: {request.owner.display_name || request.owner.username}
@@ -643,7 +643,7 @@ export default function InventoryPage() {
                           <button
                             onClick={() => confirmReceiptMutation.mutate(request.id)}
                             disabled={confirmReceiptMutation.isPending}
-                            className="btn bg-purple-600 hover:bg-purple-500 text-sm py-1.5 px-3"
+                            className="btn bg-krt-orange hover:bg-krt-orange-dark text-sm py-1.5 px-3"
                           >
                             {confirmReceiptMutation.isPending ? '...' : 'Als Admin bestätigen'}
                           </button>
@@ -665,7 +665,7 @@ export default function InventoryPage() {
                       .map((request) => (
                         <div
                           key={request.id}
-                          className="flex items-center justify-between p-3 bg-blue-900/20 border border-blue-600/30 rounded-lg"
+                          className="flex items-center justify-between p-3 bg-gray-800/30 border border-gray-600/30 rounded-lg"
                         >
                           <div>
                             <p className="font-medium">
@@ -680,7 +680,7 @@ export default function InventoryPage() {
                               {new Date(request.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </p>
                           </div>
-                          <span className="text-xs bg-blue-600/30 text-blue-300 px-2 py-1 rounded">
+                          <span className="text-xs bg-gray-600/30 text-gray-300 px-2 py-1 rounded">
                             Wartet auf Besitzer
                           </span>
                         </div>
@@ -703,7 +703,7 @@ export default function InventoryPage() {
                         <div
                           key={request.id}
                           className={`flex items-center justify-between p-3 rounded-lg ${
-                            request.status === 'completed' ? 'bg-green-900/10 border border-green-600/20' : 'bg-red-900/10 border border-red-600/20'
+                            request.status === 'completed' ? 'bg-gray-800/30 border border-gray-600/30' : 'bg-red-900/10 border border-red-600/20'
                           }`}
                         >
                           <div>
@@ -718,7 +718,7 @@ export default function InventoryPage() {
                             </p>
                           </div>
                           <span className={`text-xs px-2 py-1 rounded ${
-                            request.status === 'completed' ? 'bg-green-600/30 text-green-300' : 'bg-red-600/30 text-red-300'
+                            request.status === 'completed' ? 'bg-gray-600/30 text-gray-200' : 'bg-red-600/30 text-red-300'
                           }`}>
                             {request.status === 'completed' ? 'Abgeschlossen' : 'Abgelehnt'}
                           </span>
@@ -983,7 +983,7 @@ export default function InventoryPage() {
                           <span className="text-xs text-gray-500 ml-1">(Du)</span>
                         )}
                         {officer.is_pioneer && (
-                          <span className="text-xs bg-purple-600/30 text-purple-300 px-1.5 py-0.5 rounded ml-2">Pioneer</span>
+                          <span className="text-xs bg-gray-600/30 text-gray-300 px-1.5 py-0.5 rounded ml-2">Pioneer</span>
                         )}
                       </span>
                     </div>
@@ -1107,7 +1107,7 @@ export default function InventoryPage() {
                                                   })
                                                   setRequestAmount(1)
                                                 }}
-                                                className="p-1 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/30"
+                                                className="p-1 bg-gray-600/20 text-gray-400 rounded hover:bg-gray-600/30"
                                                 title="Anfragen"
                                               >
                                                 <Send size={12} />
@@ -1268,7 +1268,7 @@ export default function InventoryPage() {
                       }
                     }}
                     disabled={transferMutation.isPending}
-                    className="btn bg-green-600 hover:bg-green-700 flex-1"
+                    className="btn bg-krt-orange hover:bg-krt-orange-dark flex-1"
                   >
                     {transferMutation.isPending ? 'Wird transferiert...' : 'Bestätigen'}
                   </button>
@@ -1380,7 +1380,7 @@ export default function InventoryPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="card max-w-md w-full mx-4">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Send size={24} className="text-blue-400" />
+              <Send size={24} className="text-gray-400" />
               Item anfragen
             </h2>
 
@@ -1453,7 +1453,7 @@ export default function InventoryPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="card max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
             <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
-              <Package size={24} className="text-amber-500" />
+              <Package size={24} className="text-gray-400" />
               Patch-Reset
             </h2>
             <p className="text-gray-400 mb-4">
@@ -1547,7 +1547,7 @@ export default function InventoryPage() {
                             <label
                               key={item.id}
                               className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-800/30 transition-colors ${
-                                patchKeptItems.has(item.id) ? 'bg-green-900/20' : 'bg-red-900/10'
+                                patchKeptItems.has(item.id) ? 'bg-gray-800/30' : 'bg-red-900/10'
                               }`}
                             >
                               <input
@@ -1592,7 +1592,7 @@ export default function InventoryPage() {
               {/* Zusammenfassung */}
               <div className="p-3 bg-gray-800/50 rounded-lg">
                 <div className="flex justify-between text-sm">
-                  <span className="text-green-400">
+                  <span className="text-gray-300">
                     Behalten: {patchKeptItems.size} Items ({myInventory?.filter(i => patchKeptItems.has(i.id)).reduce((s, i) => s + i.quantity, 0) || 0} Stück)
                   </span>
                   <span className="text-red-400">
@@ -1623,7 +1623,7 @@ export default function InventoryPage() {
                     }
                   }}
                   disabled={!patchNewLocation || patchResetMutation.isPending}
-                  className="btn bg-amber-600 hover:bg-amber-500 flex-1"
+                  className="btn bg-gray-600 hover:bg-gray-500 flex-1"
                 >
                   {patchResetMutation.isPending ? 'Wird verarbeitet...' : 'Patch-Reset durchführen'}
                 </button>

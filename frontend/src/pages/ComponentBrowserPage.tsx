@@ -23,21 +23,21 @@ const formatPrice = (price: number | null): string => {
 }
 
 
-// Class-Farben
+// Class-Farben (minimalistisch mit Grautönen)
 const classColors: Record<string, string> = {
-  Military: 'text-red-400 bg-red-900/30 border-red-700',
-  Industrial: 'text-yellow-400 bg-yellow-900/30 border-yellow-700',
-  Civilian: 'text-blue-400 bg-blue-900/30 border-blue-700',
-  Stealth: 'text-purple-400 bg-purple-900/30 border-purple-700',
-  Competition: 'text-green-400 bg-green-900/30 border-green-700',
+  Military: 'text-krt-orange bg-krt-orange/10 border-krt-orange/30',
+  Industrial: 'text-gray-300 bg-gray-800/50 border-gray-600',
+  Civilian: 'text-gray-400 bg-gray-800/30 border-gray-700',
+  Stealth: 'text-gray-300 bg-gray-800/50 border-gray-600',
+  Competition: 'text-white bg-gray-700/50 border-gray-500',
 }
 
-// Grade-Farben
+// Grade-Farben (minimalistisch)
 const gradeColors: Record<string, string> = {
-  A: 'text-green-400',
-  B: 'text-blue-400',
-  C: 'text-yellow-400',
-  D: 'text-red-400',
+  A: 'text-white',
+  B: 'text-gray-300',
+  C: 'text-gray-400',
+  D: 'text-gray-500',
 }
 
 export default function ComponentBrowserPage() {
@@ -152,8 +152,8 @@ export default function ComponentBrowserPage() {
 
       {/* Sync Status Meldung */}
       {syncUEXMutation.isSuccess && (
-        <div className="card mb-6 bg-green-900/30 border-green-600/50">
-          <p className="text-green-400">
+        <div className="card mb-6 bg-gray-800/30 border-gray-600/50">
+          <p className="text-gray-300">
             UEX Sync erfolgreich!
           </p>
         </div>
@@ -360,7 +360,7 @@ export default function ComponentBrowserPage() {
               {/* Power Stats */}
               {componentDetail.power && (
                 <div className="mb-4">
-                  <h4 className="text-sm font-bold text-yellow-400 mb-2 flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-gray-400 mb-2 flex items-center gap-2">
                     <Zap size={16} />
                     Power Stats
                   </h4>
@@ -408,7 +408,7 @@ export default function ComponentBrowserPage() {
               {/* Quantum Drive Stats */}
               {componentDetail.quantum_drive && (
                 <div className="mb-4">
-                  <h4 className="text-sm font-bold text-purple-400 mb-2 flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-gray-400 mb-2 flex items-center gap-2">
                     <Rocket size={16} />
                     Quantum Drive Stats
                   </h4>
@@ -454,7 +454,7 @@ export default function ComponentBrowserPage() {
                         {componentPrices.map((price) => (
                           <tr key={price.id} className="border-b border-gray-800 last:border-0">
                             <td className="py-1.5 pr-2 text-gray-300">{price.terminal_name}</td>
-                            <td className="py-1.5 text-right text-green-400">
+                            <td className="py-1.5 text-right text-gray-300">
                               {formatPrice(price.price_buy)}
                             </td>
                           </tr>
