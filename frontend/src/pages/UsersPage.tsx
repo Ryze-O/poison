@@ -484,18 +484,9 @@ export default function UsersPage() {
                         </button>
                       )}
 
-                      {isAdmin && u.id !== currentUser?.id && (
+                      {/* Pioneer/Kassenwart Toggle - auch für sich selbst */}
+                      {isAdmin && (
                         <>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              openEditUserModal(u)
-                            }}
-                            className="p-2 text-gray-400 hover:text-gray-400 hover:bg-gray-700 rounded-lg"
-                            title="Benutzer bearbeiten"
-                          >
-                            <Edit3 size={20} />
-                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -523,6 +514,22 @@ export default function UsersPage() {
                             title={u.is_treasurer ? 'Kassenwart-Status entfernen' : 'Als Kassenwart markieren'}
                           >
                             <Wallet size={20} />
+                          </button>
+                        </>
+                      )}
+
+                      {/* Andere Admin-Aktionen - nicht für sich selbst */}
+                      {isAdmin && u.id !== currentUser?.id && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEditUserModal(u)
+                            }}
+                            className="p-2 text-gray-400 hover:text-gray-400 hover:bg-gray-700 rounded-lg"
+                            title="Benutzer bearbeiten"
+                          >
+                            <Edit3 size={20} />
                           </button>
                           <button
                             onClick={(e) => {
