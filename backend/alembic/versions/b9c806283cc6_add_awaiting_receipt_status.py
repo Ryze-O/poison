@@ -24,9 +24,14 @@ def upgrade() -> None:
     # Für SQLite: Enum-Werte werden als String gespeichert, daher kein Schema-Update nötig
     # Die neuen Werte 'awaiting_receipt' und 'completed' werden automatisch unterstützt
 
-    # Neue Spalte für confirmed_by_id hinzufügen (ohne Foreign Key für SQLite)
-    # SQLite unterstützt kein ADD CONSTRAINT, aber die Spalte funktioniert trotzdem
-    op.add_column('transfer_requests', sa.Column('confirmed_by_id', sa.Integer(), nullable=True))
+    # Prüfen ob Spalte bereits existiert (falls vorherige Migration teilweise lief)
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [col['name'] for col in inspector.get_columns('transfer_requests')]
+
+    if 'confirmed_by_id' not in columns:
+        # Neue Spalte für confirmed_by_id hinzufügen (ohne Foreign Key für SQLite)
+        op.add_column('transfer_requests', sa.Column('confirmed_by_id', sa.Integer(), nullable=True))
 
 
 def downgrade() -> None:
