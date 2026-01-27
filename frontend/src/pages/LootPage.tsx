@@ -90,7 +90,7 @@ export default function LootPage() {
   const { data: locations } = useQuery<Location[]>({
     queryKey: ['locations'],
     queryFn: () => apiClient.get('/api/locations').then((r) => r.data),
-    enabled: editingSession !== null || isCreating,
+    enabled: editingSession !== null || isCreating || expandedSession !== null,
   })
 
   const { data: components } = useQuery<Component[]>({
@@ -118,7 +118,7 @@ export default function LootPage() {
   const { data: allUsers } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: () => apiClient.get('/api/users').then((r) => r.data),
-    enabled: distributingItem !== null || showDistributionDialog || isCreating,
+    enabled: distributingItem !== null || showDistributionDialog || isCreating || expandedSession !== null,
   })
 
   // OCR-Scan Mutation
@@ -159,11 +159,16 @@ export default function LootPage() {
     return () => document.removeEventListener('paste', handlePaste)
   }, [handlePaste])
 
+  // Aktuell aufgeklappte Session finden
+  const currentExpandedSession = sessions?.find(s => s.id === expandedSession) || null
+
   // Attendance-Session laden (falls Loot-Session mit Attendance verknüpft)
+  // Funktioniert für Modal UND Inline-Editing
+  const activeSession = editingSession || currentExpandedSession
   const { data: attendanceSession } = useQuery<AttendanceSession>({
-    queryKey: ['attendance', editingSession?.attendance_session_id],
-    queryFn: () => apiClient.get(`/api/attendance/${editingSession?.attendance_session_id}`).then((r) => r.data),
-    enabled: !!editingSession?.attendance_session_id && (distributingItem !== null || showDistributionDialog),
+    queryKey: ['attendance', activeSession?.attendance_session_id],
+    queryFn: () => apiClient.get(`/api/attendance/${activeSession?.attendance_session_id}`).then((r) => r.data),
+    enabled: !!activeSession?.attendance_session_id && (distributingItem !== null || showDistributionDialog || expandedSession !== null),
   })
 
   // Anwesende User-IDs extrahieren
@@ -841,21 +846,113 @@ export default function LootPage() {
                         </span>
                       </div>
                     </div>
-                    {canCreate && (
+                    {canCreate && session.is_completed && (
                       <button
                         onClick={() => openEditModal(session)}
                         className="btn bg-gray-700 hover:bg-gray-600 text-sm flex items-center gap-2"
                       >
                         <Edit3 size={16} />
-                        {session.is_completed ? 'Ansehen' : 'Bearbeiten'}
+                        Details
                       </button>
                     )}
                   </div>
                 </div>
 
-                {/* Expanded Content */}
+                {/* Expanded Content - Inline Editing */}
                 {expandedSession === session.id && (
                   <div className="mt-4 pt-4 border-t border-gray-700">
+                    {/* Session Details (editierbar wenn canCreate und nicht abgeschlossen) */}
+                    {canCreate && !session.is_completed && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-800/30 rounded-lg">
+                        <div>
+                          <label className="label flex items-center gap-1 text-xs">
+                            <Calendar size={12} />
+                            Datum
+                          </label>
+                          <input
+                            type="date"
+                            value={session.date ? session.date.split('T')[0] : ''}
+                            onChange={(e) => updateSessionMutation.mutate({
+                              sessionId: session.id,
+                              data: { date: e.target.value ? new Date(e.target.value).toISOString() : undefined }
+                            })}
+                            className="input text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="label flex items-center gap-1 text-xs">
+                            <MapPin size={12} />
+                            Lootort
+                          </label>
+                          <div className="flex gap-2">
+                            <select
+                              value={session.location?.id || ''}
+                              onChange={(e) => updateSessionMutation.mutate({
+                                sessionId: session.id,
+                                data: { location_id: e.target.value ? parseInt(e.target.value) : 0 }
+                              })}
+                              className="input flex-1 text-sm"
+                            >
+                              <option value="">-- Kein Lootort --</option>
+                              {locations?.map((loc) => (
+                                <option key={loc.id} value={loc.id}>
+                                  {loc.name} {loc.system_name && `(${loc.system_name})`}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                openEditModal(session)
+                                setShowNewLocationForm(true)
+                              }}
+                              className="btn bg-gray-700 hover:bg-gray-600 p-2"
+                              title="Neuen Lootort hinzufügen"
+                            >
+                              <PlusCircle size={16} />
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="label text-xs">Notizen</label>
+                          <input
+                            type="text"
+                            defaultValue={session.notes || ''}
+                            onBlur={(e) => {
+                              if (e.target.value !== (session.notes || '')) {
+                                updateSessionMutation.mutate({
+                                  sessionId: session.id,
+                                  data: { notes: e.target.value }
+                                })
+                              }
+                            }}
+                            placeholder="z.B. Mining-Run..."
+                            className="input text-sm"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Loot Items Überschrift mit Add-Button */}
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-medium text-gray-400">
+                        Loot-Items ({session.items.length})
+                      </h4>
+                      {canCreate && !session.is_completed && !addingItem && (
+                        <button
+                          onClick={() => {
+                            openEditModal(session)
+                            setAddingItem(true)
+                          }}
+                          className="btn bg-gray-700 hover:bg-gray-600 text-xs flex items-center gap-1 py-1.5"
+                        >
+                          <Plus size={14} />
+                          Item hinzufügen
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Items Liste mit Inline-Actions */}
                     {session.items.length > 0 ? (
                       <div className="space-y-3">
                         {session.items.map((item) => {
@@ -865,16 +962,114 @@ export default function LootPage() {
                           return (
                             <div key={item.id} className="p-4 bg-gray-800/50 rounded-lg">
                               <div className="flex items-center justify-between mb-2">
-                                <p className="font-medium">{item.component.name}</p>
-                                <span className="text-sm">
-                                  {distributed}/{item.quantity} verteilt
-                                  {remaining > 0 && (
-                                    <span className="text-yellow-500 ml-2">({remaining} übrig)</span>
+                                <div>
+                                  <p className="font-medium">{item.component.name}</p>
+                                  {item.component.category && (
+                                    <p className="text-xs text-gray-500">{item.component.category}</p>
                                   )}
-                                </span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className={`text-sm ${remaining === 0 ? 'text-green-500' : 'text-yellow-500'}`}>
+                                    {distributed}/{item.quantity} verteilt
+                                  </span>
+                                  {canCreate && !session.is_completed && remaining > 0 && (
+                                    <button
+                                      onClick={() => {
+                                        setDistributingItem(item)
+                                        setDistributeQuantity(1)
+                                        setDistributeUserId(null)
+                                      }}
+                                      className="btn bg-krt-orange hover:bg-krt-orange/80 text-xs py-1 px-2 flex items-center gap-1"
+                                    >
+                                      <Users size={12} />
+                                      Verteilen
+                                    </button>
+                                  )}
+                                  {canCreate && !session.is_completed && item.distributions.length === 0 && (
+                                    <button
+                                      onClick={() => deleteItemMutation.mutate({
+                                        sessionId: session.id,
+                                        itemId: item.id
+                                      })}
+                                      disabled={deleteItemMutation.isPending}
+                                      className="text-red-400 hover:text-red-300 p-1"
+                                      title="Entfernen"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
+
+                              {/* Inline Verteilungs-Dialog */}
+                              {distributingItem?.id === item.id && (
+                                <div className="mt-3 p-3 bg-gray-900 rounded border border-krt-orange">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <select
+                                      value={distributeUserId || ''}
+                                      onChange={(e) => setDistributeUserId(e.target.value ? parseInt(e.target.value) : null)}
+                                      className="input flex-1 text-sm"
+                                    >
+                                      <option value="">-- User wählen --</option>
+                                      {sortedUsers.attendees.length > 0 && (
+                                        <optgroup label="Anwesend">
+                                          {sortedUsers.attendees.map((u) => (
+                                            <option key={u.id} value={u.id}>
+                                              {u.display_name || u.username}
+                                            </option>
+                                          ))}
+                                        </optgroup>
+                                      )}
+                                      {sortedUsers.nonAttendees.length > 0 && (
+                                        <optgroup label={sortedUsers.attendees.length > 0 ? "Nicht anwesend" : "Alle User"}>
+                                          {sortedUsers.nonAttendees.map((u) => (
+                                            <option key={u.id} value={u.id}>
+                                              {u.display_name || u.username}
+                                            </option>
+                                          ))}
+                                        </optgroup>
+                                      )}
+                                    </select>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      max={remaining}
+                                      value={distributeQuantity}
+                                      onChange={(e) => setDistributeQuantity(Math.min(parseInt(e.target.value) || 1, remaining))}
+                                      className="input w-16 text-sm"
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        if (distributeUserId) {
+                                          distributeMutation.mutate({
+                                            sessionId: session.id,
+                                            itemId: item.id,
+                                            userId: distributeUserId,
+                                            quantity: distributeQuantity,
+                                          })
+                                        }
+                                      }}
+                                      disabled={!distributeUserId || distributeMutation.isPending}
+                                      className="btn btn-primary py-1.5 px-2"
+                                    >
+                                      <Check size={14} />
+                                    </button>
+                                    <button
+                                      onClick={() => setDistributingItem(null)}
+                                      className="text-gray-400 hover:text-white"
+                                    >
+                                      <X size={16} />
+                                    </button>
+                                  </div>
+                                  <p className="text-xs text-gray-500">
+                                    {remaining} von {item.quantity} verfügbar
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Bestehende Verteilungen */}
                               {item.distributions.length > 0 && (
-                                <div className="flex flex-wrap gap-2">
+                                <div className="flex flex-wrap gap-2 mt-2">
                                   {item.distributions.map((dist) => (
                                     <span key={dist.id} className="px-2 py-1 bg-gray-700 rounded text-sm">
                                       {dist.user.display_name || dist.user.username}: {dist.quantity}x
@@ -887,7 +1082,51 @@ export default function LootPage() {
                         })}
                       </div>
                     ) : (
-                      <p className="text-gray-400">Keine Loot-Items erfasst.</p>
+                      <p className="text-gray-500 text-center py-4">
+                        Keine Items - {canCreate && !session.is_completed ? 'füge welche hinzu!' : 'keine Loot-Items erfasst.'}
+                      </p>
+                    )}
+
+                    {/* Action Buttons */}
+                    {canCreate && (
+                      <div className="mt-4 pt-4 border-t border-gray-700 flex justify-between">
+                        <div>
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleDeleteSession(session.id)}
+                              disabled={deleteSessionMutation.isPending}
+                              className="btn bg-red-600/50 hover:bg-red-600 text-sm flex items-center gap-2"
+                            >
+                              <Trash2 size={14} />
+                              Löschen
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          {session.is_completed ? (
+                            <button
+                              onClick={() => updateSessionMutation.mutate({
+                                sessionId: session.id,
+                                data: { is_completed: false }
+                              })}
+                              disabled={updateSessionMutation.isPending}
+                              className="btn bg-yellow-600 hover:bg-yellow-700 text-sm flex items-center gap-2"
+                            >
+                              <RotateCcw size={14} />
+                              Wieder öffnen
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => openEditModal(session)}
+                              disabled={updateSessionMutation.isPending || session.items.length === 0}
+                              className="btn btn-primary text-sm flex items-center gap-2"
+                            >
+                              <CheckCircle size={14} />
+                              Abschließen...
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
