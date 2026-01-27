@@ -533,14 +533,15 @@ export default function ComponentBrowserPage() {
                 </div>
               ) : null}
 
-              {/* UEX Preise / Wo kaufbar */}
+              {/* Wo kaufbar / Verfügbarkeit (UEX ist die einzige Quelle) */}
               <div className="mb-4">
                 <h4 className="text-sm font-bold text-krt-orange mb-2 flex items-center gap-2">
                   <MapPin size={16} />
                   Wo kaufbar?
                 </h4>
+
                 {isPricesLoading ? (
-                  <p className="text-sm text-gray-400">Lade Preisdaten...</p>
+                  <p className="text-sm text-gray-400">Lade Shop-Daten...</p>
                 ) : componentPrices && componentPrices.length > 0 ? (
                   <div className="max-h-48 overflow-y-auto">
                     <table className="w-full text-sm">
@@ -553,7 +554,7 @@ export default function ComponentBrowserPage() {
                       <tbody>
                         {componentPrices.map((price) => (
                           <tr key={price.id} className="border-b border-gray-800 last:border-0">
-                            <td className="py-1.5 pr-2 text-gray-300">{price.terminal_name}</td>
+                            <td className="py-1.5 pr-2 text-green-400">{price.terminal_name}</td>
                             <td className="py-1.5 text-right text-gray-300">
                               {formatPrice(price.price_buy)}
                             </td>
@@ -562,14 +563,31 @@ export default function ComponentBrowserPage() {
                       </tbody>
                     </table>
                   </div>
+                ) : uexStats && uexStats.status === 'completed' ? (
+                  /* UEX Sync wurde gemacht, aber keine Preise für dieses Item */
+                  <div className="p-2 bg-red-900/20 border border-red-700/30 rounded">
+                    <p className="text-sm text-red-400 font-medium">
+                      Nicht kaufbar
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Nur durch Loot, Bergbau oder als Schiffs-Standardausrüstung erhältlich
+                    </p>
+                  </div>
                 ) : (
-                  <p className="text-sm text-gray-500">
-                    Keine Preisdaten verfügbar.
-                    {isAdmin && ' Führe einen UEX Sync durch.'}
-                  </p>
+                  /* Kein UEX Sync gemacht */
+                  <div className="p-2 bg-yellow-900/20 border border-yellow-700/30 rounded">
+                    <p className="text-sm text-yellow-400">
+                      Keine Preisdaten vorhanden
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Führe einen UEX Sync im Admin-Bereich durch um Preisdaten zu laden
+                    </p>
+                  </div>
                 )}
+
                 <p className="text-xs text-gray-600 mt-2">
-                  Daten von <a href="https://uexcorp.space" target="_blank" rel="noopener noreferrer" className="text-krt-orange hover:underline">UEX</a>
+                  Stats: <a href="https://api.star-citizen.wiki" target="_blank" rel="noopener noreferrer" className="text-krt-orange hover:underline">SC Wiki</a>
+                  {' · '}Preise: <a href="https://uexcorp.space" target="_blank" rel="noopener noreferrer" className="text-krt-orange hover:underline">UEX</a>
                 </p>
               </div>
 

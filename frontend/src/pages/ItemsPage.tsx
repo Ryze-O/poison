@@ -373,12 +373,6 @@ export default function ItemsPage() {
                                     {item.power_output && <span>Output: {item.power_output.toFixed(0)}</span>}
                                     {item.quantum_speed && <span>QT: {(item.quantum_speed / 1000000).toFixed(1)}M m/s</span>}
                                   </div>
-                                  {/* Shop-Info */}
-                                  {item.shop_locations && (
-                                    <p className="text-xs text-green-400 mt-1 truncate">
-                                      Kaufbar: {item.shop_locations}
-                                    </p>
-                                  )}
                                 </div>
                               ))}
                             </div>
