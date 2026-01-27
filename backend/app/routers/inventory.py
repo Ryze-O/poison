@@ -981,12 +981,12 @@ async def create_transfer_request(
             detail="Nicht genug Items im Lager des Besitzers"
         )
 
-    # Bestellnummer generieren (TR-YYYY-NNNN)
+    # Bestellnummer generieren (VPR-YYYY-NNNN)
     from datetime import datetime
     year = datetime.now().year
     # Finde die höchste Nummer dieses Jahres
     last_request = db.query(TransferRequest).filter(
-        TransferRequest.order_number.like(f"TR-{year}-%")
+        TransferRequest.order_number.like(f"VPR-{year}-%")
     ).order_by(TransferRequest.id.desc()).first()
 
     if last_request and last_request.order_number:
