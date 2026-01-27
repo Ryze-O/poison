@@ -79,28 +79,25 @@ export default function Layout() {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-6 border-b border-default">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <h1
+                  className="text-2xl font-bold tracking-wider text-poison-neon"
+                  style={{ textShadow: '0 0 20px rgba(57, 255, 20, 0.5), 0 0 40px rgba(57, 255, 20, 0.2)' }}
+                >
+                  POISON
+                </h1>
+                <p className="text-sm font-medium tracking-wide text-gray-300 mt-1">Staffel Viper</p>
+                <p className="text-[10px] text-krt-orange tracking-widest mt-0.5">DAS KARTELL</p>
+              </div>
               <img
                 src="/assets/Staffel-Viper-RWK 2019-750px.png"
                 alt="Staffel Viper"
-                className="w-12 h-12 object-contain"
+                className="w-14 h-14 object-contain"
               />
-              <div>
-                <h1 className="text-xl font-bold tracking-wide">STAFFEL VIPER</h1>
-                <p className="text-xs text-krt-orange tracking-widest">DAS KARTELL</p>
-              </div>
-            </div>
-            {/* POISON Branding */}
-            <div className="mt-3 flex items-center justify-center">
-              <span
-                className="text-[10px] font-mono tracking-[0.3em] text-poison-neon/70"
-                style={{ textShadow: '0 0 8px rgba(57, 255, 20, 0.4)' }}
-              >
-                POISON
-              </span>
             </div>
             {/* Orange Akzent-Linie */}
-            <div className="mt-3 h-px bg-gradient-to-r from-krt-orange via-krt-orange to-transparent" />
+            <div className="mt-4 h-px bg-gradient-to-r from-krt-orange via-krt-orange to-transparent" />
           </div>
 
           {/* Navigation */}
