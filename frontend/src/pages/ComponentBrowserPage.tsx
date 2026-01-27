@@ -358,11 +358,11 @@ export default function ComponentBrowserPage() {
                     {componentDetail.manufacturer || 'Unbekannter Hersteller'}
                   </p>
                   {/* Ref-Code (class_name) */}
-                  {componentDetail.raw_stats?.class_name && (
+                  {componentDetail.raw_stats?.class_name ? (
                     <p className="text-xs text-gray-500 font-mono mt-1">
                       {String(componentDetail.raw_stats.class_name)}
                     </p>
-                  )}
+                  ) : null}
                 </div>
                 <button
                   onClick={() => setSelectedComponent(null)}
