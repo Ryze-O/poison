@@ -33,9 +33,9 @@ def upgrade() -> None:
         op.add_column('transfer_requests', sa.Column('order_number', sa.String(20), nullable=True))
         op.create_index('ix_transfer_requests_order_number', 'transfer_requests', ['order_number'], unique=True)
 
-    # Wer hat als ausgeliefert markiert
+    # Wer hat als ausgeliefert markiert (ohne ForeignKey für SQLite-Kompatibilität)
     if 'delivered_by_id' not in existing_columns:
-        op.add_column('transfer_requests', sa.Column('delivered_by_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=True))
+        op.add_column('transfer_requests', sa.Column('delivered_by_id', sa.Integer(), nullable=True))
 
     # Generate order numbers for existing requests
     # Format: TR-YYYY-NNNN (e.g., TR-2026-0001)
