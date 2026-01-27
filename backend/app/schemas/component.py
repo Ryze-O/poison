@@ -27,6 +27,26 @@ class ComponentResponse(ComponentBase):
     sc_type: Optional[str] = None
     sc_version: Optional[str] = None
     is_stackable: bool = False  # Teilbar (Erze) vs. Einzelstück (Komponenten)
+
+    # Erweiterte technische Daten
+    class_name: Optional[str] = None  # Interner Ref-Code z.B. "COOL_AEGS_S04_Reclaimer"
+    power_base: Optional[float] = None
+    power_draw: Optional[float] = None
+    durability: Optional[float] = None
+    volume: Optional[float] = None
+
+    # Typ-spezifische Stats
+    cooling_rate: Optional[float] = None  # Cooler
+    shield_hp: Optional[float] = None  # Shield
+    shield_regen: Optional[float] = None  # Shield
+    power_output: Optional[float] = None  # Power Plant
+    quantum_speed: Optional[float] = None  # QD
+    quantum_range: Optional[float] = None  # QD
+    quantum_fuel_rate: Optional[float] = None  # QD
+
+    # Shop-Verfügbarkeit
+    shop_locations: Optional[str] = None
+
     created_at: datetime
     updated_at: Optional[datetime] = None
 

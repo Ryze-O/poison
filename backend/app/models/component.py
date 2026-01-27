@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -22,6 +22,29 @@ class Component(Base):
     sc_type = Column(String(100), nullable=True)  # Original-Typ aus API
     sc_version = Column(String(20), nullable=True)  # SC Version bei Import
     is_stackable = Column(Boolean, default=False)  # Teilbar (Erze etc.) vs. Einzelstück (Komponenten)
+
+    # Erweiterte technische Daten (NEU)
+    class_name = Column(String(200), nullable=True, index=True)  # Interner Ref-Code z.B. "COOL_AEGS_S04_Reclaimer"
+    power_base = Column(Float, nullable=True)  # Basis-Stromverbrauch
+    power_draw = Column(Float, nullable=True)  # Maximaler Stromverbrauch
+    durability = Column(Float, nullable=True)  # Haltbarkeit/HP
+    volume = Column(Float, nullable=True)  # Volumen in SCU oder µSCU
+
+    # Typ-spezifische Stats (als JSON-artige Felder)
+    # Cooler
+    cooling_rate = Column(Float, nullable=True)  # Kühlleistung
+    # Shield
+    shield_hp = Column(Float, nullable=True)  # Schild-HP
+    shield_regen = Column(Float, nullable=True)  # Schild-Regeneration/s
+    # Power Plant
+    power_output = Column(Float, nullable=True)  # Energieoutput
+    # Quantum Drive
+    quantum_speed = Column(Float, nullable=True)  # QT Geschwindigkeit
+    quantum_range = Column(Float, nullable=True)  # QT Reichweite
+    quantum_fuel_rate = Column(Float, nullable=True)  # Treibstoffverbrauch
+
+    # Shop-Verfügbarkeit (als Text-Liste)
+    shop_locations = Column(Text, nullable=True)  # Komma-getrennte Liste von Shop-Orten
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

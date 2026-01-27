@@ -202,6 +202,81 @@ class SCImportService:
         if sc_type and len(sc_type) > 100:
             sc_type = sc_type[:100]
 
+        # Erweiterte Daten extrahieren
+        class_name = item.get("class_name")
+        if class_name and len(class_name) > 200:
+            class_name = class_name[:200]
+
+        grade = item.get("grade")
+        if grade and len(str(grade)) > 10:
+            grade = str(grade)[:10]
+
+        item_class = item.get("class")
+        if item_class and len(str(item_class)) > 50:
+            item_class = str(item_class)[:50]
+
+        size = item.get("size")
+
+        # Dimension/Volume extrahieren
+        volume = None
+        dimension = item.get("dimension", {})
+        if dimension:
+            volume = dimension.get("volume")
+
+        # Durability aus durability oder health
+        durability = None
+        durability_data = item.get("durability", {})
+        if durability_data:
+            durability = durability_data.get("health")
+
+        # Power-Daten
+        power_base = None
+        power_draw = None
+
+        # Typ-spezifische Stats
+        cooling_rate = None
+        shield_hp = None
+        shield_regen = None
+        power_output = None
+        quantum_speed = None
+        quantum_range = None
+        quantum_fuel_rate = None
+
+        # Shield-Daten
+        shield_data = item.get("shield", {})
+        if shield_data:
+            shield_hp = shield_data.get("max_health")
+            shield_regen = shield_data.get("regen_rate")
+            power_base = shield_data.get("power_base")
+            power_draw = shield_data.get("power_draw")
+
+        # Cooler-Daten
+        cooler_data = item.get("cooler", {})
+        if cooler_data:
+            cooling_rate = cooler_data.get("cooling_rate") or cooler_data.get("max_cooling_rate")
+            power_base = power_base or cooler_data.get("power_base")
+            power_draw = power_draw or cooler_data.get("power_draw")
+
+        # Power Plant-Daten
+        power_plant_data = item.get("power_plant", {})
+        if power_plant_data:
+            power_output = power_plant_data.get("power_output") or power_plant_data.get("power_generated")
+
+        # Quantum Drive-Daten
+        quantum_data = item.get("quantum_drive", {}) or item.get("quantum", {})
+        if quantum_data:
+            quantum_speed = quantum_data.get("quantum_speed") or quantum_data.get("speed")
+            quantum_range = quantum_data.get("quantum_range") or quantum_data.get("range")
+            quantum_fuel_rate = quantum_data.get("quantum_fuel_requirement") or quantum_data.get("fuel_rate")
+
+        # Shop-Daten extrahieren
+        shop_locations = None
+        shops = item.get("shops", [])
+        if shops:
+            shop_names = [s.get("name", "") for s in shops if s.get("name")]
+            if shop_names:
+                shop_locations = ", ".join(shop_names[:10])  # Max 10 Shops
+
         # Prüfen ob bereits vorhanden (via UUID)
         existing = self.db.query(Component).filter(Component.sc_uuid == uuid).first()
 
@@ -214,6 +289,23 @@ class SCImportService:
             existing.sc_type = sc_type
             existing.sc_version = self.stats.sc_version
             existing.is_predefined = True
+            # Erweiterte Felder
+            existing.class_name = class_name
+            existing.grade = grade
+            existing.item_class = item_class
+            existing.size = size
+            existing.volume = volume
+            existing.durability = durability
+            existing.power_base = power_base
+            existing.power_draw = power_draw
+            existing.cooling_rate = cooling_rate
+            existing.shield_hp = shield_hp
+            existing.shield_regen = shield_regen
+            existing.power_output = power_output
+            existing.quantum_speed = quantum_speed
+            existing.quantum_range = quantum_range
+            existing.quantum_fuel_rate = quantum_fuel_rate
+            existing.shop_locations = shop_locations
             self.stats.components_updated += 1
         else:
             # Neu anlegen
@@ -225,7 +317,24 @@ class SCImportService:
                 manufacturer=manufacturer,
                 sc_type=sc_type,
                 sc_version=self.stats.sc_version,
-                is_predefined=True
+                is_predefined=True,
+                # Erweiterte Felder
+                class_name=class_name,
+                grade=grade,
+                item_class=item_class,
+                size=size,
+                volume=volume,
+                durability=durability,
+                power_base=power_base,
+                power_draw=power_draw,
+                cooling_rate=cooling_rate,
+                shield_hp=shield_hp,
+                shield_regen=shield_regen,
+                power_output=power_output,
+                quantum_speed=quantum_speed,
+                quantum_range=quantum_range,
+                quantum_fuel_rate=quantum_fuel_rate,
+                shop_locations=shop_locations
             )
             self.db.add(component)
             self.stats.components_added += 1

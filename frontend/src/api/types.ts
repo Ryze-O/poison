@@ -29,6 +29,25 @@ export interface Component {
   sc_type: string | null
   is_stackable: boolean  // Teilbar (Erze) vs. Einzelstück (Komponenten)
   created_at: string
+
+  // Erweiterte technische Daten
+  class_name: string | null  // Interner Ref-Code z.B. "COOL_AEGS_S04_Reclaimer"
+  power_base: number | null
+  power_draw: number | null
+  durability: number | null
+  volume: number | null
+
+  // Typ-spezifische Stats
+  cooling_rate: number | null  // Cooler
+  shield_hp: number | null  // Shield
+  shield_regen: number | null  // Shield
+  power_output: number | null  // Power Plant
+  quantum_speed: number | null  // QD
+  quantum_range: number | null  // QD
+  quantum_fuel_rate: number | null  // QD
+
+  // Shop-Verfügbarkeit
+  shop_locations: string | null
 }
 
 // Detaillierte Komponenten-Daten (von SC Wiki API)

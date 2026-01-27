@@ -17,6 +17,7 @@ export default function ItemsPage() {
   const [filterCategory, setFilterCategory] = useState<string>('')
   const [filterSubCategory, setFilterSubCategory] = useState<string>('')
   const [filterManufacturer, setFilterManufacturer] = useState<string>('')
+  const [filterItemClass, setFilterItemClass] = useState<string>('')
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [formData, setFormData] = useState({
     name: '',
@@ -90,13 +91,19 @@ export default function ItemsPage() {
 
   // Filtern
   const filteredItems = items?.filter((item) => {
-    const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
-      item.manufacturer?.toLowerCase().includes(search.toLowerCase())
+    const searchLower = search.toLowerCase()
+    const matchesSearch = item.name.toLowerCase().includes(searchLower) ||
+      item.manufacturer?.toLowerCase().includes(searchLower) ||
+      item.class_name?.toLowerCase().includes(searchLower)
     const matchesCategory = !filterCategory || item.category === filterCategory
     const matchesSubCategory = !filterSubCategory || item.sub_category === filterSubCategory
     const matchesManufacturer = !filterManufacturer || item.manufacturer === filterManufacturer
-    return matchesSearch && matchesCategory && matchesSubCategory && matchesManufacturer
+    const matchesItemClass = !filterItemClass || item.item_class === filterItemClass
+    return matchesSearch && matchesCategory && matchesSubCategory && matchesManufacturer && matchesItemClass
   })
+
+  // Item-Klassen extrahieren
+  const itemClasses = [...new Set(items?.map(i => i.item_class).filter(Boolean) || [])].sort()
 
   // Zweistufige Gruppierung: Category → Sub-Category → Items
   const groupedItems = filteredItems?.reduce(
@@ -217,7 +224,7 @@ export default function ItemsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Item oder Hersteller suchen..."
+              placeholder="Name, Hersteller oder Ref-Code suchen..."
               className="input pl-10"
             />
           </div>
@@ -257,6 +264,18 @@ export default function ItemsPage() {
             {manufacturers?.map((manu) => (
               <option key={manu} value={manu}>
                 {manu}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterItemClass}
+            onChange={(e) => setFilterItemClass(e.target.value)}
+            className="input md:w-40"
+          >
+            <option value="">Alle Klassen</option>
+            {itemClasses.map((cls) => (
+              <option key={cls} value={cls}>
+                {cls}
               </option>
             ))}
           </select>
@@ -304,38 +323,62 @@ export default function ItemsPage() {
                                 <div
                                   key={item.id}
                                   onClick={() => navigate(`/components?search=${encodeURIComponent(item.name)}`)}
-                                  className="element p-3 flex items-center justify-between cursor-pointer hover:border-krt-orange/30 group"
+                                  className="element p-3 cursor-pointer hover:border-krt-orange/30 group"
                                 >
-                                  <div className="min-w-0 flex-1">
-                                    <p className="font-medium truncate group-hover:text-krt-orange transition-colors">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <p className="font-medium truncate group-hover:text-krt-orange transition-colors flex-1">
                                       {item.name}
                                     </p>
-                                    <p className="text-xs text-krt-orange dark:text-krt-orange/70 truncate">
-                                      {[
-                                        item.manufacturer,
-                                        item.size && `Size ${item.size}`,
-                                        item.grade && `Grade ${item.grade}`,
-                                      ]
-                                        .filter(Boolean)
-                                        .join(' • ') || (item.is_predefined ? 'SC-Daten' : '')}
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      <ExternalLink size={14} className="text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                      {canDelete && !item.is_predefined && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (confirm(`"${item.name}" wirklich löschen?`)) {
+                                              deleteMutation.mutate(item.id)
+                                            }
+                                          }}
+                                          className="p-2 text-gray-400 hover:text-sc-red rounded-lg"
+                                        >
+                                          <Trash2 size={18} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {/* Basis-Info */}
+                                  <p className="text-xs text-krt-orange dark:text-krt-orange/70 truncate">
+                                    {[
+                                      item.manufacturer,
+                                      item.size && `Size ${item.size}`,
+                                      item.grade && `Grade ${item.grade}`,
+                                      item.item_class,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' • ') || (item.is_predefined ? 'SC-Daten' : '')}
+                                  </p>
+                                  {/* Ref-Code */}
+                                  {item.class_name && (
+                                    <p className="text-xs text-gray-500 font-mono mt-1 truncate">
+                                      {item.class_name}
                                     </p>
+                                  )}
+                                  {/* Technische Stats */}
+                                  <div className="text-xs text-gray-400 mt-1 flex flex-wrap gap-x-3">
+                                    {item.power_draw && <span>Power: {item.power_draw.toFixed(0)}</span>}
+                                    {item.durability && <span>HP: {item.durability.toFixed(0)}</span>}
+                                    {item.cooling_rate && <span>Cool: {item.cooling_rate.toFixed(0)}/s</span>}
+                                    {item.shield_hp && <span>Shield: {item.shield_hp.toFixed(0)}</span>}
+                                    {item.shield_regen && <span>Regen: {item.shield_regen.toFixed(0)}/s</span>}
+                                    {item.power_output && <span>Output: {item.power_output.toFixed(0)}</span>}
+                                    {item.quantum_speed && <span>QT: {(item.quantum_speed / 1000000).toFixed(1)}M m/s</span>}
                                   </div>
-                                  <div className="flex items-center gap-1 flex-shrink-0">
-                                    <ExternalLink size={14} className="text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                    {canDelete && !item.is_predefined && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          if (confirm(`"${item.name}" wirklich löschen?`)) {
-                                            deleteMutation.mutate(item.id)
-                                          }
-                                        }}
-                                        className="p-2 text-gray-400 hover:text-sc-red rounded-lg"
-                                      >
-                                        <Trash2 size={18} />
-                                      </button>
-                                    )}
-                                  </div>
+                                  {/* Shop-Info */}
+                                  {item.shop_locations && (
+                                    <p className="text-xs text-green-400 mt-1 truncate">
+                                      Kaufbar: {item.shop_locations}
+                                    </p>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -350,7 +393,7 @@ export default function ItemsPage() {
       ) : (
         <div className="card text-center py-12">
           <p className="text-gray-400">
-            {search || filterCategory || filterSubCategory || filterManufacturer
+            {search || filterCategory || filterSubCategory || filterManufacturer || filterItemClass
               ? 'Keine Items gefunden.'
               : 'Noch keine Items vorhanden.'}
           </p>
