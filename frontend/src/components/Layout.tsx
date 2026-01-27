@@ -106,8 +106,8 @@ export default function Layout() {
                   clsx(
                     'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200',
                     isActive
-                      ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange'
-                      : 'text-muted hover:bg-card-hover hover:text-primary'
+                      ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange shadow-[0_0_20px_rgba(232,90,36,0.15)]'
+                      : 'text-gray-400 hover:bg-card-hover hover:text-white hover:shadow-sm'
                   )
                 }
               >
@@ -121,7 +121,7 @@ export default function Layout() {
               <>
                 <button
                   onClick={() => setDatabaseExpanded(!databaseExpanded)}
-                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-muted hover:bg-card-hover hover:text-primary transition-all duration-200 mt-4"
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-gray-400 hover:bg-card-hover hover:text-white transition-all duration-200 mt-4"
                 >
                   <div className="flex items-center gap-3">
                     <Database size={20} />
@@ -130,7 +130,7 @@ export default function Layout() {
                   {databaseExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 </button>
                 {databaseExpanded && (
-                  <div className="ml-4 space-y-1 border-l border-gray-700">
+                  <div className="ml-4 space-y-1 border-l border-gray-600/50">
                     {databaseNavItems.map((item) => (
                       <NavLink
                         key={item.to}
@@ -141,7 +141,7 @@ export default function Layout() {
                             'flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 text-sm',
                             isActive
                               ? 'bg-krt-orange/20 text-krt-orange'
-                              : 'text-muted hover:bg-card-hover hover:text-primary'
+                              : 'text-gray-400 hover:bg-card-hover hover:text-white'
                           )
                         }
                       >
@@ -164,8 +164,8 @@ export default function Layout() {
                   clsx(
                     'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 mt-4',
                     isActive
-                      ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange'
-                      : 'text-muted hover:bg-card-hover hover:text-primary'
+                      ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange shadow-[0_0_20px_rgba(232,90,36,0.15)]'
+                      : 'text-gray-400 hover:bg-card-hover hover:text-white hover:shadow-sm'
                   )
                 }
               >
@@ -180,7 +180,7 @@ export default function Layout() {
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className="w-full flex items-center gap-3 px-4 py-2 mb-4 rounded-lg text-muted hover:bg-card-hover hover:text-primary transition-colors"
+              className="w-full flex items-center gap-3 px-4 py-2 mb-4 rounded-lg text-gray-400 hover:bg-card-hover hover:text-white transition-colors"
               title={theme === 'dark' ? 'Zu hellem Modus wechseln' : 'Zu dunklem Modus wechseln'}
             >
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
@@ -194,8 +194,8 @@ export default function Layout() {
                 className={clsx(
                   'w-full flex items-center gap-3 px-4 py-2 mb-4 rounded-lg transition-colors',
                   isInPreviewMode
-                    ? 'bg-purple-600/20 text-purple-400 border border-purple-500'
-                    : 'text-muted hover:bg-card-hover hover:text-primary'
+                    ? 'bg-purple-600/20 text-purple-400 border border-purple-500 shadow-[0_0_20px_rgba(139,92,246,0.15)]'
+                    : 'text-gray-400 hover:bg-card-hover hover:text-white'
                 )}
                 title={isInPreviewMode ? 'Vorschaumodus beenden' : 'Als Viper ansehen'}
               >
@@ -236,7 +236,7 @@ export default function Layout() {
             </div>
             <button
               onClick={logout}
-              className="flex items-center gap-2 w-full px-4 py-2 text-muted hover:text-error hover:bg-error/10 rounded-lg transition-colors"
+              className="flex items-center gap-2 w-full px-4 py-2 text-gray-400 hover:text-error hover:bg-error/10 rounded-lg transition-colors"
             >
               <LogOut size={20} />
               Abmelden

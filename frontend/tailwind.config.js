@@ -14,20 +14,20 @@ export default {
           'orange-dark': '#C94A1A',
           'orange-light': '#F26522',
         },
-        // Überschreibe die Standard-Grau-Palette mit neutralen Grautönen (kein Blau!)
-        // Angepasst für besseren Kontrast
+        // Custom Gray Palette - Neutral mit leichtem Cool-Tone für Tech-Look
+        // Optimiert für besseren Kontrast auf dunklen Backgrounds
         'gray': {
           50: '#fafafa',
-          100: '#f5f5f5',
-          200: '#e5e5e5',
-          300: '#d4d4d4',
-          400: '#b5b5b5',  // Heller für bessere Lesbarkeit
-          500: '#8a8a8a',  // Aufgehellt für besseren Kontrast
-          600: '#525252',
-          700: '#3d3d3d',
-          800: '#2d2d2d',  // Heller für besseren Kontrast auf dunklen Cards
-          900: '#1a1a1a',
-          950: '#0f0f0f',
+          100: '#f4f4f5',
+          200: '#e4e4e7',
+          300: '#d4d4d8',
+          400: '#a1a1aa',  // Deutlich heller für gute Lesbarkeit
+          500: '#71717a',
+          600: '#52525b',
+          700: '#3f3f46',
+          800: '#2a2a32',  // Leicht aufgehellt
+          900: '#1c1c22',
+          950: '#0f0f12',
         },
         // Semantische Farben (ersetzen sc-red, sc-green etc.)
         'success': '#22c55e',

@@ -6,40 +6,46 @@
    CSS Custom Properties für Theme
    ============================================ */
 :root {
-  /* Dark Mode (Default) */
-  --bg-page: #0a0a0a;
-  --bg-sidebar: #111111;
-  --bg-card: #141414;
-  --bg-card-hover: #1a1a1a;
-  --bg-input: #1a1a1a;
-  --bg-element: #222222;
-  --bg-element-hover: #2a2a2a;
+  /* Dark Mode (Default) - Modern Tech/Gaming Style */
+  --bg-page: #13141a;
+  --bg-sidebar: #181920;
+  --bg-card: #1c1d26;
+  --bg-card-hover: #22232e;
+  --bg-input: #1a1b24;
+  --bg-element: #252632;
+  --bg-element-hover: #2d2e3a;
 
-  --text-primary: #ffffff;
-  --text-secondary: #d4d4d4;
-  --text-muted: #737373;
+  --text-primary: #f0f0f5;
+  --text-secondary: #c5c5d0;
+  --text-muted: #8a8a9a;
 
-  --border-color: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.12);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
+  --border-glow: rgba(232, 90, 36, 0.3);
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
-  --shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.3);
-  --shadow-glow-orange: 0 0 20px rgba(232, 90, 36, 0.15);
-  --shadow-element: 0 2px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  /* Shadows - Enhanced with subtle glow */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.02);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --shadow-lg: 0 12px 24px -4px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-glow-orange: 0 0 30px rgba(232, 90, 36, 0.2), 0 0 60px rgba(232, 90, 36, 0.1);
+  --shadow-glow-subtle: 0 0 40px rgba(100, 100, 255, 0.03);
+  --shadow-element: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 
   /* Konstanten */
   --krt-orange: #E85A24;
   --krt-orange-dark: #C94A1A;
-  --krt-orange-glow: rgba(232, 90, 36, 0.4);
+  --krt-orange-light: #ff6b35;
+  --krt-orange-glow: rgba(232, 90, 36, 0.5);
+  --accent-blue: #3b82f6;
+  --accent-purple: #8b5cf6;
   --success: #22c55e;
   --error: #ef4444;
 
-  /* Gradients */
-  --gradient-card: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 100%);
-  --gradient-element: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 100%);
+  /* Gradients - Modern with subtle color hints */
+  --gradient-card: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);
+  --gradient-element: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
+  --gradient-page: radial-gradient(ellipse at top, rgba(232, 90, 36, 0.03) 0%, transparent 50%);
 }
 
 .light {
@@ -90,21 +96,46 @@
 
   body {
     background-color: var(--bg-page);
+    background-image: var(--gradient-page);
     color: var(--text-primary);
     min-height: 100vh;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 
+  /* Subtle noise texture for depth */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.015;
+    pointer-events: none;
+    z-index: 0;
+  }
+
   /* Selection mit Orange-Akzent */
   ::selection {
-    background-color: rgba(232, 90, 36, 0.3);
+    background-color: rgba(232, 90, 36, 0.4);
     color: white;
+  }
+
+  /* Links - besserer Kontrast */
+  a {
+    color: var(--text-secondary);
+    transition: color 0.15s ease;
+  }
+
+  a:hover {
+    color: var(--krt-orange);
   }
 }
 
 @layer components {
   /* ============================================
-     Buttons - Clean & Modern
+     Buttons - Modern Tech Style with Glow
      ============================================ */
   .btn {
     @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
@@ -112,22 +143,38 @@
     overflow: hidden;
   }
 
+  /* Subtle shine effect on buttons */
+  .btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    transition: left 0.5s ease;
+  }
+
+  .btn:hover::before {
+    left: 100%;
+  }
+
   .btn-primary {
     background: linear-gradient(135deg, var(--krt-orange) 0%, var(--krt-orange-dark) 100%);
     color: white;
-    box-shadow: 0 4px 14px rgba(232, 90, 36, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 16px rgba(232, 90, 36, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .btn-primary:hover {
-    background: linear-gradient(135deg, #f06a34 0%, var(--krt-orange) 100%);
-    box-shadow: 0 6px 20px rgba(232, 90, 36, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-    transform: translateY(-1px);
+    background: linear-gradient(135deg, var(--krt-orange-light) 0%, var(--krt-orange) 100%);
+    box-shadow: 0 6px 24px rgba(232, 90, 36, 0.5), 0 0 40px rgba(232, 90, 36, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
   }
 
   .btn-primary:active {
     transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(232, 90, 36, 0.3);
+    box-shadow: 0 2px 10px rgba(232, 90, 36, 0.4);
   }
 
   .btn-secondary {
@@ -141,7 +188,7 @@
   .btn-secondary:hover {
     background-color: var(--bg-element-hover);
     border-color: var(--border-hover);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), 0 0 20px rgba(255, 255, 255, 0.03);
     transform: translateY(-1px);
   }
 
@@ -153,27 +200,29 @@
   .btn-danger {
     @apply text-white;
     background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.25);
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
   }
 
   .btn-danger:hover {
     background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
-    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.35);
+    box-shadow: 0 6px 24px rgba(239, 68, 68, 0.45), 0 0 40px rgba(239, 68, 68, 0.15);
+    transform: translateY(-2px);
   }
 
   .btn-success {
     @apply text-white;
     background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-    box-shadow: 0 4px 14px rgba(34, 197, 94, 0.25);
+    box-shadow: 0 4px 16px rgba(34, 197, 94, 0.3);
   }
 
   .btn-success:hover {
     background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-    box-shadow: 0 6px 20px rgba(34, 197, 94, 0.35);
+    box-shadow: 0 6px 24px rgba(34, 197, 94, 0.45), 0 0 40px rgba(34, 197, 94, 0.15);
+    transform: translateY(-2px);
   }
 
   /* ============================================
-     Cards - Elevated & Subtle
+     Cards - Modern Glass Effect
      ============================================ */
   .card {
     background: var(--gradient-card);
@@ -182,17 +231,34 @@
     border-radius: 0.875rem;
     padding: 1.5rem;
     box-shadow: var(--shadow-md);
-    transition: all 0.2s ease;
+    transition: all 0.25s ease;
+    position: relative;
+    backdrop-filter: blur(8px);
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 50%);
+    pointer-events: none;
   }
 
   .card:hover {
     box-shadow: var(--shadow-lg);
+    border-color: var(--border-hover);
+    transform: translateY(-1px);
   }
 
   .card-highlight {
     @apply card;
     border-left: 4px solid var(--krt-orange);
     box-shadow: var(--shadow-md), var(--shadow-glow-orange);
+  }
+
+  .card-highlight:hover {
+    box-shadow: var(--shadow-lg), var(--shadow-glow-orange);
   }
 
   /* ============================================
@@ -214,11 +280,11 @@
   }
 
   /* ============================================
-     Input-Felder - Clean & Focused
+     Input-Felder - Modern with subtle glow on focus
      ============================================ */
   .input {
     width: 100%;
-    padding: 0.5rem 1rem;
+    padding: 0.625rem 1rem;
     background-color: var(--bg-input);
     border: 1px solid var(--border-color);
     border-radius: 0.5rem;
@@ -231,9 +297,13 @@
     color: var(--text-muted);
   }
 
+  .input:hover {
+    border-color: var(--border-hover);
+  }
+
   .input:focus {
     border-color: var(--krt-orange);
-    box-shadow: var(--shadow-inner), 0 0 0 3px rgba(232, 90, 36, 0.15);
+    box-shadow: var(--shadow-inner), 0 0 0 3px rgba(232, 90, 36, 0.15), 0 0 20px rgba(232, 90, 36, 0.1);
   }
 
   /* ============================================
@@ -395,7 +465,7 @@
   }
 
   /* ============================================
-     Stat Cards - Dashboard style
+     Stat Cards - Dashboard style with glow
      ============================================ */
   .stat-card {
     @apply card;
@@ -410,36 +480,67 @@
     left: 0;
     right: 0;
     height: 3px;
-    background: linear-gradient(90deg, var(--krt-orange) 0%, transparent 100%);
+    background: linear-gradient(90deg, var(--krt-orange) 0%, var(--krt-orange-dark) 50%, transparent 100%);
     opacity: 0;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.3s ease;
   }
 
   .stat-card:hover::before {
     opacity: 1;
   }
 
+  .stat-card:hover {
+    box-shadow: var(--shadow-lg), 0 0 30px rgba(232, 90, 36, 0.08);
+  }
+
   /* ============================================
-     Scrollbar Styling
+     Scrollbar Styling - Modern thin style
      ============================================ */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
-    background: var(--bg-page);
-    border-radius: 4px;
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
     background: var(--bg-element);
-    border-radius: 4px;
-    border: 2px solid var(--bg-page);
+    border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
     background: var(--bg-element-hover);
+  }
+
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--bg-element) transparent;
+  }
+
+  /* ============================================
+     Utility Classes - Glow Effects
+     ============================================ */
+  .glow-sm {
+    box-shadow: 0 0 10px currentColor;
+  }
+
+  .glow-md {
+    box-shadow: 0 0 20px currentColor;
+  }
+
+  .glow-orange-sm {
+    box-shadow: 0 0 15px rgba(232, 90, 36, 0.2);
+  }
+
+  .glow-orange-md {
+    box-shadow: 0 0 30px rgba(232, 90, 36, 0.3);
+  }
+
+  .text-glow {
+    text-shadow: 0 0 10px currentColor;
   }
 }
 
