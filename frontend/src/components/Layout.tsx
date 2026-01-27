@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink } from 'react-router-dom'
 import { useAuthStore } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { useQuery } from '@tanstack/react-query'
@@ -25,7 +25,6 @@ import {
   Database,
   ChevronDown,
   ChevronRight,
-  Bell,
 } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
@@ -55,7 +54,6 @@ const adminNavItems = [
 export default function Layout() {
   const { user, logout, previewRole, setPreviewRole, canUsePreviewMode } = useAuthStore()
   const { theme, toggleTheme } = useTheme()
-  const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [databaseExpanded, setDatabaseExpanded] = useState(false)
 
@@ -138,7 +136,13 @@ export default function Layout() {
                 }
               >
                 <item.icon size={20} />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {/* Badge für Lager - nur für Pioneers */}
+                {item.to === '/inventory' && isPioneer && pioneerPendingCount > 0 && (
+                  <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                    {pioneerPendingCount}
+                  </span>
+                )}
               </NavLink>
             ))}
 
@@ -295,24 +299,6 @@ export default function Layout() {
           </div>
         )}
 
-        {/* Pioneer Transfer-Anfragen Banner */}
-        {isPioneer && pioneerPendingCount > 0 && (
-          <div
-            className={clsx(
-              'fixed left-0 right-0 lg:left-64 z-40 bg-krt-orange/90 text-white py-2 px-4 flex items-center justify-center gap-3 cursor-pointer hover:bg-krt-orange transition-colors shadow-lg',
-              isInPreviewMode ? 'top-10' : 'top-0'
-            )}
-            onClick={() => navigate('/inventory?requests=open')}
-          >
-            <Bell size={18} className="animate-pulse" />
-            <span className="text-sm font-medium">
-              {pioneerPendingCount === 1
-                ? '1 neue Transfer-Anfrage wartet auf dich'
-                : `${pioneerPendingCount} Transfer-Anfragen warten auf dich`}
-            </span>
-            <span className="text-xs bg-white/20 px-2 py-0.5 rounded">Klicken zum Öffnen</span>
-          </div>
-        )}
 
         {/* KRT Logo Watermark - nur im Dark Mode sichtbar */}
         <div
@@ -328,12 +314,7 @@ export default function Layout() {
             filter: theme === 'dark' ? 'invert(1) brightness(0)' : 'brightness(0)',
           }}
         />
-        <div className={clsx(
-          'relative z-10',
-          isInPreviewMode && 'mt-10',
-          isPioneer && pioneerPendingCount > 0 && !isInPreviewMode && 'mt-10',
-          isPioneer && pioneerPendingCount > 0 && isInPreviewMode && 'mt-20'
-        )}>
+        <div className={clsx('relative z-10', isInPreviewMode && 'mt-10')}>
           <Outlet />
         </div>
       </main>
