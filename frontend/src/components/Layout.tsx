@@ -65,9 +65,9 @@ export default function Layout() {
 
   // Transfer-Anfragen für Pioneers laden
   const { data: pendingCount } = useQuery<PendingRequestsCount>({
-    queryKey: ['transfer-requests-pending-count'],
+    queryKey: ['transfer-requests', 'pending', 'count'],
     queryFn: async () => {
-      const response = await apiClient.get('/api/inventory/transfer-requests/pending-count')
+      const response = await apiClient.get('/api/inventory/transfer-requests/pending/count')
       return response.data
     },
     enabled: isPioneer || isAdmin,
