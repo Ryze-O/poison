@@ -165,6 +165,37 @@ export default function InventoryPage() {
     queryFn: () => apiClient.get('/api/locations').then((r) => r.data),
   })
 
+  // Locations nach System gruppieren und alphabetisch sortieren
+  const groupedLocations = useMemo(() => {
+    if (!locations) return { groups: {} as Record<string, Location[]>, sortedSystems: [] as string[] }
+    // Gruppiere nach system_name (null = "Andere")
+    const groups: Record<string, Location[]> = {}
+    const systemOrder = ['Stanton', 'Pyro', 'Nyx'] // Bekannte Systeme zuerst
+
+    locations.forEach(loc => {
+      const system = loc.system_name || 'Andere'
+      if (!groups[system]) groups[system] = []
+      groups[system].push(loc)
+    })
+
+    // Sortiere Locations innerhalb jeder Gruppe alphabetisch
+    Object.keys(groups).forEach(system => {
+      groups[system].sort((a, b) => a.name.localeCompare(b.name, 'de'))
+    })
+
+    // Sortiere Gruppen: bekannte Systeme zuerst, dann alphabetisch
+    const sortedSystems = Object.keys(groups).sort((a, b) => {
+      const aIdx = systemOrder.indexOf(a)
+      const bIdx = systemOrder.indexOf(b)
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx
+      if (aIdx !== -1) return -1
+      if (bIdx !== -1) return 1
+      return a.localeCompare(b, 'de')
+    })
+
+    return { groups, sortedSystems }
+  }, [locations])
+
   const { data: history } = useQuery<InventoryLog[]>({
     queryKey: ['inventory', 'history'],
     queryFn: () => apiClient.get('/api/inventory/history').then((r) => r.data),
@@ -520,10 +551,14 @@ export default function InventoryPage() {
           >
             <option value="">Alle Standorte</option>
             <option value="0">Ohne Standort</option>
-            {locations?.map((loc) => (
-              <option key={loc.id} value={loc.id}>
-                {loc.name}
-              </option>
+            {groupedLocations.sortedSystems.map(system => (
+              <optgroup key={system} label={system}>
+                {groupedLocations.groups[system].map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
@@ -1225,10 +1260,14 @@ export default function InventoryPage() {
                       className={`input ${!transferToLocation ? 'border-krt-orange' : ''}`}
                     >
                       <option value="">-- Standort wählen * --</option>
-                      {locations?.map((loc) => (
-                        <option key={loc.id} value={loc.id}>
-                          {loc.name}
-                        </option>
+                      {groupedLocations.sortedSystems.map(system => (
+                        <optgroup key={system} label={system}>
+                          {groupedLocations.groups[system].map((loc) => (
+                            <option key={loc.id} value={loc.id}>
+                              {loc.name}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                     {!transferToLocation && (
@@ -1365,10 +1404,14 @@ export default function InventoryPage() {
                   className="input"
                 >
                   <option value="null">Ohne Standort</option>
-                  {locations?.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </option>
+                  {groupedLocations.sortedSystems.map(system => (
+                    <optgroup key={system} label={system}>
+                      {groupedLocations.groups[system].map((loc) => (
+                        <option key={loc.id} value={loc.id}>
+                          {loc.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>
@@ -1385,10 +1428,14 @@ export default function InventoryPage() {
                   className="input"
                 >
                   <option value="null">Ohne Standort</option>
-                  {locations?.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </option>
+                  {groupedLocations.sortedSystems.map(system => (
+                    <optgroup key={system} label={system}>
+                      {groupedLocations.groups[system].map((loc) => (
+                        <option key={loc.id} value={loc.id}>
+                          {loc.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>
@@ -1461,11 +1508,19 @@ export default function InventoryPage() {
                   className="input"
                 >
                   <option value="">-- Neuen Standort wählen --</option>
-                  {locations?.filter(loc => loc.id !== moveModal.currentLocationId).map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name} {loc.system_name && `(${loc.system_name})`}
-                    </option>
-                  ))}
+                  {groupedLocations.sortedSystems.map(system => {
+                    const filteredLocs = groupedLocations.groups[system].filter(loc => loc.id !== moveModal.currentLocationId)
+                    if (filteredLocs.length === 0) return null
+                    return (
+                      <optgroup key={system} label={system}>
+                        {filteredLocs.map((loc) => (
+                          <option key={loc.id} value={loc.id}>
+                            {loc.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )
+                  })}
                 </select>
               </div>
 
@@ -1595,10 +1650,14 @@ export default function InventoryPage() {
                   className="input"
                 >
                   <option value="">Location wählen...</option>
-                  {locations?.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </option>
+                  {groupedLocations.sortedSystems.map(system => (
+                    <optgroup key={system} label={system}>
+                      {groupedLocations.groups[system].map((loc) => (
+                        <option key={loc.id} value={loc.id}>
+                          {loc.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>

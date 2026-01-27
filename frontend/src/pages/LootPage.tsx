@@ -200,6 +200,37 @@ export default function LootPage() {
     enabled: showDistributionDialog,
   })
 
+  // Locations nach System gruppieren und alphabetisch sortieren
+  const groupedLocations = useMemo(() => {
+    const allLocs = distributionLocations || locations || []
+    // Gruppiere nach system_name (null = "Andere")
+    const groups: Record<string, Location[]> = {}
+    const systemOrder = ['Stanton', 'Pyro', 'Nyx'] // Bekannte Systeme zuerst
+
+    allLocs.forEach(loc => {
+      const system = loc.system_name || 'Andere'
+      if (!groups[system]) groups[system] = []
+      groups[system].push(loc)
+    })
+
+    // Sortiere Locations innerhalb jeder Gruppe alphabetisch
+    Object.keys(groups).forEach(system => {
+      groups[system].sort((a, b) => a.name.localeCompare(b.name, 'de'))
+    })
+
+    // Sortiere Gruppen: bekannte Systeme zuerst, dann alphabetisch
+    const sortedSystems = Object.keys(groups).sort((a, b) => {
+      const aIdx = systemOrder.indexOf(a)
+      const bIdx = systemOrder.indexOf(b)
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx
+      if (aIdx !== -1) return -1
+      if (bIdx !== -1) return 1
+      return a.localeCompare(b, 'de')
+    })
+
+    return { groups, sortedSystems }
+  }, [locations, distributionLocations])
+
   // Session erstellen (mit optionaler Attendance-Session)
   const createSessionMutation = useMutation({
     mutationFn: async (data: {
@@ -648,10 +679,14 @@ export default function LootPage() {
                   className="input flex-1"
                 >
                   <option value="">-- Kein Lootort --</option>
-                  {locations?.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name} {loc.system_name && `(${loc.system_name})`}
-                    </option>
+                  {groupedLocations.sortedSystems.map(system => (
+                    <optgroup key={system} label={system}>
+                      {groupedLocations.groups[system].map((loc) => (
+                        <option key={loc.id} value={loc.id}>
+                          {loc.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
                 <button
@@ -900,10 +935,14 @@ export default function LootPage() {
                               className="input flex-1 text-sm"
                             >
                               <option value="">-- Kein Lootort --</option>
-                              {locations?.map((loc) => (
-                                <option key={loc.id} value={loc.id}>
-                                  {loc.name} {loc.system_name && `(${loc.system_name})`}
-                                </option>
+                              {groupedLocations.sortedSystems.map(system => (
+                                <optgroup key={system} label={system}>
+                                  {groupedLocations.groups[system].map((loc) => (
+                                    <option key={loc.id} value={loc.id}>
+                                      {loc.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
                               ))}
                             </select>
                             <button
@@ -1099,10 +1138,14 @@ export default function LootPage() {
                                       className="input flex-1 text-sm"
                                     >
                                       <option value="">-- Lagerort wählen * --</option>
-                                      {locations?.map((loc) => (
-                                        <option key={loc.id} value={loc.id}>
-                                          {loc.name} {loc.system_name && `(${loc.system_name})`}
-                                        </option>
+                                      {groupedLocations.sortedSystems.map(system => (
+                                        <optgroup key={system} label={system}>
+                                          {groupedLocations.groups[system].map((loc) => (
+                                            <option key={loc.id} value={loc.id}>
+                                              {loc.name}
+                                            </option>
+                                          ))}
+                                        </optgroup>
                                       ))}
                                     </select>
                                   </div>
@@ -1240,10 +1283,14 @@ export default function LootPage() {
                     className="input flex-1"
                   >
                     <option value="">-- Kein Lootort --</option>
-                    {locations?.map((loc) => (
-                      <option key={loc.id} value={loc.id}>
-                        {loc.name} {loc.system_name && `(${loc.system_name})`}
-                      </option>
+                    {groupedLocations.sortedSystems.map(system => (
+                      <optgroup key={system} label={system}>
+                        {groupedLocations.groups[system].map((loc) => (
+                          <option key={loc.id} value={loc.id}>
+                            {loc.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                   {!editingSession.is_completed && (
@@ -1583,10 +1630,14 @@ export default function LootPage() {
                                 className="input flex-1"
                               >
                                 <option value="">-- Lagerort wählen * --</option>
-                                {locations?.map((loc) => (
-                                  <option key={loc.id} value={loc.id}>
-                                    {loc.name} {loc.system_name && `(${loc.system_name})`}
-                                  </option>
+                                {groupedLocations.sortedSystems.map(system => (
+                                  <optgroup key={system} label={system}>
+                                    {groupedLocations.groups[system].map((loc) => (
+                                      <option key={loc.id} value={loc.id}>
+                                        {loc.name}
+                                      </option>
+                                    ))}
+                                  </optgroup>
                                 ))}
                               </select>
                             </div>
@@ -1801,10 +1852,14 @@ export default function LootPage() {
                 className={`input ${!distributionLocation ? 'border-krt-orange' : ''}`}
               >
                 <option value="">-- Lagerort wählen * --</option>
-                {(distributionLocations || locations)?.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name} {loc.system_name && `(${loc.system_name})`}
-                  </option>
+                {groupedLocations.sortedSystems.map(system => (
+                  <optgroup key={system} label={system}>
+                    {groupedLocations.groups[system].map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               {!distributionLocation && (
