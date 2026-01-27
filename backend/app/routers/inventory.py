@@ -4,13 +4,14 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User, UserRole
-from app.models.inventory import Inventory, InventoryTransfer
+from app.models.inventory import Inventory, InventoryTransfer, TransferRequest, TransferRequestStatus
 from app.models.inventory_log import InventoryLog, InventoryAction
 from app.models.component import Component
 from app.models.location import Location
 from app.schemas.inventory import (
     InventoryResponse, InventoryUpdate, TransferCreate, TransferResponse,
-    InventoryLogResponse, BulkLocationTransfer, BulkTransferToOfficer, PatchResetRequest
+    InventoryLogResponse, BulkLocationTransfer, BulkTransferToOfficer, PatchResetRequest,
+    TransferRequestCreate, TransferRequestResponse
 )
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
@@ -851,3 +852,250 @@ async def admin_remove_from_inventory(
 
     component = db.query(Component).filter(Component.id == component_id).first()
     return {"message": f"{quantity}x {component.name} von {target_user.display_name or target_user.username} entfernt", "new_quantity": inventory.quantity}
+
+
+# ============== Transfer Request Endpoints ==============
+
+@router.post("/transfer-request", response_model=TransferRequestResponse)
+async def create_transfer_request(
+    request: TransferRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Erstellt eine Transfer-Anfrage an einen anderen User."""
+    check_role(current_user, UserRole.OFFICER)
+
+    if request.quantity <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Menge muss positiv sein"
+        )
+
+    # Prüfen ob Besitzer existiert
+    owner = db.query(User).filter(User.id == request.owner_id).first()
+    if not owner:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Besitzer nicht gefunden"
+        )
+
+    # Kann nicht von sich selbst anfragen
+    if request.owner_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Du kannst keine Anfrage an dein eigenes Lager stellen"
+        )
+
+    # Prüfen ob Item im Lager des Besitzers existiert
+    inventory = db.query(Inventory).filter(
+        Inventory.user_id == request.owner_id,
+        Inventory.component_id == request.component_id,
+        Inventory.location_id == request.from_location_id
+    ).first()
+
+    if not inventory or inventory.quantity < request.quantity:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nicht genug Items im Lager des Besitzers"
+        )
+
+    # Anfrage erstellen
+    transfer_request = TransferRequest(
+        requester_id=current_user.id,
+        owner_id=request.owner_id,
+        component_id=request.component_id,
+        from_location_id=request.from_location_id,
+        to_location_id=request.to_location_id,
+        quantity=request.quantity,
+        notes=request.notes,
+        status=TransferRequestStatus.PENDING
+    )
+    db.add(transfer_request)
+    db.commit()
+    db.refresh(transfer_request)
+    return transfer_request
+
+
+@router.get("/transfer-requests", response_model=List[TransferRequestResponse])
+async def get_transfer_requests(
+    status_filter: Optional[TransferRequestStatus] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt Transfer-Anfragen zurück (eigene als Empfänger/Besitzer oder alle für Admin)."""
+    query = db.query(TransferRequest)
+
+    # Admin sieht alle, andere nur eigene
+    if not current_user.has_permission(UserRole.ADMIN):
+        query = query.filter(
+            (TransferRequest.requester_id == current_user.id) |
+            (TransferRequest.owner_id == current_user.id)
+        )
+
+    if status_filter:
+        query = query.filter(TransferRequest.status == status_filter)
+
+    return query.order_by(TransferRequest.created_at.desc()).all()
+
+
+@router.get("/transfer-requests/pending/count")
+async def get_pending_requests_count(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt die Anzahl offener Anfragen zurück (für Benachrichtigungs-Badge)."""
+    # Als Besitzer: Anfragen die ich bestätigen muss
+    owner_count = db.query(TransferRequest).filter(
+        TransferRequest.owner_id == current_user.id,
+        TransferRequest.status == TransferRequestStatus.PENDING
+    ).count()
+
+    # Als Anfragender: Meine offenen Anfragen
+    requester_count = db.query(TransferRequest).filter(
+        TransferRequest.requester_id == current_user.id,
+        TransferRequest.status == TransferRequestStatus.PENDING
+    ).count()
+
+    return {
+        "as_owner": owner_count,
+        "as_requester": requester_count,
+        "total": owner_count + requester_count
+    }
+
+
+@router.post("/transfer-requests/{request_id}/approve")
+async def approve_transfer_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bestätigt eine Transfer-Anfrage (nur Besitzer oder Admin)."""
+    transfer_request = db.query(TransferRequest).filter(TransferRequest.id == request_id).first()
+    if not transfer_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Anfrage nicht gefunden"
+        )
+
+    if transfer_request.status != TransferRequestStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Anfrage wurde bereits bearbeitet"
+        )
+
+    # Nur Besitzer oder Admin darf bestätigen
+    if transfer_request.owner_id != current_user.id:
+        check_role(current_user, UserRole.ADMIN)
+
+    # Prüfen ob noch genug im Lager ist
+    inventory = db.query(Inventory).filter(
+        Inventory.user_id == transfer_request.owner_id,
+        Inventory.component_id == transfer_request.component_id,
+        Inventory.location_id == transfer_request.from_location_id
+    ).first()
+
+    if not inventory or inventory.quantity < transfer_request.quantity:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nicht mehr genug Items im Lager"
+        )
+
+    # Transfer durchführen
+    quantity_before_sender = inventory.quantity
+    inventory.quantity -= transfer_request.quantity
+
+    # Beim Empfänger hinzufügen
+    to_inventory = db.query(Inventory).filter(
+        Inventory.user_id == transfer_request.requester_id,
+        Inventory.component_id == transfer_request.component_id,
+        Inventory.location_id == transfer_request.to_location_id
+    ).first()
+
+    quantity_before_receiver = to_inventory.quantity if to_inventory else 0
+
+    if to_inventory:
+        to_inventory.quantity += transfer_request.quantity
+    else:
+        to_inventory = Inventory(
+            user_id=transfer_request.requester_id,
+            component_id=transfer_request.component_id,
+            location_id=transfer_request.to_location_id,
+            quantity=transfer_request.quantity
+        )
+        db.add(to_inventory)
+        db.flush()
+
+    # Transfer-Log erstellen
+    transfer_record = InventoryTransfer(
+        from_user_id=transfer_request.owner_id,
+        to_user_id=transfer_request.requester_id,
+        component_id=transfer_request.component_id,
+        from_location_id=transfer_request.from_location_id,
+        to_location_id=transfer_request.to_location_id,
+        quantity=transfer_request.quantity,
+        notes=f"Transfer-Anfrage #{transfer_request.id}" + (f" - {transfer_request.notes}" if transfer_request.notes else "")
+    )
+    db.add(transfer_record)
+
+    # Historie loggen
+    log_inventory_change(
+        db=db,
+        user_id=transfer_request.owner_id,
+        component_id=transfer_request.component_id,
+        action=InventoryAction.TRANSFER_OUT,
+        quantity=-transfer_request.quantity,
+        quantity_before=quantity_before_sender,
+        quantity_after=inventory.quantity,
+        related_user_id=transfer_request.requester_id,
+        notes=f"Transfer-Anfrage bestätigt"
+    )
+
+    log_inventory_change(
+        db=db,
+        user_id=transfer_request.requester_id,
+        component_id=transfer_request.component_id,
+        action=InventoryAction.TRANSFER_IN,
+        quantity=transfer_request.quantity,
+        quantity_before=quantity_before_receiver,
+        quantity_after=to_inventory.quantity,
+        related_user_id=transfer_request.owner_id,
+        notes=f"Transfer-Anfrage bestätigt"
+    )
+
+    # Anfrage als bestätigt markieren
+    transfer_request.status = TransferRequestStatus.APPROVED
+    transfer_request.approved_by_id = current_user.id
+
+    db.commit()
+    return {"message": "Transfer-Anfrage bestätigt und durchgeführt"}
+
+
+@router.post("/transfer-requests/{request_id}/reject")
+async def reject_transfer_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Lehnt eine Transfer-Anfrage ab (nur Besitzer oder Admin)."""
+    transfer_request = db.query(TransferRequest).filter(TransferRequest.id == request_id).first()
+    if not transfer_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Anfrage nicht gefunden"
+        )
+
+    if transfer_request.status != TransferRequestStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Anfrage wurde bereits bearbeitet"
+        )
+
+    # Nur Besitzer oder Admin darf ablehnen
+    if transfer_request.owner_id != current_user.id:
+        check_role(current_user, UserRole.ADMIN)
+
+    transfer_request.status = TransferRequestStatus.REJECTED
+    transfer_request.approved_by_id = current_user.id
+
+    db.commit()
+    return {"message": "Transfer-Anfrage abgelehnt"}

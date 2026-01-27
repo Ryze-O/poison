@@ -3,7 +3,7 @@ from app.models.attendance import AttendanceSession, AttendanceRecord
 from app.models.component import Component, SCLocation
 from app.models.location import Location
 from app.models.loot import LootSession, LootItem, LootDistribution
-from app.models.inventory import Inventory, InventoryTransfer
+from app.models.inventory import Inventory, InventoryTransfer, TransferRequest, TransferRequestStatus
 from app.models.inventory_log import InventoryLog, InventoryAction
 from app.models.treasury import Treasury, TreasuryTransaction
 from app.models.officer_account import OfficerAccount, OfficerTransaction
@@ -23,6 +23,8 @@ __all__ = [
     "LootDistribution",
     "Inventory",
     "InventoryTransfer",
+    "TransferRequest",
+    "TransferRequestStatus",
     "InventoryLog",
     "InventoryAction",
     "Treasury",

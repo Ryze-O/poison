@@ -2,8 +2,8 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft, ChevronDown, ChevronRight } from 'lucide-react'
-import type { InventoryItem, User, Component, Location } from '../api/types'
+import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft, ChevronDown, ChevronRight, Bell, Check, X, Send } from 'lucide-react'
+import type { InventoryItem, User, Component, Location, TransferRequest, PendingRequestsCount } from '../api/types'
 
 type InventoryAction = 'add' | 'remove' | 'loot' | 'transfer_in' | 'transfer_out'
 
@@ -64,11 +64,23 @@ export default function InventoryPage() {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set())
   const [editingUserId, setEditingUserId] = useState<number | null>(null)
+  // Transfer Request States
+  const [showTransferRequests, setShowTransferRequests] = useState(false)
+  const [requestModal, setRequestModal] = useState<{
+    ownerId: number
+    ownerName: string
+    component: Component
+    quantity: number
+    locationId: number | null
+  } | null>(null)
+  const [requestAmount, setRequestAmount] = useState(1)
+  const [requestNotes, setRequestNotes] = useState('')
 
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
   const canManage = effectiveRole !== 'member' && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
   const isAdmin = effectiveRole === 'admin'
+  const isPioneer = user?.is_pioneer ?? false
 
   const toggleUser = (userId: number) => {
     setExpandedUsers(prev => {
@@ -144,6 +156,20 @@ export default function InventoryPage() {
     queryKey: ['inventory', 'history'],
     queryFn: () => apiClient.get('/api/inventory/history').then((r) => r.data),
     enabled: canManage && showHistory,
+  })
+
+  // Transfer Requests
+  const { data: transferRequests } = useQuery<TransferRequest[]>({
+    queryKey: ['transfer-requests'],
+    queryFn: () => apiClient.get('/api/inventory/transfer-requests').then((r) => r.data),
+    enabled: canManage,
+  })
+
+  const { data: pendingCount } = useQuery<PendingRequestsCount>({
+    queryKey: ['transfer-requests', 'pending', 'count'],
+    queryFn: () => apiClient.get('/api/inventory/transfer-requests/pending/count').then((r) => r.data),
+    enabled: canManage,
+    refetchInterval: 30000, // Alle 30 Sekunden aktualisieren
   })
 
   const addMutation = useMutation({
@@ -226,6 +252,35 @@ export default function InventoryPage() {
     },
   })
 
+  // Transfer Request Mutations
+  const createRequestMutation = useMutation({
+    mutationFn: (data: { owner_id: number; component_id: number; quantity: number; from_location_id?: number | null; notes?: string }) =>
+      apiClient.post('/api/inventory/transfer-request', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transfer-requests'] })
+      setRequestModal(null)
+      setRequestAmount(1)
+      setRequestNotes('')
+    },
+  })
+
+  const approveRequestMutation = useMutation({
+    mutationFn: (requestId: number) =>
+      apiClient.post(`/api/inventory/transfer-requests/${requestId}/approve`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transfer-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+    },
+  })
+
+  const rejectRequestMutation = useMutation({
+    mutationFn: (requestId: number) =>
+      apiClient.post(`/api/inventory/transfer-requests/${requestId}/reject`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transfer-requests'] })
+    },
+  })
+
   // Filtern von myInventory
   const filteredMyInventory = myInventory?.filter((item) => {
     const matchesSearch = item.component.name
@@ -284,12 +339,45 @@ export default function InventoryPage() {
     {} as Record<number, InventoryItem[]>
   )
 
+  // Sichtbare User basierend auf Rolle:
+  // - Admin: alle
+  // - Pioneer: alle (read-only)
+  // - Normal: nur eigenes + Pioneers
+  const visibleOfficers = useMemo(() => {
+    if (!officers) return []
+
+    if (isAdmin || isPioneer) {
+      // Admins und Pioneers sehen alle
+      return officers
+    }
+
+    // Normale User sehen nur eigenes und Pioneer-Lager
+    return officers.filter(o =>
+      o.id === user?.id || o.is_pioneer
+    )
+  }, [officers, isAdmin, isPioneer, user?.id])
+
+  // Pending Requests für Badge
+  const pendingAsOwner = pendingCount?.as_owner ?? 0
+
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold">Lager-Übersicht</h1>
         {canManage && (
           <div className="flex gap-2">
+            <button
+              onClick={() => setShowTransferRequests(!showTransferRequests)}
+              className={`btn ${showTransferRequests ? 'btn-primary' : 'btn-secondary'} flex items-center gap-2 relative`}
+            >
+              <Bell size={20} />
+              Anfragen
+              {pendingAsOwner > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {pendingAsOwner}
+                </span>
+              )}
+            </button>
             <button
               onClick={() => setShowHistory(!showHistory)}
               className={`btn ${showHistory ? 'btn-primary' : 'btn-secondary'} flex items-center gap-2`}
@@ -389,6 +477,153 @@ export default function InventoryPage() {
           </select>
         </div>
       </div>
+
+      {/* Transfer Requests */}
+      {showTransferRequests && canManage && (
+        <div className="card mb-8">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Bell size={24} className="text-krt-orange" />
+            Transfer-Anfragen
+          </h2>
+
+          {transferRequests && transferRequests.length > 0 ? (
+            <div className="space-y-4">
+              {/* Eingehende Anfragen (als Besitzer) */}
+              {transferRequests.filter(r => r.owner.id === user?.id && r.status === 'pending').length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
+                    Eingehende Anfragen
+                  </h3>
+                  <div className="space-y-2">
+                    {transferRequests
+                      .filter(r => r.owner.id === user?.id && r.status === 'pending')
+                      .map((request) => (
+                        <div
+                          key={request.id}
+                          className="flex items-center justify-between p-3 bg-amber-900/20 border border-amber-600/30 rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">
+                              <span className="text-krt-orange">{request.requester.display_name || request.requester.username}</span>
+                              {' '}möchte{' '}
+                              <span className="text-white">{request.quantity}x {request.component.name}</span>
+                            </p>
+                            {request.notes && (
+                              <p className="text-sm text-gray-400 mt-1">"{request.notes}"</p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">
+                              {new Date(request.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => rejectRequestMutation.mutate(request.id)}
+                              disabled={rejectRequestMutation.isPending}
+                              className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/30"
+                              title="Ablehnen"
+                            >
+                              <X size={18} />
+                            </button>
+                            <button
+                              onClick={() => approveRequestMutation.mutate(request.id)}
+                              disabled={approveRequestMutation.isPending}
+                              className="p-2 bg-green-600/20 text-green-400 rounded hover:bg-green-600/30"
+                              title="Bestätigen"
+                            >
+                              <Check size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Meine Anfragen (als Anfragender) */}
+              {transferRequests.filter(r => r.requester.id === user?.id && r.status === 'pending').length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
+                    Meine offenen Anfragen
+                  </h3>
+                  <div className="space-y-2">
+                    {transferRequests
+                      .filter(r => r.requester.id === user?.id && r.status === 'pending')
+                      .map((request) => (
+                        <div
+                          key={request.id}
+                          className="flex items-center justify-between p-3 bg-blue-900/20 border border-blue-600/30 rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">
+                              <span className="text-white">{request.quantity}x {request.component.name}</span>
+                              {' '}von{' '}
+                              <span className="text-krt-orange">{request.owner.display_name || request.owner.username}</span>
+                            </p>
+                            {request.notes && (
+                              <p className="text-sm text-gray-400 mt-1">"{request.notes}"</p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">
+                              {new Date(request.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                          <span className="text-xs bg-blue-600/30 text-blue-300 px-2 py-1 rounded">
+                            Wartet auf Bestätigung
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Abgeschlossene Anfragen */}
+              {transferRequests.filter(r => r.status !== 'pending').length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
+                    Vergangene Anfragen
+                  </h3>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {transferRequests
+                      .filter(r => r.status !== 'pending')
+                      .slice(0, 10)
+                      .map((request) => (
+                        <div
+                          key={request.id}
+                          className={`flex items-center justify-between p-3 rounded-lg ${
+                            request.status === 'approved' ? 'bg-green-900/10 border border-green-600/20' : 'bg-red-900/10 border border-red-600/20'
+                          }`}
+                        >
+                          <div>
+                            <p className="font-medium text-sm">
+                              {request.quantity}x {request.component.name}
+                              {' '}
+                              {request.requester.id === user?.id ? (
+                                <>von <span className="text-gray-400">{request.owner.display_name || request.owner.username}</span></>
+                              ) : (
+                                <>an <span className="text-gray-400">{request.requester.display_name || request.requester.username}</span></>
+                              )}
+                            </p>
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded ${
+                            request.status === 'approved' ? 'bg-green-600/30 text-green-300' : 'bg-red-600/30 text-red-300'
+                          }`}>
+                            {request.status === 'approved' ? 'Bestätigt' : 'Abgelehnt'}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Keine offenen Anfragen */}
+              {transferRequests.filter(r => r.status === 'pending').length === 0 && (
+                <p className="text-gray-400 text-center py-4">Keine offenen Anfragen.</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-gray-400">Noch keine Transfer-Anfragen vorhanden.</p>
+          )}
+        </div>
+      )}
 
       {/* Historie */}
       {showHistory && canManage && (
@@ -563,10 +798,17 @@ export default function InventoryPage() {
 
       {/* Alle Lager */}
       <div className="card">
-        <h2 className="text-xl font-bold mb-4">Alle Lager</h2>
-        {officers && inventoryByUser ? (
+        <h2 className="text-xl font-bold mb-4">
+          {isAdmin ? 'Alle Lager' : isPioneer ? 'Lager-Übersicht (nur Ansicht)' : 'Sichtbare Lager'}
+        </h2>
+        {!isAdmin && !isPioneer && (
+          <p className="text-sm text-gray-400 mb-4">
+            Du siehst dein eigenes Lager und die Lager der Pioneers. Um Items von anderen anzufordern, klicke auf "Anfragen".
+          </p>
+        )}
+        {visibleOfficers && inventoryByUser ? (
           <div className="space-y-3">
-            {officers.map((officer) => {
+            {visibleOfficers.map((officer) => {
               const items = inventoryByUser[officer.id]?.filter((item) => {
                 const matchesSearch = item.component.name
                   .toLowerCase()
@@ -617,6 +859,9 @@ export default function InventoryPage() {
                         {officer.display_name || officer.username}
                         {officer.id === user?.id && (
                           <span className="text-xs text-gray-500 ml-1">(Du)</span>
+                        )}
+                        {officer.is_pioneer && (
+                          <span className="text-xs bg-purple-600/30 text-purple-300 px-1.5 py-0.5 rounded ml-2">Pioneer</span>
                         )}
                       </span>
                     </div>
@@ -677,60 +922,86 @@ export default function InventoryPage() {
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                               {catItems
                                 .sort((a, b) => a.component.name.localeCompare(b.component.name))
-                                .map((item) => (
-                                  <div
-                                    key={item.id}
-                                    className="p-3 bg-gray-800/30 rounded-lg"
-                                  >
-                                    <p className="font-medium text-sm truncate">{item.component.name}</p>
-                                    <div className="flex items-center justify-between mt-1">
-                                      {isEditing ? (
-                                        // Admin Edit Controls
-                                        <div className="flex items-center gap-1">
-                                          <button
-                                            onClick={() =>
-                                              adminRemoveMutation.mutate({
-                                                userId: officer.id,
-                                                componentId: item.component.id,
-                                                quantity: 1,
-                                                locationId: item.location?.id,
-                                              })
-                                            }
-                                            disabled={item.quantity <= 0 || adminRemoveMutation.isPending}
-                                            className="p-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
-                                          >
-                                            <Minus size={12} />
-                                          </button>
-                                          <span className="w-8 text-center text-sm font-bold text-krt-orange">
-                                            {item.quantity}
+                                .map((item) => {
+                                  const isOwnInventory = officer.id === user?.id
+                                  const canRequestFrom = !isOwnInventory && !isAdmin && canManage
+
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      className="p-3 bg-gray-800/30 rounded-lg"
+                                    >
+                                      <p className="font-medium text-sm truncate">{item.component.name}</p>
+                                      <div className="flex items-center justify-between mt-1">
+                                        {isEditing ? (
+                                          // Admin Edit Controls
+                                          <div className="flex items-center gap-1">
+                                            <button
+                                              onClick={() =>
+                                                adminRemoveMutation.mutate({
+                                                  userId: officer.id,
+                                                  componentId: item.component.id,
+                                                  quantity: 1,
+                                                  locationId: item.location?.id,
+                                                })
+                                              }
+                                              disabled={item.quantity <= 0 || adminRemoveMutation.isPending}
+                                              className="p-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+                                            >
+                                              <Minus size={12} />
+                                            </button>
+                                            <span className="w-8 text-center text-sm font-bold text-krt-orange">
+                                              {item.quantity}
+                                            </span>
+                                            <button
+                                              onClick={() =>
+                                                adminAddMutation.mutate({
+                                                  userId: officer.id,
+                                                  componentId: item.component.id,
+                                                  quantity: 1,
+                                                  locationId: item.location?.id,
+                                                })
+                                              }
+                                              disabled={adminAddMutation.isPending}
+                                              className="p-1 bg-gray-700 rounded hover:bg-gray-600"
+                                            >
+                                              <Plus size={12} />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-2">
+                                            <p className="text-krt-orange font-medium">{item.quantity}x</p>
+                                            {canRequestFrom && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  setRequestModal({
+                                                    ownerId: officer.id,
+                                                    ownerName: officer.display_name || officer.username,
+                                                    component: item.component,
+                                                    quantity: item.quantity,
+                                                    locationId: item.location?.id ?? null,
+                                                  })
+                                                  setRequestAmount(1)
+                                                }}
+                                                className="p-1 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/30"
+                                                title="Anfragen"
+                                              >
+                                                <Send size={12} />
+                                              </button>
+                                            )}
+                                          </div>
+                                        )}
+                                        {item.location && (
+                                          <span className="flex items-center gap-1 text-xs text-gray-400">
+                                            <MapPin size={10} />
+                                            {item.location.name}
                                           </span>
-                                          <button
-                                            onClick={() =>
-                                              adminAddMutation.mutate({
-                                                userId: officer.id,
-                                                componentId: item.component.id,
-                                                quantity: 1,
-                                                locationId: item.location?.id,
-                                              })
-                                            }
-                                            disabled={adminAddMutation.isPending}
-                                            className="p-1 bg-gray-700 rounded hover:bg-gray-600"
-                                          >
-                                            <Plus size={12} />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <p className="text-krt-orange font-medium">{item.quantity}x</p>
-                                      )}
-                                      {item.location && (
-                                        <span className="flex items-center gap-1 text-xs text-gray-400">
-                                          <MapPin size={10} />
-                                          {item.location.name}
-                                        </span>
-                                      )}
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                ))}
+                                  )
+                                })}
                             </div>
                           </div>
                         ))}
@@ -974,6 +1245,79 @@ export default function InventoryPage() {
                   className="btn btn-primary flex-1"
                 >
                   {bulkMoveMutation.isPending ? 'Wird verschoben...' : 'Verschieben'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer Request Modal */}
+      {requestModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="card max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Send size={24} className="text-blue-400" />
+              Item anfragen
+            </h2>
+
+            <div className="p-4 bg-gray-800/50 rounded-lg mb-4">
+              <p className="text-sm text-gray-400 mb-1">Von:</p>
+              <p className="font-medium text-krt-orange">{requestModal.ownerName}</p>
+              <p className="text-sm text-gray-400 mt-2 mb-1">Item:</p>
+              <p className="font-bold">{requestModal.component.name}</p>
+              <p className="text-sm text-gray-500">Verfügbar: {requestModal.quantity}</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="label">Gewünschte Menge</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={requestModal.quantity}
+                  value={requestAmount}
+                  onChange={(e) => setRequestAmount(Math.min(Number(e.target.value), requestModal.quantity))}
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label className="label">Notiz (optional)</label>
+                <textarea
+                  value={requestNotes}
+                  onChange={(e) => setRequestNotes(e.target.value)}
+                  placeholder="Warum brauchst du das Item?"
+                  className="input resize-none"
+                  rows={2}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setRequestModal(null)
+                    setRequestAmount(1)
+                    setRequestNotes('')
+                  }}
+                  className="btn btn-secondary flex-1"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => {
+                    createRequestMutation.mutate({
+                      owner_id: requestModal.ownerId,
+                      component_id: requestModal.component.id,
+                      quantity: requestAmount,
+                      from_location_id: requestModal.locationId,
+                      notes: requestNotes || undefined,
+                    })
+                  }}
+                  disabled={createRequestMutation.isPending || requestAmount < 1}
+                  className="btn btn-primary flex-1"
+                >
+                  {createRequestMutation.isPending ? 'Wird gesendet...' : 'Anfrage senden'}
                 </button>
               </div>
             </div>

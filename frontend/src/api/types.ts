@@ -302,3 +302,36 @@ export interface UEXSyncStats {
   status: string
   errors: string | null
 }
+
+// Transfer Requests (Anfragen für Items aus anderen Lagern)
+export type TransferRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface TransferRequest {
+  id: number
+  requester: User       // Wer will haben
+  owner: User           // Wessen Lager
+  component: Component
+  from_location: Location | null
+  to_location: Location | null
+  quantity: number
+  notes: string | null
+  status: TransferRequestStatus
+  approved_by: User | null
+  created_at: string
+  updated_at: string | null
+}
+
+export interface TransferRequestCreate {
+  owner_id: number
+  component_id: number
+  quantity: number
+  from_location_id?: number | null
+  to_location_id?: number | null
+  notes?: string | null
+}
+
+export interface PendingRequestsCount {
+  as_owner: number      // Anfragen die ich bestätigen muss
+  as_requester: number  // Meine offenen Anfragen
+  total: number
+}
