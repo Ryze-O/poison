@@ -14,7 +14,7 @@ from pathlib import Path
 
 from app.database import get_db
 from app.auth.jwt import get_current_user
-from app.auth.permissions import check_role
+from app.auth.dependencies import check_role
 from app.models.user import User, UserRole
 from app.models.inventory import Inventory
 from app.models.treasury import TreasuryTransaction
