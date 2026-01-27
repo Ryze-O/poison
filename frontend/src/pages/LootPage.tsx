@@ -756,7 +756,7 @@ export default function LootPage() {
           <button
             onClick={() => {
               createSessionMutation.mutate({
-                date: newSessionDate || undefined,
+                date: newSessionDate || new Date().toISOString().split('T')[0],
                 notes: newSessionNotes || undefined,
                 location_id: newSessionLocation || undefined,
                 session_type: newSessionType,

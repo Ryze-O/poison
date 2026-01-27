@@ -1,4 +1,5 @@
 from typing import List
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -86,7 +87,7 @@ async def create_loot_session(
     session = LootSession(
         attendance_session_id=session_data.attendance_session_id,
         location_id=session_data.location_id,
-        date=session_data.date,
+        date=session_data.date or datetime.now(),  # Default: heute
         notes=session_data.notes,
         created_by_id=current_user.id
     )
