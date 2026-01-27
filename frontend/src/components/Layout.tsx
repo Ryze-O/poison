@@ -67,7 +67,7 @@ export default function Layout() {
   const { data: pendingCount } = useQuery<PendingRequestsCount>({
     queryKey: ['transfer-requests-pending-count'],
     queryFn: async () => {
-      const response = await apiClient.get('/inventory/transfer-requests/pending-count')
+      const response = await apiClient.get('/api/inventory/transfer-requests/pending-count')
       return response.data
     },
     enabled: isPioneer || isAdmin,
