@@ -1,6 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from app.database import get_db
 from app.models.user import User, UserRole
@@ -945,10 +946,24 @@ async def get_pending_requests_count(
 ):
     """Gibt die Anzahl offener Anfragen zurück (für Benachrichtigungs-Badge)."""
     # Als Besitzer: Anfragen die ich bestätigen muss
-    owner_count = db.query(TransferRequest).filter(
-        TransferRequest.owner_id == current_user.id,
-        TransferRequest.status == TransferRequestStatus.PENDING
-    ).count()
+    # Pioneers sehen auch Anfragen für andere Pioneer-Lager
+    if current_user.is_pioneer:
+        # Pioneer: eigene + andere Pioneer-Anfragen
+        owner_count = db.query(TransferRequest).join(
+            User, TransferRequest.owner_id == User.id
+        ).filter(
+            TransferRequest.status == TransferRequestStatus.PENDING,
+            or_(
+                TransferRequest.owner_id == current_user.id,
+                User.is_pioneer == True
+            )
+        ).count()
+    else:
+        # Normale User: nur eigene
+        owner_count = db.query(TransferRequest).filter(
+            TransferRequest.owner_id == current_user.id,
+            TransferRequest.status == TransferRequestStatus.PENDING
+        ).count()
 
     # Als Anfragender: Meine offenen Anfragen
     requester_count = db.query(TransferRequest).filter(
@@ -969,7 +984,7 @@ async def approve_transfer_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Bestätigt eine Transfer-Anfrage (nur Besitzer oder Admin)."""
+    """Bestätigt eine Transfer-Anfrage (Besitzer, Admin, oder Pioneer für Pioneer-Lager)."""
     transfer_request = db.query(TransferRequest).filter(TransferRequest.id == request_id).first()
     if not transfer_request:
         raise HTTPException(
@@ -983,9 +998,22 @@ async def approve_transfer_request(
             detail="Anfrage wurde bereits bearbeitet"
         )
 
-    # Nur Besitzer oder Admin darf bestätigen
-    if transfer_request.owner_id != current_user.id:
-        check_role(current_user, UserRole.ADMIN)
+    # Wer darf bestätigen?
+    # - Owner selbst
+    # - Admin
+    # - Pioneer kann andere Pioneer-Lager bestätigen
+    owner = db.query(User).filter(User.id == transfer_request.owner_id).first()
+    can_approve = (
+        transfer_request.owner_id == current_user.id or  # Owner selbst
+        current_user.has_permission(UserRole.ADMIN) or   # Admin
+        (current_user.is_pioneer and owner and owner.is_pioneer)  # Pioneer approves Pioneer
+    )
+
+    if not can_approve:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Keine Berechtigung zum Bestätigen"
+        )
 
     # Prüfen ob noch genug im Lager ist
     inventory = db.query(Inventory).filter(
@@ -1076,7 +1104,7 @@ async def reject_transfer_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Lehnt eine Transfer-Anfrage ab (nur Besitzer oder Admin)."""
+    """Lehnt eine Transfer-Anfrage ab (Besitzer, Admin, oder Pioneer für Pioneer-Lager)."""
     transfer_request = db.query(TransferRequest).filter(TransferRequest.id == request_id).first()
     if not transfer_request:
         raise HTTPException(
@@ -1090,9 +1118,19 @@ async def reject_transfer_request(
             detail="Anfrage wurde bereits bearbeitet"
         )
 
-    # Nur Besitzer oder Admin darf ablehnen
-    if transfer_request.owner_id != current_user.id:
-        check_role(current_user, UserRole.ADMIN)
+    # Wer darf ablehnen?
+    owner = db.query(User).filter(User.id == transfer_request.owner_id).first()
+    can_reject = (
+        transfer_request.owner_id == current_user.id or
+        current_user.has_permission(UserRole.ADMIN) or
+        (current_user.is_pioneer and owner and owner.is_pioneer)
+    )
+
+    if not can_reject:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Keine Berechtigung zum Ablehnen"
+        )
 
     transfer_request.status = TransferRequestStatus.REJECTED
     transfer_request.approved_by_id = current_user.id

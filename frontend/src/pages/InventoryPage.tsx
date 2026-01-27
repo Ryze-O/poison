@@ -78,7 +78,10 @@ export default function InventoryPage() {
 
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
+  // canManage: Kann eigenes Lager aktiv verwalten (hinzufügen/entfernen)
   const canManage = effectiveRole !== 'member' && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
+  // hasInventory: Hat Zugriff auf Lager-Funktionen (alle außer Guest/Loot-Guest)
+  const hasInventory = !!user && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
   const isAdmin = effectiveRole === 'admin'
   const isPioneer = user?.is_pioneer ?? false
 
@@ -109,7 +112,7 @@ export default function InventoryPage() {
   const { data: myInventory } = useQuery<InventoryItem[]>({
     queryKey: ['inventory', 'my'],
     queryFn: () => apiClient.get('/api/inventory/my').then((r) => r.data),
-    enabled: canManage,
+    enabled: hasInventory,  // Alle User mit Lager-Zugang
   })
 
   const { data: allInventory } = useQuery<InventoryItem[]>({
@@ -155,20 +158,20 @@ export default function InventoryPage() {
   const { data: history } = useQuery<InventoryLog[]>({
     queryKey: ['inventory', 'history'],
     queryFn: () => apiClient.get('/api/inventory/history').then((r) => r.data),
-    enabled: canManage && showHistory,
+    enabled: hasInventory && showHistory,
   })
 
   // Transfer Requests
   const { data: transferRequests } = useQuery<TransferRequest[]>({
     queryKey: ['transfer-requests'],
     queryFn: () => apiClient.get('/api/inventory/transfer-requests').then((r) => r.data),
-    enabled: canManage,
+    enabled: hasInventory,
   })
 
   const { data: pendingCount } = useQuery<PendingRequestsCount>({
     queryKey: ['transfer-requests', 'pending', 'count'],
     queryFn: () => apiClient.get('/api/inventory/transfer-requests/pending/count').then((r) => r.data),
-    enabled: canManage,
+    enabled: hasInventory,
     refetchInterval: 30000, // Alle 30 Sekunden aktualisieren
   })
 
@@ -364,57 +367,65 @@ export default function InventoryPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold">Lager-Übersicht</h1>
-        {canManage && (
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowTransferRequests(!showTransferRequests)}
-              className={`btn ${showTransferRequests ? 'btn-primary' : 'btn-secondary'} flex items-center gap-2 relative`}
-            >
-              <Bell size={20} />
-              Anfragen
-              {pendingAsOwner > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                  {pendingAsOwner}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className={`btn ${showHistory ? 'btn-primary' : 'btn-secondary'} flex items-center gap-2`}
-            >
-              <History size={20} />
-              Historie
-            </button>
-            <button
-              onClick={() => {
-                // Alle Items vorauswählen
-                if (myInventory) {
-                  setPatchKeptItems(new Set(myInventory.map(i => i.id)))
-                }
-                setPatchModal(true)
-              }}
-              className="btn bg-amber-600 hover:bg-amber-500 flex items-center gap-2"
-              title="Nach einem Patch: Items abgleichen und neue Homelocation setzen"
-            >
-              <Package size={20} />
-              Patch
-            </button>
-            <button
-              onClick={() => setBulkMoveModal(true)}
-              className="btn btn-secondary flex items-center gap-2"
-            >
-              <ArrowRightLeft size={20} />
-              Standort wechseln
-            </button>
-            <button
-              onClick={() => setAddModal(true)}
-              className="btn btn-primary flex items-center gap-2"
-            >
-              <Plus size={20} />
-              Hinzufügen
-            </button>
-          </div>
-        )}
+        <div className="flex gap-2">
+          {/* Buttons für alle User mit Lager-Zugang */}
+          {hasInventory && (
+            <>
+              <button
+                onClick={() => setShowTransferRequests(!showTransferRequests)}
+                className={`btn ${showTransferRequests ? 'btn-primary' : 'btn-secondary'} flex items-center gap-2 relative`}
+              >
+                <Bell size={20} />
+                Anfragen
+                {pendingAsOwner > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {pendingAsOwner}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className={`btn ${showHistory ? 'btn-primary' : 'btn-secondary'} flex items-center gap-2`}
+              >
+                <History size={20} />
+                Historie
+              </button>
+              <button
+                onClick={() => {
+                  // Alle Items vorauswählen
+                  if (myInventory) {
+                    setPatchKeptItems(new Set(myInventory.map(i => i.id)))
+                  }
+                  setPatchModal(true)
+                }}
+                className="btn bg-amber-600 hover:bg-amber-500 flex items-center gap-2"
+                title="Nach einem Patch: Items abgleichen und neue Homelocation setzen"
+              >
+                <Package size={20} />
+                Patch
+              </button>
+            </>
+          )}
+          {/* Buttons nur für Officers+ (aktive Verwaltung) */}
+          {canManage && (
+            <>
+              <button
+                onClick={() => setBulkMoveModal(true)}
+                className="btn btn-secondary flex items-center gap-2"
+              >
+                <ArrowRightLeft size={20} />
+                Standort wechseln
+              </button>
+              <button
+                onClick={() => setAddModal(true)}
+                className="btn btn-primary flex items-center gap-2"
+              >
+                <Plus size={20} />
+                Hinzufügen
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Such- und Filterleiste */}
@@ -479,7 +490,7 @@ export default function InventoryPage() {
       </div>
 
       {/* Transfer Requests */}
-      {showTransferRequests && canManage && (
+      {showTransferRequests && hasInventory && (
         <div className="card mb-8">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
             <Bell size={24} className="text-krt-orange" />
@@ -488,15 +499,25 @@ export default function InventoryPage() {
 
           {transferRequests && transferRequests.length > 0 ? (
             <div className="space-y-4">
-              {/* Eingehende Anfragen (als Besitzer) */}
-              {transferRequests.filter(r => r.owner.id === user?.id && r.status === 'pending').length > 0 && (
+              {/* Eingehende Anfragen (als Besitzer oder Pioneer für Pioneer-Lager) */}
+              {transferRequests.filter(r =>
+                r.status === 'pending' && (
+                  r.owner.id === user?.id ||  // Eigene Anfragen
+                  (isPioneer && r.owner.is_pioneer && r.owner.id !== user?.id)  // Pioneer kann andere Pioneer-Anfragen sehen
+                )
+              ).length > 0 && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
                     Eingehende Anfragen
                   </h3>
                   <div className="space-y-2">
                     {transferRequests
-                      .filter(r => r.owner.id === user?.id && r.status === 'pending')
+                      .filter(r =>
+                        r.status === 'pending' && (
+                          r.owner.id === user?.id ||
+                          (isPioneer && r.owner.is_pioneer && r.owner.id !== user?.id)
+                        )
+                      )
                       .map((request) => (
                         <div
                           key={request.id}
@@ -507,6 +528,13 @@ export default function InventoryPage() {
                               <span className="text-krt-orange">{request.requester.display_name || request.requester.username}</span>
                               {' '}möchte{' '}
                               <span className="text-white">{request.quantity}x {request.component.name}</span>
+                              {/* Zeige Besitzer wenn nicht eigenes Lager */}
+                              {request.owner.id !== user?.id && (
+                                <>
+                                  {' '}von{' '}
+                                  <span className="text-purple-400">{request.owner.display_name || request.owner.username}</span>
+                                </>
+                              )}
                             </p>
                             {request.notes && (
                               <p className="text-sm text-gray-400 mt-1">"{request.notes}"</p>
@@ -666,7 +694,7 @@ export default function InventoryPage() {
       )}
 
       {/* Mein Lager */}
-      {canManage && (
+      {hasInventory && (
         <div className="card mb-8">
           <h2 className="text-xl font-bold mb-4">Mein Lager</h2>
           {filteredMyInventory && filteredMyInventory.length > 0 ? (
@@ -729,48 +757,56 @@ export default function InventoryPage() {
                                         )}
                                       </div>
                                       <div className="flex items-center gap-3">
-                                        <div className="flex items-center gap-1">
-                                          <button
-                                            onClick={() =>
-                                              removeMutation.mutate({
-                                                componentId: item.component.id,
-                                                quantity: 1,
-                                                locationId: item.location?.id,
-                                              })
-                                            }
-                                            disabled={item.quantity <= 0}
-                                            className="p-1.5 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
-                                          >
-                                            <Minus size={14} />
-                                          </button>
+                                        {canManage ? (
+                                          <>
+                                            <div className="flex items-center gap-1">
+                                              <button
+                                                onClick={() =>
+                                                  removeMutation.mutate({
+                                                    componentId: item.component.id,
+                                                    quantity: 1,
+                                                    locationId: item.location?.id,
+                                                  })
+                                                }
+                                                disabled={item.quantity <= 0}
+                                                className="p-1.5 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+                                              >
+                                                <Minus size={14} />
+                                              </button>
+                                              <span className="w-10 text-center font-bold">
+                                                {item.quantity}
+                                              </span>
+                                              <button
+                                                onClick={() =>
+                                                  addMutation.mutate({
+                                                    componentId: item.component.id,
+                                                    quantity: 1,
+                                                    locationId: item.location?.id,
+                                                  })
+                                                }
+                                                className="p-1.5 bg-gray-700 rounded hover:bg-gray-600"
+                                              >
+                                                <Plus size={14} />
+                                              </button>
+                                            </div>
+                                            <button
+                                              onClick={() =>
+                                                setTransferModal({
+                                                  component: item.component,
+                                                  quantity: item.quantity,
+                                                  locationId: item.location?.id ?? null,
+                                                })
+                                              }
+                                              className="p-1.5 bg-krt-orange/20 text-krt-orange rounded hover:bg-krt-orange/30"
+                                            >
+                                              <ArrowRight size={14} />
+                                            </button>
+                                          </>
+                                        ) : (
                                           <span className="w-10 text-center font-bold">
                                             {item.quantity}
                                           </span>
-                                          <button
-                                            onClick={() =>
-                                              addMutation.mutate({
-                                                componentId: item.component.id,
-                                                quantity: 1,
-                                                locationId: item.location?.id,
-                                              })
-                                            }
-                                            className="p-1.5 bg-gray-700 rounded hover:bg-gray-600"
-                                          >
-                                            <Plus size={14} />
-                                          </button>
-                                        </div>
-                                        <button
-                                          onClick={() =>
-                                            setTransferModal({
-                                              component: item.component,
-                                              quantity: item.quantity,
-                                              locationId: item.location?.id ?? null,
-                                            })
-                                          }
-                                          className="p-1.5 bg-krt-orange/20 text-krt-orange rounded hover:bg-krt-orange/30"
-                                        >
-                                          <ArrowRight size={14} />
-                                        </button>
+                                        )}
                                       </div>
                                     </div>
                                   ))}
@@ -924,7 +960,8 @@ export default function InventoryPage() {
                                 .sort((a, b) => a.component.name.localeCompare(b.component.name))
                                 .map((item) => {
                                   const isOwnInventory = officer.id === user?.id
-                                  const canRequestFrom = !isOwnInventory && !isAdmin && canManage
+                                  // Jeder kann Items anfragen (außer Admins, die bearbeiten direkt)
+                                  const canRequestFrom = !isOwnInventory && !isAdmin && !!user
 
                                   return (
                                     <div
