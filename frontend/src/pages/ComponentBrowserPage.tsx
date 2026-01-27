@@ -360,7 +360,7 @@ export default function ComponentBrowserPage() {
                   {/* Ref-Code (class_name) */}
                   {componentDetail.raw_stats?.class_name && (
                     <p className="text-xs text-gray-500 font-mono mt-1">
-                      {componentDetail.raw_stats.class_name as string}
+                      {String(componentDetail.raw_stats.class_name)}
                     </p>
                   )}
                 </div>
@@ -409,7 +409,7 @@ export default function ComponentBrowserPage() {
               )}
 
               {/* Shield Stats */}
-              {componentDetail.shield && (
+              {componentDetail.shield ? (
                 <div className="mb-4">
                   <h4 className="text-sm font-bold text-krt-orange mb-2 flex items-center gap-2">
                     <Shield size={16} />
@@ -434,10 +434,10 @@ export default function ComponentBrowserPage() {
                     </div>
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* Power Stats */}
-              {componentDetail.power && (
+              {componentDetail.power ? (
                 <div className="mb-4">
                   <h4 className="text-sm font-bold text-gray-400 mb-2 flex items-center gap-2">
                     <Zap size={16} />
@@ -462,10 +462,10 @@ export default function ComponentBrowserPage() {
                     </div>
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* Cooler Stats */}
-              {componentDetail.cooler && (
+              {componentDetail.cooler ? (
                 <div className="mb-4">
                   <h4 className="text-sm font-bold text-cyan-400 mb-2 flex items-center gap-2">
                     <Thermometer size={16} />
@@ -482,10 +482,10 @@ export default function ComponentBrowserPage() {
                     </div>
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* Quantum Drive Stats */}
-              {componentDetail.quantum_drive && (
+              {componentDetail.quantum_drive ? (
                 <div className="mb-4">
                   <h4 className="text-sm font-bold text-gray-400 mb-2 flex items-center gap-2">
                     <Rocket size={16} />
@@ -510,28 +510,28 @@ export default function ComponentBrowserPage() {
                     </div>
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* Technische Daten (Durability, Volume) */}
-              {(componentDetail.raw_stats?.durability || componentDetail.raw_stats?.dimension) && (
+              {(componentDetail.raw_stats?.durability !== undefined || componentDetail.raw_stats?.dimension !== undefined) ? (
                 <div className="mb-4">
                   <h4 className="text-sm font-bold text-gray-400 mb-2">Technische Daten</h4>
                   <div className="grid grid-cols-2 gap-2">
-                    {componentDetail.raw_stats?.durability && (
+                    {componentDetail.raw_stats?.durability !== undefined ? (
                       <div className="p-2 bg-gray-800/50 rounded">
                         <p className="text-xs text-gray-500">Durability</p>
                         <p className="font-medium">{formatNumber((componentDetail.raw_stats.durability as {health?: number}).health)} HP</p>
                       </div>
-                    )}
-                    {componentDetail.raw_stats?.dimension && (
+                    ) : null}
+                    {componentDetail.raw_stats?.dimension !== undefined ? (
                       <div className="p-2 bg-gray-800/50 rounded">
                         <p className="text-xs text-gray-500">Volume</p>
                         <p className="font-medium">{formatNumber((componentDetail.raw_stats.dimension as {volume?: number}).volume)} µSCU</p>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* UEX Preise / Wo kaufbar */}
               <div className="mb-4">
