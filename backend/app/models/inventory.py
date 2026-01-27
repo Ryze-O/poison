@@ -59,7 +59,7 @@ class TransferRequest(Base):
     __tablename__ = "transfer_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    # Bestellnummer für Discord-Koordination (z.B. "TR-2026-0042")
+    # Bestellnummer für Discord-Koordination (z.B. "VPR-2026-0042")
     order_number = Column(String(20), unique=True, nullable=True, index=True)
     # Wer fragt an (will empfangen)
     requester_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)

@@ -38,13 +38,13 @@ def upgrade() -> None:
         op.add_column('transfer_requests', sa.Column('delivered_by_id', sa.Integer(), nullable=True))
 
     # Generate order numbers for existing requests
-    # Format: TR-YYYY-NNNN (e.g., TR-2026-0001)
+    # Format: VPR-YYYY-NNNN (e.g., VPR-2026-0001)
     connection = op.get_bind()
     result = connection.execute(sa.text("SELECT id FROM transfer_requests WHERE order_number IS NULL ORDER BY id"))
     rows = result.fetchall()
 
     for i, row in enumerate(rows, start=1):
-        order_num = f"TR-2026-{i:04d}"
+        order_num = f"VPR-2026-{i:04d}"
         connection.execute(
             sa.text("UPDATE transfer_requests SET order_number = :order_num WHERE id = :id"),
             {"order_num": order_num, "id": row[0]}

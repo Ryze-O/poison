@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft, ChevronDown, ChevronRight, Bell, Check, X, Send, Copy, Truck, MessageCircle } from 'lucide-react'
+import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft, ChevronDown, ChevronRight, Bell, Check, X, Send, Copy, Truck, MessageCircle, Clock } from 'lucide-react'
 import type { InventoryItem, User, Component, Location, TransferRequest, PendingRequestsCount } from '../api/types'
 
 type InventoryAction = 'add' | 'remove' | 'loot' | 'transfer_in' | 'transfer_out'
@@ -451,7 +451,7 @@ export default function InventoryPage() {
   }, [officers, isAdmin, isPioneer, user?.id])
 
   // Pending Requests für Badge
-  const pendingAsOwner = (pendingCount?.as_owner_pending ?? 0) + (pendingCount?.as_owner_approved ?? 0)
+  const pendingAsOwner = (pendingCount?.as_owner_pending ?? 0) + (pendingCount?.as_owner_approved ?? 0) + (pendingCount?.as_owner_awaiting ?? 0)
   const pendingAsRequester = (pendingCount?.as_requester_pending ?? 0) + (pendingCount?.as_requester_approved ?? 0)
   const awaitingReceipt = pendingCount?.awaiting_receipt ?? 0
   const adminAwaiting = pendingCount?.admin_awaiting ?? 0
@@ -764,6 +764,64 @@ export default function InventoryPage() {
                               <Truck size={16} />
                               Ausgeliefert
                             </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 2b. Warte auf Empfängerbestätigung (als Pioneer/Owner) */}
+              {transferRequests.filter(r => r.owner.id === user?.id && r.status === 'awaiting_receipt').length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-yellow-400 mb-2 border-b border-yellow-700/50 pb-1">
+                    ⏳ Warte auf Empfängerbestätigung
+                  </h3>
+                  <div className="space-y-3">
+                    {transferRequests
+                      .filter(r => r.owner.id === user?.id && r.status === 'awaiting_receipt')
+                      .map((request) => (
+                        <div
+                          key={request.id}
+                          className="p-4 bg-yellow-900/10 border border-yellow-600/30 rounded-lg"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              {/* Bestellnummer */}
+                              {request.order_number && (
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-xs font-mono bg-yellow-900/50 px-2 py-0.5 rounded text-yellow-300">
+                                    {request.order_number}
+                                  </span>
+                                  <button
+                                    onClick={() => copyOrderNumber(request.order_number!)}
+                                    className="text-yellow-400 hover:text-yellow-300"
+                                    title="Bestellnummer kopieren"
+                                  >
+                                    <Copy size={14} />
+                                  </button>
+                                </div>
+                              )}
+                              {/* Item & Menge */}
+                              <p className="font-bold text-lg text-white">
+                                {request.quantity}x {request.component.name}
+                              </p>
+                              {/* An wen */}
+                              <p className="text-sm text-gray-400 mt-1">
+                                An: <span className="text-krt-orange font-medium">{request.requester.display_name || request.requester.username}</span>
+                              </p>
+                              {/* Status */}
+                              <p className="text-sm text-yellow-400 mt-2">
+                                Ausgeliefert - warte auf Bestätigung durch Empfänger
+                              </p>
+                              {/* Datum */}
+                              <p className="text-xs text-gray-500 mt-2">
+                                Angefragt am {new Date(request.created_at).toLocaleDateString('de-DE')}
+                              </p>
+                            </div>
+                            <div className="text-yellow-400">
+                              <Clock size={24} />
+                            </div>
                           </div>
                         </div>
                       ))}

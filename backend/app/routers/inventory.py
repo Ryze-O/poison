@@ -998,7 +998,7 @@ async def create_transfer_request(
     else:
         next_num = 1
 
-    order_number = f"TR-{year}-{next_num:04d}"
+    order_number = f"VPR-{year}-{next_num:04d}"
 
     # Anfrage erstellen
     transfer_request = TransferRequest(
@@ -1098,6 +1098,12 @@ async def get_pending_requests_count(
         TransferRequest.status == TransferRequestStatus.AWAITING_RECEIPT
     ).count()
 
+    # Als Owner: Anfragen die ich ausgeliefert habe, warte auf Empfängerbestätigung
+    owner_awaiting = db.query(TransferRequest).filter(
+        TransferRequest.owner_id == current_user.id,
+        TransferRequest.status == TransferRequestStatus.AWAITING_RECEIPT
+    ).count()
+
     # Admin sieht auch AWAITING_RECEIPT von anderen (falls User inaktiv)
     admin_awaiting = 0
     if current_user.has_permission(UserRole.ADMIN):
@@ -1109,11 +1115,12 @@ async def get_pending_requests_count(
     return {
         "as_owner_pending": owner_pending,
         "as_owner_approved": owner_approved,
+        "as_owner_awaiting": owner_awaiting,
         "as_requester_pending": requester_pending,
         "as_requester_approved": requester_approved,
         "awaiting_receipt": awaiting_receipt,
         "admin_awaiting": admin_awaiting,
-        "total": owner_pending + owner_approved + requester_pending + requester_approved + awaiting_receipt + admin_awaiting
+        "total": owner_pending + owner_approved + owner_awaiting + requester_pending + requester_approved + awaiting_receipt + admin_awaiting
     }
 
 

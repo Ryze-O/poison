@@ -105,7 +105,7 @@ class TransferRequestCreate(BaseModel):
 
 class TransferRequestResponse(BaseModel):
     id: int
-    order_number: Optional[str]     # Bestellnummer für Discord-Koordination (z.B. "TR-2026-0042")
+    order_number: Optional[str]     # Bestellnummer für Discord-Koordination (z.B. "VPR-2026-0042")
     requester: UserResponse         # Wer will haben
     owner: UserResponse             # Wessen Lager
     component: ComponentResponse

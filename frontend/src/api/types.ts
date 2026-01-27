@@ -356,6 +356,7 @@ export interface TransferRequestCreate {
 export interface PendingRequestsCount {
   as_owner_pending: number      // Anfragen die ich freigeben muss (PENDING)
   as_owner_approved: number     // Anfragen die ich ausliefern muss (APPROVED)
+  as_owner_awaiting: number     // Anfragen die ich ausgeliefert habe, warte auf Bestätigung
   as_requester_pending: number  // Meine Anfragen die auf Freigabe warten
   as_requester_approved: number // Meine freigegebenen Anfragen (Discord-Koordination)
   awaiting_receipt: number      // Anfragen wo ich Erhalt bestätigen muss
