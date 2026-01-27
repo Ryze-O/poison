@@ -65,13 +65,23 @@ export default function ComponentBrowserPage() {
 
   // Suche nach Komponenten (mit optionalem Kategorie-Filter)
   // Aktiviert wenn: mindestens 2 Zeichen ODER Kategorie ausgewählt
-  const hasSearchCriteria = search.length >= 2 || !!categoryFilter
+  const hasSearchText = search.length >= 2
+  const hasSearchCriteria = hasSearchText || !!categoryFilter
   const { data: searchResults, isLoading: isSearching } = useQuery<Component[]>({
-    queryKey: ['component-search', search, categoryFilter],
+    queryKey: ['component-search', search, categoryFilter, subCategoryFilter],
     queryFn: () => {
-      let url = `/api/items/search?q=${encodeURIComponent(search)}`
-      if (categoryFilter) url += `&category=${encodeURIComponent(categoryFilter)}`
-      return apiClient.get(url).then(r => r.data)
+      // Wenn Suchtext vorhanden: /search Endpoint nutzen (Fuzzy-Matching)
+      // Sonst: /items Endpoint mit Kategorie-Filter
+      if (hasSearchText) {
+        let url = `/api/items/search?q=${encodeURIComponent(search)}`
+        if (categoryFilter) url += `&category=${encodeURIComponent(categoryFilter)}`
+        return apiClient.get(url).then(r => r.data)
+      } else {
+        // Nur Kategorie-Filter, keine Suche - nutze /items Endpoint
+        let url = `/api/items?category=${encodeURIComponent(categoryFilter)}`
+        if (subCategoryFilter) url += `&sub_category=${encodeURIComponent(subCategoryFilter)}`
+        return apiClient.get(url).then(r => r.data)
+      }
     },
     enabled: hasSearchCriteria,
   })
