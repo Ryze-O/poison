@@ -12,7 +12,7 @@ from app.models.location import Location
 from app.schemas.inventory import (
     InventoryResponse, InventoryUpdate, TransferCreate, TransferResponse,
     InventoryLogResponse, BulkLocationTransfer, BulkTransferToOfficer, PatchResetRequest,
-    TransferRequestCreate, TransferRequestResponse
+    TransferRequestCreate, TransferRequestResponse, TransferRequestReject
 )
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
@@ -981,8 +981,28 @@ async def create_transfer_request(
             detail="Nicht genug Items im Lager des Besitzers"
         )
 
+    # Bestellnummer generieren (TR-YYYY-NNNN)
+    from datetime import datetime
+    year = datetime.now().year
+    # Finde die höchste Nummer dieses Jahres
+    last_request = db.query(TransferRequest).filter(
+        TransferRequest.order_number.like(f"TR-{year}-%")
+    ).order_by(TransferRequest.id.desc()).first()
+
+    if last_request and last_request.order_number:
+        try:
+            last_num = int(last_request.order_number.split("-")[-1])
+            next_num = last_num + 1
+        except ValueError:
+            next_num = 1
+    else:
+        next_num = 1
+
+    order_number = f"TR-{year}-{next_num:04d}"
+
     # Anfrage erstellen
     transfer_request = TransferRequest(
+        order_number=order_number,
         requester_id=current_user.id,
         owner_id=request.owner_id,
         component_id=request.component_id,
@@ -1026,11 +1046,11 @@ async def get_pending_requests_count(
     current_user: User = Depends(get_current_user)
 ):
     """Gibt die Anzahl offener Anfragen zurück (für Benachrichtigungs-Badge)."""
-    # Als Besitzer: Anfragen die ich bestätigen muss (PENDING)
+    # Als Besitzer/Pioneer: Anfragen die ich freigeben muss (PENDING)
     # Pioneers sehen auch Anfragen für andere Pioneer-Lager
     if current_user.is_pioneer:
-        # Pioneer: eigene + andere Pioneer-Anfragen
-        owner_count = db.query(TransferRequest).join(
+        # Pioneer: eigene + andere Pioneer-Anfragen (PENDING)
+        owner_pending = db.query(TransferRequest).join(
             User, TransferRequest.owner_id == User.id
         ).filter(
             TransferRequest.status == TransferRequestStatus.PENDING,
@@ -1039,17 +1059,37 @@ async def get_pending_requests_count(
                 User.is_pioneer == True
             )
         ).count()
+        # Pioneer: Anfragen die ich ausliefern muss (APPROVED)
+        owner_approved = db.query(TransferRequest).join(
+            User, TransferRequest.owner_id == User.id
+        ).filter(
+            TransferRequest.status == TransferRequestStatus.APPROVED,
+            or_(
+                TransferRequest.owner_id == current_user.id,
+                User.is_pioneer == True
+            )
+        ).count()
     else:
         # Normale User: nur eigene
-        owner_count = db.query(TransferRequest).filter(
+        owner_pending = db.query(TransferRequest).filter(
             TransferRequest.owner_id == current_user.id,
             TransferRequest.status == TransferRequestStatus.PENDING
         ).count()
+        owner_approved = db.query(TransferRequest).filter(
+            TransferRequest.owner_id == current_user.id,
+            TransferRequest.status == TransferRequestStatus.APPROVED
+        ).count()
 
-    # Als Anfragender: Meine Anfragen die noch auf Owner-Bestätigung warten
+    # Als Anfragender: Meine Anfragen die noch auf Freigabe warten (PENDING)
     requester_pending = db.query(TransferRequest).filter(
         TransferRequest.requester_id == current_user.id,
         TransferRequest.status == TransferRequestStatus.PENDING
+    ).count()
+
+    # Als Anfragender: Meine Anfragen die freigegeben wurden - Discord-Koordination (APPROVED)
+    requester_approved = db.query(TransferRequest).filter(
+        TransferRequest.requester_id == current_user.id,
+        TransferRequest.status == TransferRequestStatus.APPROVED
     ).count()
 
     # Als Empfänger: Anfragen wo ich Erhalt bestätigen muss (AWAITING_RECEIPT)
@@ -1067,11 +1107,13 @@ async def get_pending_requests_count(
         ).count()
 
     return {
-        "as_owner": owner_count,
-        "as_requester": requester_pending,
+        "as_owner_pending": owner_pending,
+        "as_owner_approved": owner_approved,
+        "as_requester_pending": requester_pending,
+        "as_requester_approved": requester_approved,
         "awaiting_receipt": awaiting_receipt,
         "admin_awaiting": admin_awaiting,
-        "total": owner_count + requester_pending + awaiting_receipt + admin_awaiting
+        "total": owner_pending + owner_approved + requester_pending + requester_approved + awaiting_receipt + admin_awaiting
     }
 
 
@@ -1081,8 +1123,8 @@ async def approve_transfer_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Bestätigt eine Transfer-Anfrage (Besitzer, Admin, oder Pioneer für Pioneer-Lager).
-    Setzt Status auf AWAITING_RECEIPT - Empfänger muss noch Erhalt bestätigen."""
+    """Gibt eine Transfer-Anfrage frei (Besitzer, Admin, oder Pioneer für Pioneer-Lager).
+    Setzt Status auf APPROVED - jetzt muss über Discord ein Übergabetermin vereinbart werden."""
     transfer_request = db.query(TransferRequest).filter(TransferRequest.id == request_id).first()
     if not transfer_request:
         raise HTTPException(
@@ -1096,10 +1138,10 @@ async def approve_transfer_request(
             detail="Anfrage wurde bereits bearbeitet"
         )
 
-    # Wer darf bestätigen?
+    # Wer darf freigeben?
     # - Owner selbst
     # - Admin
-    # - Pioneer kann andere Pioneer-Lager bestätigen
+    # - Pioneer kann andere Pioneer-Lager freigeben
     owner = db.query(User).filter(User.id == transfer_request.owner_id).first()
     can_approve = (
         transfer_request.owner_id == current_user.id or  # Owner selbst
@@ -1110,7 +1152,7 @@ async def approve_transfer_request(
     if not can_approve:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Keine Berechtigung zum Bestätigen"
+            detail="Keine Berechtigung zum Freigeben"
         )
 
     # Prüfen ob noch genug im Lager ist
@@ -1126,13 +1168,74 @@ async def approve_transfer_request(
             detail="Nicht mehr genug Items im Lager"
         )
 
-    # Status auf "Warte auf Empfänger-Bestätigung" setzen
-    # Transfer wird erst durchgeführt wenn Empfänger bestätigt
-    transfer_request.status = TransferRequestStatus.AWAITING_RECEIPT
+    # Status auf APPROVED setzen - Discord-Koordination beginnt
+    transfer_request.status = TransferRequestStatus.APPROVED
     transfer_request.approved_by_id = current_user.id
 
     db.commit()
-    return {"message": "Transfer-Anfrage bestätigt - wartet auf Empfänger-Bestätigung"}
+    return {
+        "message": "Anfrage freigegeben - bitte Übergabetermin über Discord vereinbaren",
+        "order_number": transfer_request.order_number
+    }
+
+
+@router.post("/transfer-requests/{request_id}/deliver")
+async def mark_as_delivered(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Markiert eine Anfrage als ausgeliefert (Besitzer, Admin, oder Pioneer für Pioneer-Lager).
+    Setzt Status auf AWAITING_RECEIPT - Empfänger muss noch Erhalt bestätigen."""
+    transfer_request = db.query(TransferRequest).filter(TransferRequest.id == request_id).first()
+    if not transfer_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Anfrage nicht gefunden"
+        )
+
+    if transfer_request.status != TransferRequestStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Anfrage muss erst freigegeben werden (Status: APPROVED)"
+        )
+
+    # Wer darf als ausgeliefert markieren?
+    # - Owner selbst
+    # - Admin
+    # - Pioneer kann andere Pioneer-Lager markieren
+    owner = db.query(User).filter(User.id == transfer_request.owner_id).first()
+    can_deliver = (
+        transfer_request.owner_id == current_user.id or  # Owner selbst
+        current_user.has_permission(UserRole.ADMIN) or   # Admin
+        (current_user.is_pioneer and owner and owner.is_pioneer)  # Pioneer delivers Pioneer
+    )
+
+    if not can_deliver:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Keine Berechtigung zum Markieren als ausgeliefert"
+        )
+
+    # Prüfen ob noch genug im Lager ist
+    inventory = db.query(Inventory).filter(
+        Inventory.user_id == transfer_request.owner_id,
+        Inventory.component_id == transfer_request.component_id,
+        Inventory.location_id == transfer_request.from_location_id
+    ).first()
+
+    if not inventory or inventory.quantity < transfer_request.quantity:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nicht mehr genug Items im Lager"
+        )
+
+    # Status auf AWAITING_RECEIPT setzen - Empfänger muss bestätigen
+    transfer_request.status = TransferRequestStatus.AWAITING_RECEIPT
+    transfer_request.delivered_by_id = current_user.id
+
+    db.commit()
+    return {"message": "Als ausgeliefert markiert - wartet auf Empfänger-Bestätigung"}
 
 
 @router.post("/transfer-requests/{request_id}/confirm-receipt")
@@ -1256,10 +1359,12 @@ async def confirm_receipt(
 @router.post("/transfer-requests/{request_id}/reject")
 async def reject_transfer_request(
     request_id: int,
+    rejection: TransferRequestReject,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Lehnt eine Transfer-Anfrage ab (Besitzer, Admin, oder Pioneer für Pioneer-Lager)."""
+    """Lehnt eine Transfer-Anfrage ab (Besitzer, Admin, oder Pioneer für Pioneer-Lager).
+    Erfordert eine Begründung für die Ablehnung."""
     transfer_request = db.query(TransferRequest).filter(TransferRequest.id == request_id).first()
     if not transfer_request:
         raise HTTPException(
@@ -1271,6 +1376,13 @@ async def reject_transfer_request(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Anfrage wurde bereits bearbeitet"
+        )
+
+    # Begründung ist Pflicht
+    if not rejection.reason or not rejection.reason.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bitte gib eine Begründung für die Ablehnung an"
         )
 
     # Wer darf ablehnen?
@@ -1289,6 +1401,7 @@ async def reject_transfer_request(
 
     transfer_request.status = TransferRequestStatus.REJECTED
     transfer_request.approved_by_id = current_user.id
+    transfer_request.rejection_reason = rejection.reason.strip()
 
     db.commit()
     return {"message": "Transfer-Anfrage abgelehnt"}

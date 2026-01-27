@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft, ChevronDown, ChevronRight, Bell, Check, X, Send } from 'lucide-react'
+import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft, ChevronDown, ChevronRight, Bell, Check, X, Send, Copy, Truck, MessageCircle } from 'lucide-react'
 import type { InventoryItem, User, Component, Location, TransferRequest, PendingRequestsCount } from '../api/types'
 
 type InventoryAction = 'add' | 'remove' | 'loot' | 'transfer_in' | 'transfer_out'
@@ -75,6 +75,13 @@ export default function InventoryPage() {
   } | null>(null)
   const [requestAmount, setRequestAmount] = useState(1)
   const [requestNotes, setRequestNotes] = useState('')
+  // Rejection Modal
+  const [rejectModal, setRejectModal] = useState<{
+    requestId: number
+    componentName: string
+    requesterName: string
+  } | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
   // Move Location Modal
   const [moveModal, setMoveModal] = useState<{
     itemId: number
@@ -336,10 +343,12 @@ export default function InventoryPage() {
   })
 
   const rejectRequestMutation = useMutation({
-    mutationFn: (requestId: number) =>
-      apiClient.post(`/api/inventory/transfer-requests/${requestId}/reject`),
+    mutationFn: ({ requestId, reason }: { requestId: number; reason: string }) =>
+      apiClient.post(`/api/inventory/transfer-requests/${requestId}/reject`, { reason }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transfer-requests'] })
+      setRejectModal(null)
+      setRejectReason('')
     },
   })
 
@@ -351,6 +360,19 @@ export default function InventoryPage() {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
     },
   })
+
+  const deliverMutation = useMutation({
+    mutationFn: (requestId: number) =>
+      apiClient.post(`/api/inventory/transfer-requests/${requestId}/deliver`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transfer-requests'] })
+    },
+  })
+
+  // Hilfsfunktion zum Kopieren der Bestellnummer
+  const copyOrderNumber = (orderNumber: string) => {
+    navigator.clipboard.writeText(orderNumber)
+  }
 
   // Filtern von myInventory
   const filteredMyInventory = myInventory?.filter((item) => {
@@ -429,10 +451,11 @@ export default function InventoryPage() {
   }, [officers, isAdmin, isPioneer, user?.id])
 
   // Pending Requests für Badge
-  const pendingAsOwner = pendingCount?.as_owner ?? 0
+  const pendingAsOwner = (pendingCount?.as_owner_pending ?? 0) + (pendingCount?.as_owner_approved ?? 0)
+  const pendingAsRequester = (pendingCount?.as_requester_pending ?? 0) + (pendingCount?.as_requester_approved ?? 0)
   const awaitingReceipt = pendingCount?.awaiting_receipt ?? 0
   const adminAwaiting = pendingCount?.admin_awaiting ?? 0
-  const totalPendingBadge = pendingAsOwner + awaitingReceipt + adminAwaiting
+  const totalPendingBadge = pendingAsOwner + pendingAsRequester + awaitingReceipt + adminAwaiting
 
   return (
     <div>
@@ -574,18 +597,18 @@ export default function InventoryPage() {
 
           {transferRequests && transferRequests.length > 0 ? (
             <div className="space-y-4">
-              {/* Eingehende Anfragen (als Besitzer oder Pioneer für Pioneer-Lager) */}
+              {/* 1. Neue Anfragen freigeben (PENDING → APPROVED) */}
               {transferRequests.filter(r =>
                 r.status === 'pending' && (
-                  r.owner.id === user?.id ||  // Eigene Anfragen
-                  (isPioneer && r.owner.is_pioneer && r.owner.id !== user?.id)  // Pioneer kann andere Pioneer-Anfragen sehen
+                  r.owner.id === user?.id ||
+                  (isPioneer && r.owner.is_pioneer && r.owner.id !== user?.id)
                 )
               ).length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
-                    Eingehende Anfragen
+                  <h3 className="text-sm font-medium text-yellow-400 mb-2 border-b border-yellow-700/50 pb-1">
+                    Neue Anfragen - Freigabe erforderlich
                   </h3>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {transferRequests
                       .filter(r =>
                         r.status === 'pending' && (
@@ -596,44 +619,150 @@ export default function InventoryPage() {
                       .map((request) => (
                         <div
                           key={request.id}
-                          className="flex items-center justify-between p-3 bg-gray-800/50 border border-gray-600/30 rounded-lg"
+                          className="p-4 bg-yellow-900/10 border border-yellow-600/30 rounded-lg"
                         >
-                          <div>
-                            <p className="font-medium">
-                              <span className="text-krt-orange">{request.requester.display_name || request.requester.username}</span>
-                              {' '}möchte{' '}
-                              <span className="text-white">{request.quantity}x {request.component.name}</span>
-                              {/* Zeige Besitzer wenn nicht eigenes Lager */}
-                              {request.owner.id !== user?.id && (
-                                <>
-                                  {' '}von{' '}
-                                  <span className="text-gray-300">{request.owner.display_name || request.owner.username}</span>
-                                </>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              {/* Bestellnummer */}
+                              {request.order_number && (
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-xs font-mono bg-gray-700 px-2 py-0.5 rounded text-gray-300">
+                                    {request.order_number}
+                                  </span>
+                                </div>
                               )}
-                            </p>
-                            {request.notes && (
-                              <p className="text-sm text-gray-400 mt-1">"{request.notes}"</p>
-                            )}
-                            <p className="text-xs text-gray-500 mt-1">
-                              {new Date(request.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </p>
+                              {/* Item & Menge */}
+                              <p className="font-bold text-lg text-white">
+                                {request.quantity}x {request.component.name}
+                              </p>
+                              {/* Wer → Wohin */}
+                              <div className="flex flex-wrap items-center gap-x-2 text-sm mt-1">
+                                <span className="text-gray-400">Angefragt von:</span>
+                                <span className="text-krt-orange font-medium">{request.requester.display_name || request.requester.username}</span>
+                                <span className="text-gray-500">|</span>
+                                <span className="text-gray-400">Aus Lager:</span>
+                                <span className="text-gray-300">{request.owner.display_name || request.owner.username}</span>
+                              </div>
+                              {/* Notizen/Begründung */}
+                              {request.notes && (
+                                <div className="mt-2 p-2 bg-gray-700/30 rounded text-sm">
+                                  <span className="text-gray-500">Begründung: </span>
+                                  <span className="text-gray-200 italic">"{request.notes}"</span>
+                                </div>
+                              )}
+                              {/* Datum */}
+                              <p className="text-xs text-gray-500 mt-2">
+                                Angefragt am {new Date(request.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })} um {new Date(request.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                              </p>
+                            </div>
+                            <div className="flex gap-2 flex-shrink-0">
+                              <button
+                                onClick={() => setRejectModal({
+                                  requestId: request.id,
+                                  componentName: request.component.name,
+                                  requesterName: request.requester.display_name || request.requester.username
+                                })}
+                                className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/30"
+                                title="Ablehnen"
+                              >
+                                <X size={18} />
+                              </button>
+                              <button
+                                onClick={() => approveRequestMutation.mutate(request.id)}
+                                disabled={approveRequestMutation.isPending}
+                                className="btn btn-primary text-sm py-1.5 px-3"
+                                title="Freigeben"
+                              >
+                                <Check size={16} className="mr-1" />
+                                Freigeben
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex gap-2">
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Freigegebene Anfragen ausliefern (APPROVED → AWAITING_RECEIPT) - Pioneer-Seite */}
+              {transferRequests.filter(r =>
+                r.status === 'approved' && (
+                  r.owner.id === user?.id ||
+                  (isPioneer && r.owner.is_pioneer && r.owner.id !== user?.id)
+                )
+              ).length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-blue-400 mb-2 border-b border-blue-700/50 pb-1 flex items-center gap-2">
+                    <MessageCircle size={16} />
+                    Freigegeben - Discord-Koordination & Ausliefern
+                  </h3>
+                  <div className="space-y-3">
+                    {transferRequests
+                      .filter(r =>
+                        r.status === 'approved' && (
+                          r.owner.id === user?.id ||
+                          (isPioneer && r.owner.is_pioneer && r.owner.id !== user?.id)
+                        )
+                      )
+                      .map((request) => (
+                        <div
+                          key={request.id}
+                          className="p-4 bg-blue-900/10 border border-blue-600/30 rounded-lg"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              {/* Bestellnummer prominent */}
+                              {request.order_number && (
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-sm font-mono bg-blue-900/50 px-3 py-1 rounded text-blue-300 font-bold">
+                                    {request.order_number}
+                                  </span>
+                                  <button
+                                    onClick={() => copyOrderNumber(request.order_number!)}
+                                    className="p-1 text-gray-400 hover:text-white rounded"
+                                    title="Bestellnummer kopieren"
+                                  >
+                                    <Copy size={14} />
+                                  </button>
+                                </div>
+                              )}
+                              {/* Item & Menge */}
+                              <p className="font-bold text-lg text-white">
+                                {request.quantity}x {request.component.name}
+                              </p>
+                              {/* An wen */}
+                              <div className="flex flex-wrap items-center gap-x-2 text-sm mt-1">
+                                <span className="text-gray-400">Übergabe an:</span>
+                                <span className="text-krt-orange font-medium">{request.requester.display_name || request.requester.username}</span>
+                                {request.requester.discord_id && (
+                                  <span className="text-gray-500 text-xs">
+                                    (Discord: @{request.requester.username})
+                                  </span>
+                                )}
+                              </div>
+                              {/* Discord Hinweis */}
+                              <div className="mt-3 p-2 bg-blue-900/30 border border-blue-700/30 rounded text-sm">
+                                <p className="text-blue-300 flex items-center gap-2">
+                                  <MessageCircle size={14} />
+                                  Vereinbare über Discord einen Übergabetermin
+                                </p>
+                                <p className="text-xs text-gray-400 mt-1">
+                                  Erwähne die Bestellnummer: <span className="font-mono text-blue-300">{request.order_number}</span>
+                                </p>
+                              </div>
+                              {/* Datum */}
+                              <p className="text-xs text-gray-500 mt-2">
+                                Freigegeben am {new Date(request.updated_at || request.created_at).toLocaleDateString('de-DE')}
+                              </p>
+                            </div>
                             <button
-                              onClick={() => rejectRequestMutation.mutate(request.id)}
-                              disabled={rejectRequestMutation.isPending}
-                              className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/30"
-                              title="Ablehnen"
+                              onClick={() => deliverMutation.mutate(request.id)}
+                              disabled={deliverMutation.isPending}
+                              className="btn bg-blue-600 hover:bg-blue-700 text-sm py-1.5 px-3 flex-shrink-0 flex items-center gap-1"
+                              title="Als ausgeliefert markieren"
                             >
-                              <X size={18} />
-                            </button>
-                            <button
-                              onClick={() => approveRequestMutation.mutate(request.id)}
-                              disabled={approveRequestMutation.isPending}
-                              className="p-2 bg-krt-orange/20 text-krt-orange rounded hover:bg-krt-orange/30"
-                              title="Bestätigen"
-                            >
-                              <Check size={18} />
+                              <Truck size={16} />
+                              Ausgeliefert
                             </button>
                           </div>
                         </div>
@@ -642,37 +771,55 @@ export default function InventoryPage() {
                 </div>
               )}
 
-              {/* Erhalt bestätigen (als Empfänger) - WICHTIG! */}
+              {/* 3. Erhalt bestätigen (als Empfänger) - WICHTIG! */}
               {transferRequests.filter(r => r.requester.id === user?.id && r.status === 'awaiting_receipt').length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-300 mb-2 border-b border-gray-700/50 pb-1">
-                    ✓ Erhalt bestätigen
+                  <h3 className="text-sm font-medium text-green-400 mb-2 border-b border-green-700/50 pb-1">
+                    ✓ Erhalt bestätigen - Items wurden übergeben
                   </h3>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {transferRequests
                       .filter(r => r.requester.id === user?.id && r.status === 'awaiting_receipt')
                       .map((request) => (
                         <div
                           key={request.id}
-                          className="flex items-center justify-between p-3 bg-gray-800/30 border border-gray-600/30 rounded-lg"
+                          className="p-4 bg-green-900/10 border border-green-600/30 rounded-lg"
                         >
-                          <div>
-                            <p className="font-medium">
-                              <span className="text-white">{request.quantity}x {request.component.name}</span>
-                              {' '}von{' '}
-                              <span className="text-krt-orange">{request.owner.display_name || request.owner.username}</span>
-                            </p>
-                            <p className="text-xs text-gray-300 mt-1">
-                              Besitzer hat freigegeben - bitte Erhalt bestätigen
-                            </p>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              {/* Bestellnummer */}
+                              {request.order_number && (
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-xs font-mono bg-green-900/50 px-2 py-0.5 rounded text-green-300">
+                                    {request.order_number}
+                                  </span>
+                                </div>
+                              )}
+                              {/* Item & Menge */}
+                              <p className="font-bold text-lg text-white">
+                                {request.quantity}x {request.component.name}
+                              </p>
+                              {/* Von wem */}
+                              <p className="text-sm text-gray-400 mt-1">
+                                Von: <span className="text-krt-orange font-medium">{request.owner.display_name || request.owner.username}</span>
+                              </p>
+                              {/* Status */}
+                              <p className="text-sm text-green-400 mt-2">
+                                Pioneer hat ausgeliefert - bitte bestätige den Erhalt
+                              </p>
+                              {/* Datum */}
+                              <p className="text-xs text-gray-500 mt-2">
+                                Angefragt am {new Date(request.created_at).toLocaleDateString('de-DE')}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => confirmReceiptMutation.mutate(request.id)}
+                              disabled={confirmReceiptMutation.isPending}
+                              className="btn btn-primary text-sm py-1.5 px-3 flex-shrink-0"
+                            >
+                              {confirmReceiptMutation.isPending ? '...' : 'Erhalt bestätigen'}
+                            </button>
                           </div>
-                          <button
-                            onClick={() => confirmReceiptMutation.mutate(request.id)}
-                            disabled={confirmReceiptMutation.isPending}
-                            className="btn btn-primary text-sm py-1.5 px-3"
-                          >
-                            {confirmReceiptMutation.isPending ? '...' : 'Erhalt bestätigen'}
-                          </button>
                         </div>
                       ))}
                   </div>
@@ -685,67 +832,167 @@ export default function InventoryPage() {
                   <h3 className="text-sm font-medium text-gray-300 mb-2 border-b border-gray-700/50 pb-1">
                     Admin: Erhalt für andere bestätigen
                   </h3>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {transferRequests
                       .filter(r => r.requester.id !== user?.id && r.status === 'awaiting_receipt')
                       .map((request) => (
                         <div
                           key={request.id}
-                          className="flex items-center justify-between p-3 bg-gray-800/30 border border-gray-600/30 rounded-lg"
+                          className="p-4 bg-gray-800/30 border border-krt-orange/30 rounded-lg"
                         >
-                          <div>
-                            <p className="font-medium">
-                              <span className="text-white">{request.quantity}x {request.component.name}</span>
-                              {' '}→{' '}
-                              <span className="text-gray-300">{request.requester.display_name || request.requester.username}</span>
-                            </p>
-                            <p className="text-xs text-gray-400 mt-1">
-                              Von: {request.owner.display_name || request.owner.username}
-                            </p>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              {/* Item & Menge */}
+                              <p className="font-bold text-lg text-white">
+                                {request.quantity}x {request.component.name}
+                              </p>
+                              {/* Wer → Wem */}
+                              <div className="flex flex-wrap items-center gap-x-2 text-sm mt-1">
+                                <span className="text-gray-400">Von:</span>
+                                <span className="text-gray-300">{request.owner.display_name || request.owner.username}</span>
+                                <span className="text-gray-500">→</span>
+                                <span className="text-gray-400">An:</span>
+                                <span className="text-krt-orange font-medium">{request.requester.display_name || request.requester.username}</span>
+                              </div>
+                              {/* Notizen */}
+                              {request.notes && (
+                                <div className="mt-2 p-2 bg-gray-700/30 rounded text-sm">
+                                  <span className="text-gray-500">Begründung: </span>
+                                  <span className="text-gray-200 italic">"{request.notes}"</span>
+                                </div>
+                              )}
+                              {/* Datum */}
+                              <p className="text-xs text-gray-500 mt-2">
+                                Angefragt am {new Date(request.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })} um {new Date(request.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => confirmReceiptMutation.mutate(request.id)}
+                              disabled={confirmReceiptMutation.isPending}
+                              className="btn bg-krt-orange hover:bg-krt-orange-dark text-sm py-1.5 px-3 flex-shrink-0"
+                            >
+                              {confirmReceiptMutation.isPending ? '...' : 'Als Admin bestätigen'}
+                            </button>
                           </div>
-                          <button
-                            onClick={() => confirmReceiptMutation.mutate(request.id)}
-                            disabled={confirmReceiptMutation.isPending}
-                            className="btn bg-krt-orange hover:bg-krt-orange-dark text-sm py-1.5 px-3"
-                          >
-                            {confirmReceiptMutation.isPending ? '...' : 'Als Admin bestätigen'}
-                          </button>
                         </div>
                       ))}
                   </div>
                 </div>
               )}
 
-              {/* Meine Anfragen (als Anfragender) - warten auf Owner */}
+              {/* Meine Anfragen (als Anfragender) - warten auf Freigabe */}
               {transferRequests.filter(r => r.requester.id === user?.id && r.status === 'pending').length > 0 && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
-                    Meine offenen Anfragen
+                    Meine Anfragen - Warten auf Freigabe
                   </h3>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {transferRequests
                       .filter(r => r.requester.id === user?.id && r.status === 'pending')
                       .map((request) => (
                         <div
                           key={request.id}
-                          className="flex items-center justify-between p-3 bg-gray-800/30 border border-gray-600/30 rounded-lg"
+                          className="p-4 bg-gray-800/30 border border-gray-600/30 rounded-lg"
                         >
-                          <div>
-                            <p className="font-medium">
-                              <span className="text-white">{request.quantity}x {request.component.name}</span>
-                              {' '}von{' '}
-                              <span className="text-krt-orange">{request.owner.display_name || request.owner.username}</span>
-                            </p>
-                            {request.notes && (
-                              <p className="text-sm text-gray-400 mt-1">"{request.notes}"</p>
-                            )}
-                            <p className="text-xs text-gray-500 mt-1">
-                              {new Date(request.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </p>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              {/* Bestellnummer */}
+                              {request.order_number && (
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-xs font-mono bg-gray-700 px-2 py-0.5 rounded text-gray-300">
+                                    {request.order_number}
+                                  </span>
+                                </div>
+                              )}
+                              {/* Item & Menge */}
+                              <p className="font-bold text-white">
+                                {request.quantity}x {request.component.name}
+                              </p>
+                              {/* Bei wem */}
+                              <p className="text-sm text-gray-400 mt-1">
+                                Angefragt bei: <span className="text-krt-orange font-medium">{request.owner.display_name || request.owner.username}</span>
+                              </p>
+                              {/* Begründung */}
+                              {request.notes && (
+                                <div className="mt-2 p-2 bg-gray-700/30 rounded text-sm">
+                                  <span className="text-gray-500">Begründung: </span>
+                                  <span className="text-gray-200 italic">"{request.notes}"</span>
+                                </div>
+                              )}
+                              {/* Datum */}
+                              <p className="text-xs text-gray-500 mt-2">
+                                Angefragt am {new Date(request.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })} um {new Date(request.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                              </p>
+                            </div>
+                            <span className="text-xs bg-yellow-600/20 text-yellow-300 px-2 py-1 rounded flex-shrink-0">
+                              Wartet auf Freigabe
+                            </span>
                           </div>
-                          <span className="text-xs bg-gray-600/30 text-gray-300 px-2 py-1 rounded">
-                            Wartet auf Besitzer
-                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Meine freigegebenen Anfragen - Discord Koordination läuft */}
+              {transferRequests.filter(r => r.requester.id === user?.id && r.status === 'approved').length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-blue-400 mb-2 border-b border-blue-700/50 pb-1 flex items-center gap-2">
+                    <MessageCircle size={16} />
+                    Freigegeben - Warte auf Übergabe
+                  </h3>
+                  <div className="space-y-3">
+                    {transferRequests
+                      .filter(r => r.requester.id === user?.id && r.status === 'approved')
+                      .map((request) => (
+                        <div
+                          key={request.id}
+                          className="p-4 bg-blue-900/10 border border-blue-600/30 rounded-lg"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              {/* Bestellnummer prominent */}
+                              {request.order_number && (
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-sm font-mono bg-blue-900/50 px-3 py-1 rounded text-blue-300 font-bold">
+                                    {request.order_number}
+                                  </span>
+                                  <button
+                                    onClick={() => copyOrderNumber(request.order_number!)}
+                                    className="p-1 text-gray-400 hover:text-white rounded"
+                                    title="Bestellnummer kopieren"
+                                  >
+                                    <Copy size={14} />
+                                  </button>
+                                </div>
+                              )}
+                              {/* Item & Menge */}
+                              <p className="font-bold text-white">
+                                {request.quantity}x {request.component.name}
+                              </p>
+                              {/* Von wem */}
+                              <p className="text-sm text-gray-400 mt-1">
+                                Pioneer: <span className="text-krt-orange font-medium">{request.owner.display_name || request.owner.username}</span>
+                              </p>
+                              {/* Discord Hinweis */}
+                              <div className="mt-3 p-2 bg-blue-900/30 border border-blue-700/30 rounded text-sm">
+                                <p className="text-blue-300 flex items-center gap-2">
+                                  <MessageCircle size={14} />
+                                  Kontaktiere den Pioneer über Discord für einen Übergabetermin
+                                </p>
+                                <p className="text-xs text-gray-400 mt-1">
+                                  Bestellnummer: <span className="font-mono text-blue-300">{request.order_number}</span>
+                                </p>
+                              </div>
+                              {/* Datum */}
+                              <p className="text-xs text-gray-500 mt-2">
+                                Freigegeben am {new Date(request.updated_at || request.created_at).toLocaleDateString('de-DE')}
+                              </p>
+                            </div>
+                            <span className="text-xs bg-blue-600/20 text-blue-300 px-2 py-1 rounded flex-shrink-0">
+                              Discord-Koordination
+                            </span>
+                          </div>
                         </div>
                       ))}
                   </div>
@@ -758,33 +1005,55 @@ export default function InventoryPage() {
                   <h3 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
                     Vergangene Anfragen
                   </h3>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
                     {transferRequests
                       .filter(r => r.status === 'completed' || r.status === 'rejected')
-                      .slice(0, 10)
+                      .slice(0, 15)
                       .map((request) => (
                         <div
                           key={request.id}
-                          className={`flex items-center justify-between p-3 rounded-lg ${
+                          className={`p-3 rounded-lg ${
                             request.status === 'completed' ? 'bg-gray-800/30 border border-gray-600/30' : 'bg-red-900/10 border border-red-600/20'
                           }`}
                         >
-                          <div>
-                            <p className="font-medium text-sm">
-                              {request.quantity}x {request.component.name}
-                              {' '}
-                              {request.requester.id === user?.id ? (
-                                <>von <span className="text-gray-400">{request.owner.display_name || request.owner.username}</span></>
-                              ) : (
-                                <>an <span className="text-gray-400">{request.requester.display_name || request.requester.username}</span></>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              {/* Bestellnummer */}
+                              {request.order_number && (
+                                <span className="text-xs font-mono bg-gray-700/50 px-1.5 py-0.5 rounded text-gray-400 mr-2">
+                                  {request.order_number}
+                                </span>
                               )}
-                            </p>
+                              <p className="font-medium text-sm inline">
+                                {request.quantity}x {request.component.name}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                {request.requester.display_name || request.requester.username}
+                                {' ← '}
+                                {request.owner.display_name || request.owner.username}
+                              </p>
+                              {request.notes && (
+                                <p className="text-xs text-gray-500 mt-1 truncate" title={request.notes}>
+                                  "{request.notes}"
+                                </p>
+                              )}
+                              {/* Ablehnungsgrund anzeigen */}
+                              {request.status === 'rejected' && request.rejection_reason && (
+                                <div className="mt-2 p-2 bg-red-900/20 border border-red-700/30 rounded">
+                                  <p className="text-xs text-red-400 font-medium">Ablehnungsgrund:</p>
+                                  <p className="text-sm text-gray-200 italic">"{request.rejection_reason}"</p>
+                                </div>
+                              )}
+                              <p className="text-xs text-gray-600 mt-1">
+                                {new Date(request.created_at).toLocaleDateString('de-DE')}
+                              </p>
+                            </div>
+                            <span className={`text-xs px-2 py-1 rounded flex-shrink-0 ${
+                              request.status === 'completed' ? 'bg-gray-600/30 text-gray-200' : 'bg-red-600/30 text-red-300'
+                            }`}>
+                              {request.status === 'completed' ? 'Abgeschlossen' : 'Abgelehnt'}
+                            </span>
                           </div>
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            request.status === 'completed' ? 'bg-gray-600/30 text-gray-200' : 'bg-red-600/30 text-red-300'
-                          }`}>
-                            {request.status === 'completed' ? 'Abgeschlossen' : 'Abgelehnt'}
-                          </span>
                         </div>
                       ))}
                   </div>
@@ -792,7 +1061,7 @@ export default function InventoryPage() {
               )}
 
               {/* Keine offenen Anfragen */}
-              {transferRequests.filter(r => r.status === 'pending' || r.status === 'awaiting_receipt').length === 0 && (
+              {transferRequests.filter(r => r.status === 'pending' || r.status === 'approved' || r.status === 'awaiting_receipt').length === 0 && (
                 <p className="text-gray-400 text-center py-4">Keine offenen Anfragen.</p>
               )}
             </div>
@@ -1620,6 +1889,68 @@ export default function InventoryPage() {
                   className="btn btn-primary flex-1"
                 >
                   {createRequestMutation.isPending ? 'Wird gesendet...' : 'Anfrage senden'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Request Modal */}
+      {rejectModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="card max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-red-400">
+              <X size={24} />
+              Anfrage ablehnen
+            </h2>
+
+            <div className="p-4 bg-gray-800/50 rounded-lg mb-4">
+              <p className="text-sm text-gray-400 mb-1">Anfrage von:</p>
+              <p className="font-medium text-krt-orange">{rejectModal.requesterName}</p>
+              <p className="text-sm text-gray-400 mt-2 mb-1">Item:</p>
+              <p className="font-bold">{rejectModal.componentName}</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="label">
+                  Begründung <span className="text-red-400">*</span>
+                </label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Warum lehnst du die Anfrage ab?"
+                  className="input resize-none"
+                  rows={3}
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Der Anfragende sieht diese Begründung.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setRejectModal(null)
+                    setRejectReason('')
+                  }}
+                  className="btn btn-secondary flex-1"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => {
+                    rejectRequestMutation.mutate({
+                      requestId: rejectModal.requestId,
+                      reason: rejectReason
+                    })
+                  }}
+                  disabled={rejectRequestMutation.isPending || !rejectReason.trim()}
+                  className="btn bg-red-600 hover:bg-red-700 text-white flex-1"
+                >
+                  {rejectRequestMutation.isPending ? 'Wird abgelehnt...' : 'Ablehnen'}
                 </button>
               </div>
             </div>

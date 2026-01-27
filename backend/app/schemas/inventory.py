@@ -105,18 +105,26 @@ class TransferRequestCreate(BaseModel):
 
 class TransferRequestResponse(BaseModel):
     id: int
-    requester: UserResponse     # Wer will haben
-    owner: UserResponse         # Wessen Lager
+    order_number: Optional[str]     # Bestellnummer für Discord-Koordination (z.B. "TR-2026-0042")
+    requester: UserResponse         # Wer will haben
+    owner: UserResponse             # Wessen Lager
     component: ComponentResponse
     from_location: Optional[LocationSimple]
     to_location: Optional[LocationSimple]
     quantity: int
     notes: Optional[str]
     status: TransferRequestStatus
-    approved_by: Optional[UserResponse]    # Wer hat als Owner bestätigt
+    approved_by: Optional[UserResponse]    # Wer hat freigegeben (Pioneer)
+    delivered_by: Optional[UserResponse]   # Wer hat als ausgeliefert markiert
     confirmed_by: Optional[UserResponse]   # Wer hat Erhalt bestätigt
+    rejection_reason: Optional[str]        # Begründung bei Ablehnung
     created_at: datetime
     updated_at: Optional[datetime]
 
     class Config:
         from_attributes = True
+
+
+class TransferRequestReject(BaseModel):
+    """Ablehnung einer Transfer-Anfrage mit Begründung."""
+    reason: str  # Pflichtfeld: Begründung für die Ablehnung

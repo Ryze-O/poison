@@ -323,10 +323,11 @@ export interface UEXSyncStats {
 }
 
 // Transfer Requests (Anfragen für Items aus anderen Lagern)
-export type TransferRequestStatus = 'pending' | 'awaiting_receipt' | 'completed' | 'rejected'
+export type TransferRequestStatus = 'pending' | 'approved' | 'awaiting_receipt' | 'completed' | 'rejected'
 
 export interface TransferRequest {
   id: number
+  order_number: string | null     // Bestellnummer für Discord-Koordination (z.B. "TR-2026-0042")
   requester: User       // Wer will haben
   owner: User           // Wessen Lager
   component: Component
@@ -335,8 +336,10 @@ export interface TransferRequest {
   quantity: number
   notes: string | null
   status: TransferRequestStatus
-  approved_by: User | null      // Wer hat als Owner bestätigt
+  approved_by: User | null      // Wer hat freigegeben (Pioneer)
+  delivered_by: User | null     // Wer hat als ausgeliefert markiert
   confirmed_by: User | null     // Wer hat Erhalt bestätigt
+  rejection_reason: string | null  // Begründung bei Ablehnung
   created_at: string
   updated_at: string | null
 }
@@ -351,9 +354,11 @@ export interface TransferRequestCreate {
 }
 
 export interface PendingRequestsCount {
-  as_owner: number          // Anfragen die ich bestätigen muss (als Besitzer)
-  as_requester: number      // Meine Anfragen die auf Owner-Bestätigung warten
-  awaiting_receipt: number  // Anfragen wo ich Erhalt bestätigen muss
-  admin_awaiting: number    // Für Admins: Anfragen von inaktiven Usern
+  as_owner_pending: number      // Anfragen die ich freigeben muss (PENDING)
+  as_owner_approved: number     // Anfragen die ich ausliefern muss (APPROVED)
+  as_requester_pending: number  // Meine Anfragen die auf Freigabe warten
+  as_requester_approved: number // Meine freigegebenen Anfragen (Discord-Koordination)
+  awaiting_receipt: number      // Anfragen wo ich Erhalt bestätigen muss
+  admin_awaiting: number        // Für Admins: Anfragen von inaktiven Usern
   total: number
 }
