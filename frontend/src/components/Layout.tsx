@@ -1,6 +1,9 @@
-import { Outlet, NavLink } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
+import { useQuery } from '@tanstack/react-query'
+import { apiClient } from '../api/client'
+import type { PendingRequestsCount } from '../api/types'
 import {
   Home,
   Users,
@@ -22,6 +25,7 @@ import {
   Database,
   ChevronDown,
   ChevronRight,
+  Bell,
 } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
@@ -51,6 +55,7 @@ const adminNavItems = [
 export default function Layout() {
   const { user, logout, previewRole, setPreviewRole, canUsePreviewMode } = useAuthStore()
   const { theme, toggleTheme } = useTheme()
+  const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [databaseExpanded, setDatabaseExpanded] = useState(false)
 
@@ -58,6 +63,21 @@ export default function Layout() {
   const effectiveRole = previewRole || user?.role
   const isOfficerOrHigher = effectiveRole === 'officer' || effectiveRole === 'treasurer' || effectiveRole === 'admin'
   const isAdmin = !isInPreviewMode && user?.role === 'admin'
+  const isPioneer = user?.is_pioneer === true
+
+  // Transfer-Anfragen für Pioneers laden
+  const { data: pendingCount } = useQuery<PendingRequestsCount>({
+    queryKey: ['transfer-requests-pending-count'],
+    queryFn: async () => {
+      const response = await apiClient.get('/inventory/transfer-requests/pending-count')
+      return response.data
+    },
+    enabled: isPioneer || isAdmin,
+    refetchInterval: 30000, // Alle 30 Sekunden aktualisieren
+  })
+
+  // Anzahl der Anfragen die der Pioneer bearbeiten muss
+  const pioneerPendingCount = (pendingCount?.as_owner_pending ?? 0) + (pendingCount?.as_owner_approved ?? 0)
 
   return (
     <div className="min-h-screen flex bg-page text-primary">
@@ -275,6 +295,25 @@ export default function Layout() {
           </div>
         )}
 
+        {/* Pioneer Transfer-Anfragen Banner */}
+        {isPioneer && pioneerPendingCount > 0 && (
+          <div
+            className={clsx(
+              'fixed left-0 right-0 lg:left-64 z-40 bg-krt-orange/90 text-white py-2 px-4 flex items-center justify-center gap-3 cursor-pointer hover:bg-krt-orange transition-colors shadow-lg',
+              isInPreviewMode ? 'top-10' : 'top-0'
+            )}
+            onClick={() => navigate('/inventory?requests=open')}
+          >
+            <Bell size={18} className="animate-pulse" />
+            <span className="text-sm font-medium">
+              {pioneerPendingCount === 1
+                ? '1 neue Transfer-Anfrage wartet auf dich'
+                : `${pioneerPendingCount} Transfer-Anfragen warten auf dich`}
+            </span>
+            <span className="text-xs bg-white/20 px-2 py-0.5 rounded">Klicken zum Öffnen</span>
+          </div>
+        )}
+
         {/* KRT Logo Watermark - nur im Dark Mode sichtbar */}
         <div
           className={clsx(
@@ -289,7 +328,12 @@ export default function Layout() {
             filter: theme === 'dark' ? 'invert(1) brightness(0)' : 'brightness(0)',
           }}
         />
-        <div className={clsx('relative z-10', isInPreviewMode && 'mt-10')}>
+        <div className={clsx(
+          'relative z-10',
+          isInPreviewMode && 'mt-10',
+          isPioneer && pioneerPendingCount > 0 && !isInPreviewMode && 'mt-10',
+          isPioneer && pioneerPendingCount > 0 && isInPreviewMode && 'mt-20'
+        )}>
           <Outlet />
         </div>
       </main>

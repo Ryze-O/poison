@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
 import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft, ChevronDown, ChevronRight, Bell, Check, X, Send, Copy, Truck, MessageCircle, Clock } from 'lucide-react'
@@ -39,6 +40,7 @@ const actionColors: Record<InventoryAction, string> = {
 export default function InventoryPage() {
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('')
   const [filterLocation, setFilterLocation] = useState<string>('')
@@ -101,6 +103,16 @@ export default function InventoryPage() {
   const hasInventory = !!user && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
   const isAdmin = effectiveRole === 'admin'
   const isPioneer = user?.is_pioneer ?? false
+
+  // URL-Parameter verarbeiten (z.B. ?requests=open)
+  useEffect(() => {
+    if (searchParams.get('requests') === 'open') {
+      setShowTransferRequests(true)
+      // Parameter entfernen nach dem Öffnen
+      searchParams.delete('requests')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   const toggleUser = (userId: number) => {
     setExpandedUsers(prev => {
