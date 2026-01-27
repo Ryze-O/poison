@@ -7,8 +7,8 @@ import type { Treasury, AttendanceSession, InventoryItem, LootSession, SessionTy
 
 const SESSION_TYPE_CONFIG: Record<SessionType, { label: string; labelPlural: string; color: string; bgColor: string; icon: typeof ClipboardList }> = {
   staffelabend: { label: 'Staffelabend', labelPlural: 'Staffelabende', color: 'krt-orange', bgColor: 'krt-orange/20', icon: ClipboardList },
-  loot_run: { label: 'Loot-Run', labelPlural: 'Loot-Runs', color: 'gray-400', bgColor: 'gray-600/20', icon: Target },
-  freeplay: { label: 'Freeplay', labelPlural: 'Freeplay-Sessions', color: 'gray-400', bgColor: 'gray-600/20', icon: Gamepad2 },
+  loot_run: { label: 'Loot-Run', labelPlural: 'Loot-Runs', color: 'white', bgColor: 'gray-700/50', icon: Target },
+  freeplay: { label: 'Freeplay', labelPlural: 'Freeplay-Sessions', color: 'white', bgColor: 'gray-700/50', icon: Gamepad2 },
 }
 
 export default function DashboardPage() {
@@ -139,10 +139,10 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="card border-l-4 border-l-gray-500">
+        <div className="card">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-gray-600/20 rounded-lg">
-              <ClipboardList className="text-gray-400" size={24} />
+            <div className="p-3 bg-gray-700/50 rounded-lg">
+              <ClipboardList className="text-white" size={24} />
             </div>
             <div>
               <p className="text-gray-400 text-sm">Letzte Session</p>
@@ -155,10 +155,10 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="card border-l-4 border-l-gray-500">
+        <div className="card">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-gray-600/20 rounded-lg">
-              <Gift className="text-gray-400" size={24} />
+            <div className="p-3 bg-gray-700/50 rounded-lg">
+              <Gift className="text-white" size={24} />
             </div>
             <div>
               <p className="text-gray-400 text-sm">Loot (letzte 5)</p>
@@ -170,10 +170,10 @@ export default function DashboardPage() {
         </div>
 
         {canManage && (
-          <div className="card border-l-4 border-l-gray-500">
+          <div className="card">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-gray-600/20 rounded-lg">
-                <Package className="text-gray-400" size={24} />
+              <div className="p-3 bg-gray-700/50 rounded-lg">
+                <Package className="text-white" size={24} />
               </div>
               <div>
                 <p className="text-gray-400 text-sm">Mein Lager</p>
@@ -198,7 +198,7 @@ export default function DashboardPage() {
       {/* Letzte Loot-Sessions (Items) */}
       <div className="card">
         <div className="flex items-center gap-3 mb-4">
-          <Gift className="text-gray-400" size={20} />
+          <Gift className="text-white" size={20} />
           <h2 className="text-xl font-bold">Letzte Loot-Verteilungen</h2>
         </div>
         {lootSessions && lootSessions.length > 0 ? (
@@ -214,7 +214,7 @@ export default function DashboardPage() {
               return (
                 <div
                   key={session.id}
-                  className="list-item flex items-center justify-between hover:border-amber-500/30"
+                  className="list-item flex items-center justify-between hover:border-krt-orange/30"
                 >
                   <div>
                     <p className="font-medium flex items-center gap-2">
