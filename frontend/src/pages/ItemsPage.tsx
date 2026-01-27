@@ -103,7 +103,7 @@ export default function ItemsPage() {
   })
 
   // Item-Klassen extrahieren
-  const itemClasses = [...new Set(items?.map(i => i.item_class).filter(Boolean) || [])].sort()
+  const itemClasses = [...new Set(items?.map(i => i.item_class).filter((c): c is string => c !== null) || [])].sort()
 
   // Zweistufige Gruppierung: Category → Sub-Category → Items
   const groupedItems = filteredItems?.reduce(
