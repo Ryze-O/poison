@@ -78,8 +78,8 @@ export default function LootPage() {
 
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
-  // Offiziere, Treasurer, Admins und Pioneers dürfen Loot verwalten
-  const canCreate = (effectiveRole !== 'member' && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest') || user?.is_pioneer
+  // Alle Viper (Members+) dürfen Loot-Sessions erstellen - nur Guests nicht
+  const canCreate = effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
   const isAdmin = effectiveRole === 'admin'
 
   const { data: sessions } = useQuery<LootSession[]>({
