@@ -304,7 +304,7 @@ export interface UEXSyncStats {
 }
 
 // Transfer Requests (Anfragen für Items aus anderen Lagern)
-export type TransferRequestStatus = 'pending' | 'approved' | 'rejected'
+export type TransferRequestStatus = 'pending' | 'awaiting_receipt' | 'completed' | 'rejected'
 
 export interface TransferRequest {
   id: number
@@ -316,7 +316,8 @@ export interface TransferRequest {
   quantity: number
   notes: string | null
   status: TransferRequestStatus
-  approved_by: User | null
+  approved_by: User | null      // Wer hat als Owner bestätigt
+  confirmed_by: User | null     // Wer hat Erhalt bestätigt
   created_at: string
   updated_at: string | null
 }
@@ -331,7 +332,9 @@ export interface TransferRequestCreate {
 }
 
 export interface PendingRequestsCount {
-  as_owner: number      // Anfragen die ich bestätigen muss
-  as_requester: number  // Meine offenen Anfragen
+  as_owner: number          // Anfragen die ich bestätigen muss (als Besitzer)
+  as_requester: number      // Meine Anfragen die auf Owner-Bestätigung warten
+  awaiting_receipt: number  // Anfragen wo ich Erhalt bestätigen muss
+  admin_awaiting: number    // Für Admins: Anfragen von inaktiven Usern
   total: number
 }

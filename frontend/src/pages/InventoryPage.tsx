@@ -284,6 +284,15 @@ export default function InventoryPage() {
     },
   })
 
+  const confirmReceiptMutation = useMutation({
+    mutationFn: (requestId: number) =>
+      apiClient.post(`/api/inventory/transfer-requests/${requestId}/confirm-receipt`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transfer-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+    },
+  })
+
   // Filtern von myInventory
   const filteredMyInventory = myInventory?.filter((item) => {
     const matchesSearch = item.component.name
@@ -362,6 +371,9 @@ export default function InventoryPage() {
 
   // Pending Requests für Badge
   const pendingAsOwner = pendingCount?.as_owner ?? 0
+  const awaitingReceipt = pendingCount?.awaiting_receipt ?? 0
+  const adminAwaiting = pendingCount?.admin_awaiting ?? 0
+  const totalPendingBadge = pendingAsOwner + awaitingReceipt + adminAwaiting
 
   return (
     <div>
@@ -377,9 +389,9 @@ export default function InventoryPage() {
               >
                 <Bell size={20} />
                 Anfragen
-                {pendingAsOwner > 0 && (
+                {totalPendingBadge > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {pendingAsOwner}
+                    {totalPendingBadge}
                   </span>
                 )}
               </button>
@@ -567,7 +579,81 @@ export default function InventoryPage() {
                 </div>
               )}
 
-              {/* Meine Anfragen (als Anfragender) */}
+              {/* Erhalt bestätigen (als Empfänger) - WICHTIG! */}
+              {transferRequests.filter(r => r.requester.id === user?.id && r.status === 'awaiting_receipt').length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-green-400 mb-2 border-b border-green-700/50 pb-1">
+                    ✓ Erhalt bestätigen
+                  </h3>
+                  <div className="space-y-2">
+                    {transferRequests
+                      .filter(r => r.requester.id === user?.id && r.status === 'awaiting_receipt')
+                      .map((request) => (
+                        <div
+                          key={request.id}
+                          className="flex items-center justify-between p-3 bg-green-900/20 border border-green-600/30 rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">
+                              <span className="text-white">{request.quantity}x {request.component.name}</span>
+                              {' '}von{' '}
+                              <span className="text-krt-orange">{request.owner.display_name || request.owner.username}</span>
+                            </p>
+                            <p className="text-xs text-green-400 mt-1">
+                              Besitzer hat freigegeben - bitte Erhalt bestätigen
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => confirmReceiptMutation.mutate(request.id)}
+                            disabled={confirmReceiptMutation.isPending}
+                            className="btn btn-primary text-sm py-1.5 px-3"
+                          >
+                            {confirmReceiptMutation.isPending ? '...' : 'Erhalt bestätigen'}
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Admin: Erhalt für inaktive User bestätigen */}
+              {isAdmin && transferRequests.filter(r => r.requester.id !== user?.id && r.status === 'awaiting_receipt').length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-purple-400 mb-2 border-b border-purple-700/50 pb-1">
+                    Admin: Erhalt für andere bestätigen
+                  </h3>
+                  <div className="space-y-2">
+                    {transferRequests
+                      .filter(r => r.requester.id !== user?.id && r.status === 'awaiting_receipt')
+                      .map((request) => (
+                        <div
+                          key={request.id}
+                          className="flex items-center justify-between p-3 bg-purple-900/20 border border-purple-600/30 rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">
+                              <span className="text-white">{request.quantity}x {request.component.name}</span>
+                              {' '}→{' '}
+                              <span className="text-purple-400">{request.requester.display_name || request.requester.username}</span>
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              Von: {request.owner.display_name || request.owner.username}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => confirmReceiptMutation.mutate(request.id)}
+                            disabled={confirmReceiptMutation.isPending}
+                            className="btn bg-purple-600 hover:bg-purple-500 text-sm py-1.5 px-3"
+                          >
+                            {confirmReceiptMutation.isPending ? '...' : 'Als Admin bestätigen'}
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Meine Anfragen (als Anfragender) - warten auf Owner */}
               {transferRequests.filter(r => r.requester.id === user?.id && r.status === 'pending').length > 0 && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
@@ -595,7 +681,7 @@ export default function InventoryPage() {
                             </p>
                           </div>
                           <span className="text-xs bg-blue-600/30 text-blue-300 px-2 py-1 rounded">
-                            Wartet auf Bestätigung
+                            Wartet auf Besitzer
                           </span>
                         </div>
                       ))}
@@ -604,20 +690,20 @@ export default function InventoryPage() {
               )}
 
               {/* Abgeschlossene Anfragen */}
-              {transferRequests.filter(r => r.status !== 'pending').length > 0 && (
+              {transferRequests.filter(r => r.status === 'completed' || r.status === 'rejected').length > 0 && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
                     Vergangene Anfragen
                   </h3>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {transferRequests
-                      .filter(r => r.status !== 'pending')
+                      .filter(r => r.status === 'completed' || r.status === 'rejected')
                       .slice(0, 10)
                       .map((request) => (
                         <div
                           key={request.id}
                           className={`flex items-center justify-between p-3 rounded-lg ${
-                            request.status === 'approved' ? 'bg-green-900/10 border border-green-600/20' : 'bg-red-900/10 border border-red-600/20'
+                            request.status === 'completed' ? 'bg-green-900/10 border border-green-600/20' : 'bg-red-900/10 border border-red-600/20'
                           }`}
                         >
                           <div>
@@ -632,9 +718,9 @@ export default function InventoryPage() {
                             </p>
                           </div>
                           <span className={`text-xs px-2 py-1 rounded ${
-                            request.status === 'approved' ? 'bg-green-600/30 text-green-300' : 'bg-red-600/30 text-red-300'
+                            request.status === 'completed' ? 'bg-green-600/30 text-green-300' : 'bg-red-600/30 text-red-300'
                           }`}>
-                            {request.status === 'approved' ? 'Bestätigt' : 'Abgelehnt'}
+                            {request.status === 'completed' ? 'Abgeschlossen' : 'Abgelehnt'}
                           </span>
                         </div>
                       ))}
@@ -643,7 +729,7 @@ export default function InventoryPage() {
               )}
 
               {/* Keine offenen Anfragen */}
-              {transferRequests.filter(r => r.status === 'pending').length === 0 && (
+              {transferRequests.filter(r => r.status === 'pending' || r.status === 'awaiting_receipt').length === 0 && (
                 <p className="text-gray-400 text-center py-4">Keine offenen Anfragen.</p>
               )}
             </div>

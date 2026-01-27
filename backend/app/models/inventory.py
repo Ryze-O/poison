@@ -6,9 +6,10 @@ import enum
 
 
 class TransferRequestStatus(str, enum.Enum):
-    PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
+    PENDING = "pending"           # Warte auf Besitzer-Bestätigung
+    AWAITING_RECEIPT = "awaiting_receipt"  # Besitzer hat bestätigt, warte auf Empfänger
+    COMPLETED = "completed"       # Empfänger hat Erhalt bestätigt, Transfer abgeschlossen
+    REJECTED = "rejected"         # Abgelehnt
 
 
 class Inventory(Base):
@@ -68,7 +69,8 @@ class TransferRequest(Base):
     notes = Column(Text, nullable=True)
 
     status = Column(SQLEnum(TransferRequestStatus), default=TransferRequestStatus.PENDING, nullable=False)
-    approved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Wer hat bestätigt (Owner-Seite)
+    confirmed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Wer hat Erhalt bestätigt
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -77,6 +79,7 @@ class TransferRequest(Base):
     requester = relationship("User", foreign_keys=[requester_id])
     owner = relationship("User", foreign_keys=[owner_id])
     approved_by = relationship("User", foreign_keys=[approved_by_id])
+    confirmed_by = relationship("User", foreign_keys=[confirmed_by_id])
     component = relationship("Component")
     from_location = relationship("Location", foreign_keys=[from_location_id])
     to_location = relationship("Location", foreign_keys=[to_location_id])

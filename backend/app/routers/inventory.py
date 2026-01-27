@@ -945,7 +945,7 @@ async def get_pending_requests_count(
     current_user: User = Depends(get_current_user)
 ):
     """Gibt die Anzahl offener Anfragen zurück (für Benachrichtigungs-Badge)."""
-    # Als Besitzer: Anfragen die ich bestätigen muss
+    # Als Besitzer: Anfragen die ich bestätigen muss (PENDING)
     # Pioneers sehen auch Anfragen für andere Pioneer-Lager
     if current_user.is_pioneer:
         # Pioneer: eigene + andere Pioneer-Anfragen
@@ -965,16 +965,32 @@ async def get_pending_requests_count(
             TransferRequest.status == TransferRequestStatus.PENDING
         ).count()
 
-    # Als Anfragender: Meine offenen Anfragen
-    requester_count = db.query(TransferRequest).filter(
+    # Als Anfragender: Meine Anfragen die noch auf Owner-Bestätigung warten
+    requester_pending = db.query(TransferRequest).filter(
         TransferRequest.requester_id == current_user.id,
         TransferRequest.status == TransferRequestStatus.PENDING
     ).count()
 
+    # Als Empfänger: Anfragen wo ich Erhalt bestätigen muss (AWAITING_RECEIPT)
+    awaiting_receipt = db.query(TransferRequest).filter(
+        TransferRequest.requester_id == current_user.id,
+        TransferRequest.status == TransferRequestStatus.AWAITING_RECEIPT
+    ).count()
+
+    # Admin sieht auch AWAITING_RECEIPT von anderen (falls User inaktiv)
+    admin_awaiting = 0
+    if current_user.has_permission(UserRole.ADMIN):
+        admin_awaiting = db.query(TransferRequest).filter(
+            TransferRequest.requester_id != current_user.id,
+            TransferRequest.status == TransferRequestStatus.AWAITING_RECEIPT
+        ).count()
+
     return {
         "as_owner": owner_count,
-        "as_requester": requester_count,
-        "total": owner_count + requester_count
+        "as_requester": requester_pending,
+        "awaiting_receipt": awaiting_receipt,
+        "admin_awaiting": admin_awaiting,
+        "total": owner_count + requester_pending + awaiting_receipt + admin_awaiting
     }
 
 
@@ -984,7 +1000,8 @@ async def approve_transfer_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Bestätigt eine Transfer-Anfrage (Besitzer, Admin, oder Pioneer für Pioneer-Lager)."""
+    """Bestätigt eine Transfer-Anfrage (Besitzer, Admin, oder Pioneer für Pioneer-Lager).
+    Setzt Status auf AWAITING_RECEIPT - Empfänger muss noch Erhalt bestätigen."""
     transfer_request = db.query(TransferRequest).filter(TransferRequest.id == request_id).first()
     if not transfer_request:
         raise HTTPException(
@@ -1028,7 +1045,64 @@ async def approve_transfer_request(
             detail="Nicht mehr genug Items im Lager"
         )
 
-    # Transfer durchführen
+    # Status auf "Warte auf Empfänger-Bestätigung" setzen
+    # Transfer wird erst durchgeführt wenn Empfänger bestätigt
+    transfer_request.status = TransferRequestStatus.AWAITING_RECEIPT
+    transfer_request.approved_by_id = current_user.id
+
+    db.commit()
+    return {"message": "Transfer-Anfrage bestätigt - wartet auf Empfänger-Bestätigung"}
+
+
+@router.post("/transfer-requests/{request_id}/confirm-receipt")
+async def confirm_receipt(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Empfänger bestätigt Erhalt - führt den tatsächlichen Transfer durch.
+    Kann vom Requester selbst oder von einem Admin bestätigt werden."""
+    transfer_request = db.query(TransferRequest).filter(TransferRequest.id == request_id).first()
+    if not transfer_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Anfrage nicht gefunden"
+        )
+
+    if transfer_request.status != TransferRequestStatus.AWAITING_RECEIPT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Anfrage ist nicht im Status 'Warte auf Erhalt-Bestätigung'"
+        )
+
+    # Wer darf Erhalt bestätigen?
+    # - Requester selbst (der Empfänger)
+    # - Admin (falls Empfänger inaktiv)
+    can_confirm = (
+        transfer_request.requester_id == current_user.id or
+        current_user.has_permission(UserRole.ADMIN)
+    )
+
+    if not can_confirm:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Nur der Empfänger oder ein Admin kann den Erhalt bestätigen"
+        )
+
+    # Nochmal prüfen ob noch genug im Lager ist
+    inventory = db.query(Inventory).filter(
+        Inventory.user_id == transfer_request.owner_id,
+        Inventory.component_id == transfer_request.component_id,
+        Inventory.location_id == transfer_request.from_location_id
+    ).first()
+
+    if not inventory or inventory.quantity < transfer_request.quantity:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nicht mehr genug Items im Lager - Transfer kann nicht abgeschlossen werden"
+        )
+
+    # Jetzt Transfer durchführen
     quantity_before_sender = inventory.quantity
     inventory.quantity -= transfer_request.quantity
 
@@ -1075,7 +1149,7 @@ async def approve_transfer_request(
         quantity_before=quantity_before_sender,
         quantity_after=inventory.quantity,
         related_user_id=transfer_request.requester_id,
-        notes=f"Transfer-Anfrage bestätigt"
+        notes=f"Transfer-Anfrage abgeschlossen"
     )
 
     log_inventory_change(
@@ -1087,15 +1161,15 @@ async def approve_transfer_request(
         quantity_before=quantity_before_receiver,
         quantity_after=to_inventory.quantity,
         related_user_id=transfer_request.owner_id,
-        notes=f"Transfer-Anfrage bestätigt"
+        notes=f"Transfer-Anfrage abgeschlossen"
     )
 
-    # Anfrage als bestätigt markieren
-    transfer_request.status = TransferRequestStatus.APPROVED
-    transfer_request.approved_by_id = current_user.id
+    # Anfrage als abgeschlossen markieren
+    transfer_request.status = TransferRequestStatus.COMPLETED
+    transfer_request.confirmed_by_id = current_user.id
 
     db.commit()
-    return {"message": "Transfer-Anfrage bestätigt und durchgeführt"}
+    return {"message": "Erhalt bestätigt - Transfer abgeschlossen"}
 
 
 @router.post("/transfer-requests/{request_id}/reject")

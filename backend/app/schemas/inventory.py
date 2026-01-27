@@ -113,7 +113,8 @@ class TransferRequestResponse(BaseModel):
     quantity: int
     notes: Optional[str]
     status: TransferRequestStatus
-    approved_by: Optional[UserResponse]
+    approved_by: Optional[UserResponse]    # Wer hat als Owner bestätigt
+    confirmed_by: Optional[UserResponse]   # Wer hat Erhalt bestätigt
     created_at: datetime
     updated_at: Optional[datetime]
 
