@@ -1588,3 +1588,153 @@ async def get_transfer_request(
         )
 
     return filter_pioneer_comment(transfer_request, current_user)
+
+
+# ============== Komponenten-Suche & Dashboard ==============
+
+from app.schemas.inventory import (
+    ComponentSearchResult, InventoryDashboardResponse, PioneerInventoryStats,
+    LocationStats, CategoryStats
+)
+from sqlalchemy import func as sql_func
+
+
+@router.get("/search-component", response_model=list)
+async def search_component_in_pioneer_inventory(
+    q: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Sucht nach einer Komponente in allen Pioneer-Lagern.
+    Zeigt welcher Pioneer sie hat, wo und wie viele."""
+    if not q or len(q.strip()) < 2:
+        return []
+
+    search_term = f"%{q.strip()}%"
+
+    # Nur Pioneer-Lager durchsuchen
+    results = db.query(Inventory).join(
+        User, Inventory.user_id == User.id
+    ).join(
+        Component, Inventory.component_id == Component.id
+    ).filter(
+        User.is_pioneer == True,
+        Inventory.quantity > 0,
+        or_(
+            Component.name.ilike(search_term),
+            Component.manufacturer.ilike(search_term)
+        )
+    ).all()
+
+    # Gruppieren nach Komponente und formatieren
+    response = []
+    for inv in results:
+        response.append({
+            "pioneer": {
+                "id": inv.user.id,
+                "username": inv.user.username,
+                "display_name": inv.user.display_name,
+                "avatar_url": inv.user.avatar_url,
+                "is_pioneer": inv.user.is_pioneer,
+            },
+            "component": {
+                "id": inv.component.id,
+                "name": inv.component.name,
+                "category": inv.component.category,
+                "sub_category": inv.component.sub_category,
+                "manufacturer": inv.component.manufacturer,
+                "size": inv.component.size,
+                "grade": inv.component.grade,
+            },
+            "quantity": inv.quantity,
+            "location": {
+                "id": inv.location.id,
+                "name": inv.location.name,
+                "description": inv.location.description
+            } if inv.location else None,
+            "inventory_id": inv.id
+        })
+
+    return response
+
+
+@router.get("/dashboard", response_model=InventoryDashboardResponse)
+async def get_inventory_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Dashboard-Übersicht aller Pioneer-Lager mit Statistiken."""
+
+    # Alle Pioneers mit Inventar laden
+    pioneers = db.query(User).filter(User.is_pioneer == True).all()
+
+    pioneer_stats = []
+    total_items = 0
+    total_quantity = 0
+
+    for pioneer in pioneers:
+        # Inventar des Pioneers laden
+        inventory = db.query(Inventory).filter(
+            Inventory.user_id == pioneer.id,
+            Inventory.quantity > 0
+        ).all()
+
+        if not inventory:
+            continue
+
+        # Statistiken berechnen
+        items_count = len(inventory)
+        qty_sum = sum(i.quantity for i in inventory)
+        total_items += items_count
+        total_quantity += qty_sum
+
+        # Nach Standort gruppieren
+        by_location = {}
+        for inv in inventory:
+            loc_key = inv.location_id or 0
+            loc_name = inv.location.name if inv.location else "Ohne Standort"
+            if loc_key not in by_location:
+                by_location[loc_key] = {
+                    "location": {
+                        "id": inv.location.id,
+                        "name": inv.location.name,
+                        "description": inv.location.description
+                    } if inv.location else None,
+                    "item_count": 0,
+                    "total_quantity": 0
+                }
+            by_location[loc_key]["item_count"] += 1
+            by_location[loc_key]["total_quantity"] += inv.quantity
+
+        # Nach Kategorie gruppieren
+        by_category = {}
+        for inv in inventory:
+            cat = inv.component.category or "Unbekannt"
+            if cat not in by_category:
+                by_category[cat] = {"category": cat, "item_count": 0, "total_quantity": 0}
+            by_category[cat]["item_count"] += 1
+            by_category[cat]["total_quantity"] += inv.quantity
+
+        pioneer_stats.append({
+            "pioneer": {
+                "id": pioneer.id,
+                "username": pioneer.username,
+                "display_name": pioneer.display_name,
+                "avatar_url": pioneer.avatar_url,
+                "is_pioneer": pioneer.is_pioneer,
+            },
+            "total_items": items_count,
+            "total_quantity": qty_sum,
+            "by_location": sorted(by_location.values(), key=lambda x: x["total_quantity"], reverse=True),
+            "by_category": sorted(by_category.values(), key=lambda x: x["total_quantity"], reverse=True)
+        })
+
+    # Nach Gesamtmenge sortieren
+    pioneer_stats.sort(key=lambda x: x["total_quantity"], reverse=True)
+
+    return {
+        "pioneers": pioneer_stats,
+        "total_items": total_items,
+        "total_quantity": total_quantity,
+        "total_pioneers": len(pioneer_stats)
+    }

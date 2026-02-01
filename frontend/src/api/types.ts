@@ -370,3 +370,39 @@ export interface PendingRequestsCount {
   admin_awaiting: number        // Für Admins: Anfragen von inaktiven Usern
   total: number
 }
+
+// Komponenten-Suche & Dashboard
+export interface ComponentSearchResult {
+  pioneer: User
+  component: Component
+  quantity: number
+  location: Location | null
+  inventory_id: number
+}
+
+export interface LocationStats {
+  location: Location | null
+  item_count: number
+  total_quantity: number
+}
+
+export interface CategoryStats {
+  category: string
+  item_count: number
+  total_quantity: number
+}
+
+export interface PioneerInventoryStats {
+  pioneer: User
+  total_items: number
+  total_quantity: number
+  by_location: LocationStats[]
+  by_category: CategoryStats[]
+}
+
+export interface InventoryDashboard {
+  pioneers: PioneerInventoryStats[]
+  total_items: number
+  total_quantity: number
+  total_pioneers: number
+}

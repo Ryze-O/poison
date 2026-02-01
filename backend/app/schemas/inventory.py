@@ -136,3 +136,48 @@ class TransferRequestCommentUpdate(BaseModel):
     """Kommentar für eine Transfer-Anfrage setzen."""
     pioneer_comment: Optional[str] = None  # Nur für Pioneers sichtbar
     public_comment: Optional[str] = None   # Für alle sichtbar (Anmerkung an Bestellenden)
+
+
+# ============== Komponenten-Suche & Dashboard ==============
+
+class ComponentSearchResult(BaseModel):
+    """Suchergebnis: Welcher Pioneer hat welche Komponente wo."""
+    pioneer: UserResponse
+    component: ComponentResponse
+    quantity: int
+    location: Optional[LocationSimple]
+    inventory_id: int  # Für Transfer-Request
+
+    class Config:
+        from_attributes = True
+
+
+class LocationStats(BaseModel):
+    """Statistik für einen Standort."""
+    location: Optional[LocationSimple]
+    item_count: int
+    total_quantity: int
+
+
+class CategoryStats(BaseModel):
+    """Statistik für eine Kategorie."""
+    category: str
+    item_count: int
+    total_quantity: int
+
+
+class PioneerInventoryStats(BaseModel):
+    """Statistik für das Lager eines Pioneers."""
+    pioneer: UserResponse
+    total_items: int      # Anzahl verschiedener Items
+    total_quantity: int   # Gesamtanzahl aller Stück
+    by_location: List[LocationStats]
+    by_category: List[CategoryStats]
+
+
+class InventoryDashboardResponse(BaseModel):
+    """Dashboard-Übersicht aller Pioneer-Lager."""
+    pioneers: List[PioneerInventoryStats]
+    total_items: int
+    total_quantity: int
+    total_pioneers: int

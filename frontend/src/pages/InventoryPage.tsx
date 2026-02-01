@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
 import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft, ChevronDown, ChevronRight, Bell, Check, X, Send, Copy, Truck, MessageCircle, Clock } from 'lucide-react'
-import type { InventoryItem, User, Component, Location, TransferRequest, PendingRequestsCount } from '../api/types'
+import type { InventoryItem, User, Component, Location, TransferRequest, PendingRequestsCount, ComponentSearchResult, InventoryDashboard } from '../api/types'
 
 type InventoryAction = 'add' | 'remove' | 'loot' | 'transfer_in' | 'transfer_out'
 
@@ -55,6 +55,9 @@ export default function InventoryPage() {
   const [transferToLocation, setTransferToLocation] = useState<number | null>(null)
   const [transferConfirming, setTransferConfirming] = useState(false)
   const [addModal, setAddModal] = useState(false)
+  const [quickAddMode, setQuickAddMode] = useState(true) // Quick-Add standardmäßig an
+  const [quickAddCount, setQuickAddCount] = useState(0) // Zähler für hinzugefügte Items
+  const [lastLocationId, setLastLocationId] = useState<number | null>(null) // Letzter Standort merken
   const [bulkMoveModal, setBulkMoveModal] = useState(false)
   const [bulkFromLocation, setBulkFromLocation] = useState<number | null>(null)
   const [bulkToLocation, setBulkToLocation] = useState<number | null>(null)
@@ -106,6 +109,11 @@ export default function InventoryPage() {
   } | null>(null)
   const [moveToLocation, setMoveToLocation] = useState<number | null>(null)
   const [moveQuantity, setMoveQuantity] = useState(1)
+  // Komponenten-Suche & Dashboard
+  const [componentSearch, setComponentSearch] = useState('')
+  const [componentSearchResults, setComponentSearchResults] = useState<ComponentSearchResult[] | null>(null)
+  const [isSearchingComponents, setIsSearchingComponents] = useState(false)
+  const [showDashboard, setShowDashboard] = useState(false)
 
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
@@ -245,6 +253,13 @@ export default function InventoryPage() {
     queryFn: () => apiClient.get('/api/inventory/transfer-requests/pending/count').then((r) => r.data),
     enabled: hasInventory,
     refetchInterval: 30000, // Alle 30 Sekunden aktualisieren
+  })
+
+  // Dashboard Query
+  const { data: dashboard } = useQuery<InventoryDashboard>({
+    queryKey: ['inventory', 'dashboard'],
+    queryFn: () => apiClient.get('/api/inventory/dashboard').then((r) => r.data),
+    enabled: showDashboard,
   })
 
   const addMutation = useMutation({
@@ -436,6 +451,35 @@ export default function InventoryPage() {
     }, 300)
     return () => clearTimeout(timer)
   }, [orderSearchTerm])
+
+  // Component Search - "Wer hat was?"
+  const searchComponents = async (term: string) => {
+    if (!term.trim() || term.length < 2) {
+      setComponentSearchResults(null)
+      return
+    }
+    setIsSearchingComponents(true)
+    try {
+      const response = await apiClient.get(`/api/inventory/search-component?q=${encodeURIComponent(term)}`)
+      setComponentSearchResults(response.data)
+    } catch {
+      setComponentSearchResults([])
+    } finally {
+      setIsSearchingComponents(false)
+    }
+  }
+
+  // Debounced component search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (componentSearch && componentSearch.length >= 2) {
+        searchComponents(componentSearch)
+      } else {
+        setComponentSearchResults(null)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [componentSearch])
 
   // Hilfsfunktion zum Kopieren der Bestellnummer
   const copyOrderNumber = (orderNumber: string) => {
@@ -653,6 +697,174 @@ export default function InventoryPage() {
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Komponenten-Suche & Dashboard Section */}
+      <div className="card mb-6">
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          {/* Komponenten-Suche */}
+          <div className="flex-1 relative">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={20}
+            />
+            <input
+              type="text"
+              value={componentSearch}
+              onChange={(e) => setComponentSearch(e.target.value)}
+              placeholder="Wer hat was? (z.B. FR-76, Cooler...)"
+              className="input pl-10 w-full"
+            />
+            {isSearchingComponents && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-krt-orange border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+          {/* Dashboard Toggle */}
+          <button
+            onClick={() => setShowDashboard(!showDashboard)}
+            className={`btn ${showDashboard ? 'btn-primary' : 'btn-secondary'} flex items-center gap-2 whitespace-nowrap`}
+          >
+            <Package size={20} />
+            {showDashboard ? 'Dashboard ausblenden' : 'Lager-Dashboard'}
+          </button>
+        </div>
+
+        {/* Suchergebnisse */}
+        {componentSearchResults !== null && (
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-400">
+                {componentSearchResults.length === 0
+                  ? 'Keine Ergebnisse gefunden'
+                  : `${componentSearchResults.length} Ergebnis${componentSearchResults.length !== 1 ? 'se' : ''} bei Pioneers`}
+              </h3>
+              <button
+                onClick={() => {
+                  setComponentSearch('')
+                  setComponentSearchResults(null)
+                }}
+                className="text-xs text-gray-500 hover:text-white"
+              >
+                Suche schließen
+              </button>
+            </div>
+            {componentSearchResults.length > 0 && (
+              <div className="space-y-2">
+                {componentSearchResults.map((result) => (
+                  <div
+                    key={`${result.pioneer.id}-${result.component.id}-${result.location?.id ?? 'none'}`}
+                    className="flex items-center justify-between p-3 bg-gray-800/50 border border-gray-600/30 rounded-lg"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-white">
+                        {result.quantity}x {result.component.name}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-x-2 text-sm text-gray-400 mt-1">
+                        <span className="text-krt-orange">{result.pioneer.display_name || result.pioneer.username}</span>
+                        {result.location && (
+                          <>
+                            <span className="text-gray-600">•</span>
+                            <span className="flex items-center gap-1">
+                              <MapPin size={12} />
+                              {result.location.name}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {/* Anfragen-Button (nur wenn nicht eigenes Lager) */}
+                    {result.pioneer.id !== user?.id && (
+                      <button
+                        onClick={() => setRequestModal({
+                          ownerId: result.pioneer.id,
+                          ownerName: result.pioneer.display_name || result.pioneer.username,
+                          component: result.component,
+                          quantity: result.quantity,
+                          locationId: result.location?.id ?? null
+                        })}
+                        className="btn btn-sm btn-primary flex items-center gap-1 ml-4"
+                      >
+                        <Send size={14} />
+                        Anfragen
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Dashboard */}
+        {showDashboard && dashboard && (
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Package size={20} className="text-krt-orange" />
+                Pioneer-Lager Übersicht
+              </h3>
+              <div className="text-sm text-gray-400">
+                {dashboard.total_quantity} Items bei {dashboard.total_pioneers} Pioneer{dashboard.total_pioneers !== 1 ? 's' : ''}
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {dashboard.pioneers.map((pioneer) => (
+                <div
+                  key={pioneer.pioneer.id}
+                  className="p-4 bg-gray-800/50 border border-gray-600/30 rounded-lg"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-krt-orange/20 flex items-center justify-center text-krt-orange font-bold">
+                      {(pioneer.pioneer.display_name || pioneer.pioneer.username).charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-medium text-white">
+                        {pioneer.pioneer.display_name || pioneer.pioneer.username}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {pioneer.total_quantity} Items ({pioneer.total_items} verschiedene)
+                      </p>
+                    </div>
+                  </div>
+                  {/* Standorte */}
+                  {pioneer.by_location.length > 0 && (
+                    <div className="space-y-1 mt-3">
+                      <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Standorte</p>
+                      {pioneer.by_location.slice(0, 3).map((loc, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-1 text-gray-400">
+                            <MapPin size={12} />
+                            {loc.location?.name || 'Ohne Standort'}
+                          </span>
+                          <span className="text-gray-300">{loc.total_quantity}</span>
+                        </div>
+                      ))}
+                      {pioneer.by_location.length > 3 && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          +{pioneer.by_location.length - 3} weitere Standorte
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {/* Kategorien */}
+                  {pioneer.by_category.length > 0 && (
+                    <div className="space-y-1 mt-3 pt-3 border-t border-gray-700/50">
+                      <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Top Kategorien</p>
+                      {pioneer.by_category.slice(0, 3).map((cat, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-400">{cat.category}</span>
+                          <span className="text-gray-300">{cat.total_quantity}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Transfer Requests */}
@@ -2023,8 +2235,17 @@ export default function InventoryPage() {
           }}
           onClose={() => {
             setAddModal(false)
+            setQuickAddCount(0) // Reset Zähler beim Schließen
           }}
           isPending={addMutation.isPending}
+          quickAddMode={quickAddMode}
+          setQuickAddMode={setQuickAddMode}
+          quickAddCount={quickAddCount}
+          lastLocationId={lastLocationId}
+          onSuccessfulAdd={(locId, _name, _qty) => {
+            setLastLocationId(locId) // Letzten Standort merken
+            setQuickAddCount(prev => prev + 1) // Zähler erhöhen
+          }}
         />
       )}
 
@@ -2614,6 +2835,12 @@ interface ComponentSelectModalProps {
   onSelect: (componentId: number, quantity: number, locationId: number | null) => void
   onClose: () => void
   isPending: boolean
+  // Quick-Add Modus
+  quickAddMode: boolean
+  setQuickAddMode: (value: boolean) => void
+  quickAddCount: number
+  lastLocationId: number | null
+  onSuccessfulAdd: (locationId: number | null, componentName: string, quantity: number) => void
 }
 
 function ComponentSelectModal({
@@ -2625,13 +2852,19 @@ function ComponentSelectModal({
   onSelect,
   onClose,
   isPending,
+  quickAddMode,
+  setQuickAddMode,
+  quickAddCount,
+  lastLocationId,
+  onSuccessfulAdd,
 }: ComponentSelectModalProps) {
   const [modalSearch, setModalSearch] = useState('')
   const [modalCategory, setModalCategory] = useState('')
   const [modalManufacturer, setModalManufacturer] = useState('')
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [quantity, setQuantity] = useState(1)
-  const [locationId, setLocationId] = useState<number | null>(null)
+  const [locationId, setLocationId] = useState<number | null>(lastLocationId)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   // Komponenten filtern
   const filteredComponents = components.filter(c => {
@@ -2748,6 +2981,14 @@ function ComponentSelectModal({
           </div>
         )}
 
+        {/* Success Message */}
+        {successMessage && (
+          <div className="mb-4 p-3 bg-green-900/30 border border-green-600/50 rounded-lg text-green-400 flex items-center gap-2">
+            <Check size={18} />
+            {successMessage}
+          </div>
+        )}
+
         {/* Menge und Standort */}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div>
@@ -2775,22 +3016,48 @@ function ComponentSelectModal({
           </div>
         </div>
 
+        {/* Quick-Add Checkbox */}
+        <label className="flex items-center gap-2 mb-4 text-sm text-gray-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={quickAddMode}
+            onChange={(e) => setQuickAddMode(e.target.checked)}
+            className="rounded border-gray-600 bg-gray-800"
+          />
+          Quick-Add Modus (Modal offen lassen)
+          {quickAddCount > 0 && (
+            <span className="ml-auto text-krt-orange">{quickAddCount} hinzugefügt</span>
+          )}
+        </label>
+
         {/* Buttons */}
         <div className="flex gap-3">
           <button onClick={onClose} className="btn btn-secondary flex-1">
-            Abbrechen
+            {quickAddMode && quickAddCount > 0 ? 'Fertig' : 'Abbrechen'}
           </button>
           <button
             onClick={() => {
-              if (selectedId) {
+              if (selectedId && selectedComponent) {
                 onSelect(selectedId, quantity, locationId)
-                onClose()
+                if (quickAddMode) {
+                  // Quick-Add: Felder resetten, Modal offen lassen
+                  onSuccessfulAdd(locationId, selectedComponent.name, quantity)
+                  setSuccessMessage(`${quantity}x ${selectedComponent.name} hinzugefügt`)
+                  setSelectedId(null)
+                  setQuantity(1)
+                  setModalSearch('')
+                  // Standort NICHT resetten - der bleibt!
+                  setTimeout(() => setSuccessMessage(null), 3000)
+                } else {
+                  // Normal: Modal schließen
+                  onClose()
+                }
               }
             }}
             disabled={!selectedId || isPending}
             className="btn btn-primary flex-1"
           >
-            {isPending ? 'Wird hinzugefügt...' : 'Hinzufügen'}
+            {isPending ? 'Wird hinzugefügt...' : quickAddMode ? 'Hinzufügen & Weiter' : 'Hinzufügen'}
           </button>
         </div>
       </div>
