@@ -1,4 +1,4 @@
-# Poison - Staffelverwaltung v0.6
+# Poison - Staffelverwaltung v0.6.1
 
 Eine moderne Webanwendung zur Verwaltung einer Star Citizen Staffel. Ersetzt Google Sheets durch eine benutzerfreundliche Oberfläche mit Rollen- und Rechteverwaltung.
 
@@ -25,6 +25,9 @@ Eine moderne Webanwendung zur Verwaltung einer Star Citizen Staffel. Ersetzt Goo
 - **Transfers**: Übertrage Items zwischen Offizieren mit Bestätigungs-Dialog
 - **Standorte**: Organisiere Items nach Standorten (Hangars, Stationen)
 - **Kategorien**: Ship Components, Waffen, Erze, Rüstung und mehr
+- **Bestellnummern-Suche**: Finde Bestellungen schnell per VPR-Nummer
+- **Pioneer-Kommentare**: Interne Notizen nur für Pioneers sichtbar
+- **Öffentliche Kommentare**: Anmerkungen für Bestellende sichtbar
 
 ### Item Search (vorher Component Browser)
 - **Durchsuche ALLE SC-Items**: Nicht nur Ship Components, sondern alle Items aus dem SC Wiki
@@ -93,7 +96,13 @@ Privates Projekt für Staffel Viper - Das Kartell
 
 ## Version History
 
-### v0.6 (Aktuell)
+### v0.6.1 (Aktuell)
+- **Bestellnummern-Suche**: Transfer-Anfragen per VPR-Nummer, Komponentenname oder Username durchsuchen
+- **Pioneer-Kommentare**: Interne Notizen zu Bestellungen, nur für Pioneers sichtbar
+- **Öffentliche Kommentare**: Anmerkungen von Pioneers, die der Bestellende sehen kann
+- **Kommentar-Modal**: Pioneers können Kommentare direkt in der Transfer-Ansicht bearbeiten
+
+### v0.6
 - **Item Search**: Erweiterter Component Browser - durchsuche ALLE SC-Items mit Kategorie-Filter
 - **UEX Preis-Integration**: Aktuelle Preise und Kauforte direkt in der Item-Suche
 - **Admin: Datenbank & Export**: DB-Download, CSV-Export pro Tabelle, Statistiken

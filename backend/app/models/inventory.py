@@ -77,6 +77,10 @@ class TransferRequest(Base):
     confirmed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Wer hat Erhalt bestätigt
     rejection_reason = Column(Text, nullable=True)  # Begründung bei Ablehnung
 
+    # Kommentare
+    pioneer_comment = Column(Text, nullable=True)  # Nur für Pioneers sichtbar (interne Notizen)
+    public_comment = Column(Text, nullable=True)   # Für alle sichtbar (Anmerkung an Bestellenden)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

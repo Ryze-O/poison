@@ -12,7 +12,7 @@ from app.models.location import Location
 from app.schemas.inventory import (
     InventoryResponse, InventoryUpdate, TransferCreate, TransferResponse,
     InventoryLogResponse, BulkLocationTransfer, BulkTransferToOfficer, PatchResetRequest,
-    TransferRequestCreate, TransferRequestResponse, TransferRequestReject
+    TransferRequestCreate, TransferRequestResponse, TransferRequestReject, TransferRequestCommentUpdate
 )
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
@@ -1018,17 +1018,42 @@ async def create_transfer_request(
     return transfer_request
 
 
+def filter_pioneer_comment_inline(request: TransferRequest, is_pioneer_or_admin: bool) -> dict:
+    """Filtert pioneer_comment aus der Response, wenn User kein Pioneer/Admin ist."""
+    data = {
+        "id": request.id,
+        "order_number": request.order_number,
+        "requester": request.requester,
+        "owner": request.owner,
+        "component": request.component,
+        "from_location": request.from_location,
+        "to_location": request.to_location,
+        "quantity": request.quantity,
+        "notes": request.notes,
+        "status": request.status,
+        "approved_by": request.approved_by,
+        "delivered_by": request.delivered_by,
+        "confirmed_by": request.confirmed_by,
+        "rejection_reason": request.rejection_reason,
+        "public_comment": request.public_comment,
+        "created_at": request.created_at,
+        "updated_at": request.updated_at,
+        "pioneer_comment": request.pioneer_comment if is_pioneer_or_admin else None,
+    }
+    return data
+
+
 @router.get("/transfer-requests", response_model=List[TransferRequestResponse])
 async def get_transfer_requests(
     status_filter: Optional[TransferRequestStatus] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Gibt Transfer-Anfragen zurück (eigene als Empfänger/Besitzer oder alle für Admin)."""
+    """Gibt Transfer-Anfragen zurück (eigene als Empfänger/Besitzer oder alle für Admin/Pioneer)."""
     query = db.query(TransferRequest)
 
-    # Admin sieht alle, andere nur eigene
-    if not current_user.has_permission(UserRole.ADMIN):
+    # Admin und Pioneers sehen alle, andere nur eigene
+    if not current_user.has_permission(UserRole.ADMIN) and not current_user.is_pioneer:
         query = query.filter(
             (TransferRequest.requester_id == current_user.id) |
             (TransferRequest.owner_id == current_user.id)
@@ -1037,7 +1062,11 @@ async def get_transfer_requests(
     if status_filter:
         query = query.filter(TransferRequest.status == status_filter)
 
-    return query.order_by(TransferRequest.created_at.desc()).all()
+    requests = query.order_by(TransferRequest.created_at.desc()).all()
+
+    # pioneer_comment nur für Pioneers und Admins
+    is_pioneer_or_admin = current_user.is_pioneer or current_user.has_permission(UserRole.ADMIN)
+    return [filter_pioneer_comment_inline(r, is_pioneer_or_admin) for r in requests]
 
 
 @router.get("/transfer-requests/pending/count")
@@ -1412,3 +1441,150 @@ async def reject_transfer_request(
 
     db.commit()
     return {"message": "Transfer-Anfrage abgelehnt"}
+
+
+def filter_pioneer_comment(request: TransferRequest, current_user: User) -> dict:
+    """Filtert pioneer_comment aus der Response, wenn User kein Pioneer/Admin ist."""
+    data = {
+        "id": request.id,
+        "order_number": request.order_number,
+        "requester": request.requester,
+        "owner": request.owner,
+        "component": request.component,
+        "from_location": request.from_location,
+        "to_location": request.to_location,
+        "quantity": request.quantity,
+        "notes": request.notes,
+        "status": request.status,
+        "approved_by": request.approved_by,
+        "delivered_by": request.delivered_by,
+        "confirmed_by": request.confirmed_by,
+        "rejection_reason": request.rejection_reason,
+        "public_comment": request.public_comment,
+        "created_at": request.created_at,
+        "updated_at": request.updated_at,
+    }
+
+    # pioneer_comment nur für Pioneers und Admins
+    if current_user.is_pioneer or current_user.has_permission(UserRole.ADMIN):
+        data["pioneer_comment"] = request.pioneer_comment
+    else:
+        data["pioneer_comment"] = None
+
+    return data
+
+
+@router.get("/transfer-requests/search", response_model=List[TransferRequestResponse])
+async def search_transfer_requests(
+    q: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Sucht Transfer-Anfragen nach Bestellnummer, Komponentenname oder Username.
+    Pioneers/Admins sehen alle, andere nur ihre eigenen."""
+    search_term = f"%{q.strip()}%"
+
+    query = db.query(TransferRequest).join(
+        Component, TransferRequest.component_id == Component.id
+    ).outerjoin(
+        User, TransferRequest.requester_id == User.id
+    )
+
+    # Filter: Bestellnummer, Komponentenname oder Username
+    query = query.filter(
+        or_(
+            TransferRequest.order_number.ilike(search_term),
+            Component.name.ilike(search_term),
+            User.username.ilike(search_term),
+            User.display_name.ilike(search_term)
+        )
+    )
+
+    # Nur eigene Anfragen, außer Pioneer/Admin
+    if not current_user.is_pioneer and not current_user.has_permission(UserRole.ADMIN):
+        query = query.filter(
+            or_(
+                TransferRequest.requester_id == current_user.id,
+                TransferRequest.owner_id == current_user.id
+            )
+        )
+
+    requests = query.order_by(TransferRequest.created_at.desc()).limit(50).all()
+
+    # Filtern der pioneer_comments basierend auf Berechtigungen
+    return [filter_pioneer_comment(r, current_user) for r in requests]
+
+
+@router.post("/transfer-requests/{request_id}/comment")
+async def update_transfer_request_comment(
+    request_id: int,
+    comment: TransferRequestCommentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Setzt Kommentare für eine Transfer-Anfrage.
+    pioneer_comment: Nur Pioneers/Admins können diesen setzen und sehen.
+    public_comment: Pioneers/Admins können diesen setzen, alle können ihn sehen."""
+    transfer_request = db.query(TransferRequest).filter(TransferRequest.id == request_id).first()
+    if not transfer_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Anfrage nicht gefunden"
+        )
+
+    # Nur Pioneers und Admins können Kommentare setzen
+    if not current_user.is_pioneer and not current_user.has_permission(UserRole.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Nur Pioneers und Admins können Kommentare setzen"
+        )
+
+    updated_fields = []
+
+    if comment.pioneer_comment is not None:
+        transfer_request.pioneer_comment = comment.pioneer_comment.strip() if comment.pioneer_comment else None
+        updated_fields.append("Pioneer-Kommentar")
+
+    if comment.public_comment is not None:
+        transfer_request.public_comment = comment.public_comment.strip() if comment.public_comment else None
+        updated_fields.append("Öffentlicher Kommentar")
+
+    if not updated_fields:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kein Kommentar angegeben"
+        )
+
+    db.commit()
+    return {"message": f"{', '.join(updated_fields)} aktualisiert"}
+
+
+@router.get("/transfer-requests/{request_id}", response_model=TransferRequestResponse)
+async def get_transfer_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt eine einzelne Transfer-Anfrage zurück."""
+    transfer_request = db.query(TransferRequest).filter(TransferRequest.id == request_id).first()
+    if not transfer_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Anfrage nicht gefunden"
+        )
+
+    # Prüfen ob User berechtigt ist
+    can_view = (
+        transfer_request.requester_id == current_user.id or
+        transfer_request.owner_id == current_user.id or
+        current_user.is_pioneer or
+        current_user.has_permission(UserRole.ADMIN)
+    )
+
+    if not can_view:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Keine Berechtigung zum Anzeigen"
+        )
+
+    return filter_pioneer_comment(transfer_request, current_user)

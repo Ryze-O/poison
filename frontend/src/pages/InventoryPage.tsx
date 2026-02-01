@@ -68,6 +68,18 @@ export default function InventoryPage() {
   const [editingUserId, setEditingUserId] = useState<number | null>(null)
   // Transfer Request States
   const [showTransferRequests, setShowTransferRequests] = useState(false)
+  const [orderSearchTerm, setOrderSearchTerm] = useState('')
+  const [orderSearchResults, setOrderSearchResults] = useState<TransferRequest[] | null>(null)
+  const [isSearching, setIsSearching] = useState(false)
+  // Comment Modal
+  const [commentModal, setCommentModal] = useState<{
+    requestId: number
+    orderNumber: string | null
+    currentPioneerComment: string | null
+    currentPublicComment: string | null
+  } | null>(null)
+  const [pioneerComment, setPioneerComment] = useState('')
+  const [publicComment, setPublicComment] = useState('')
   const [requestModal, setRequestModal] = useState<{
     ownerId: number
     ownerName: string
@@ -381,6 +393,50 @@ export default function InventoryPage() {
     },
   })
 
+  // Comment Mutation
+  const updateCommentMutation = useMutation({
+    mutationFn: (data: { requestId: number; pioneer_comment?: string | null; public_comment?: string | null }) =>
+      apiClient.post(`/api/inventory/transfer-requests/${data.requestId}/comment`, {
+        pioneer_comment: data.pioneer_comment,
+        public_comment: data.public_comment
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transfer-requests'] })
+      setCommentModal(null)
+      setPioneerComment('')
+      setPublicComment('')
+    },
+  })
+
+  // Order Number Search
+  const searchOrders = async (term: string) => {
+    if (!term.trim()) {
+      setOrderSearchResults(null)
+      return
+    }
+    setIsSearching(true)
+    try {
+      const response = await apiClient.get(`/api/inventory/transfer-requests/search?q=${encodeURIComponent(term)}`)
+      setOrderSearchResults(response.data)
+    } catch {
+      setOrderSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (orderSearchTerm) {
+        searchOrders(orderSearchTerm)
+      } else {
+        setOrderSearchResults(null)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [orderSearchTerm])
+
   // Hilfsfunktion zum Kopieren der Bestellnummer
   const copyOrderNumber = (orderNumber: string) => {
     navigator.clipboard.writeText(orderNumber)
@@ -602,12 +658,149 @@ export default function InventoryPage() {
       {/* Transfer Requests */}
       {showTransferRequests && hasInventory && (
         <div className="card mb-8">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <Bell size={24} className="text-krt-orange" />
-            Transfer-Anfragen
-          </h2>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Bell size={24} className="text-krt-orange" />
+              Transfer-Anfragen
+            </h2>
 
-          {transferRequests && transferRequests.length > 0 ? (
+            {/* Suchfeld für Bestellnummern */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Bestellnummer suchen (VPR-...)..."
+                value={orderSearchTerm}
+                onChange={(e) => setOrderSearchTerm(e.target.value)}
+                className="input w-full md:w-64 pl-10"
+              />
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              {isSearching && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-krt-orange border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Suchergebnisse */}
+          {orderSearchResults !== null && (
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-gray-400">
+                  Suchergebnisse: {orderSearchResults.length} Treffer
+                </h3>
+                <button
+                  onClick={() => {
+                    setOrderSearchTerm('')
+                    setOrderSearchResults(null)
+                  }}
+                  className="text-xs text-gray-500 hover:text-white"
+                >
+                  Suche schließen
+                </button>
+              </div>
+              {orderSearchResults.length > 0 ? (
+                <div className="space-y-3">
+                  {orderSearchResults.map((request) => (
+                    <div
+                      key={request.id}
+                      className="p-4 bg-gray-800/50 border border-gray-600/30 rounded-lg"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          {/* Bestellnummer */}
+                          {request.order_number && (
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-sm font-mono bg-krt-orange/20 px-3 py-1 rounded text-krt-orange font-bold">
+                                {request.order_number}
+                              </span>
+                              <button
+                                onClick={() => copyOrderNumber(request.order_number!)}
+                                className="p-1 text-gray-400 hover:text-white rounded"
+                                title="Bestellnummer kopieren"
+                              >
+                                <Copy size={14} />
+                              </button>
+                            </div>
+                          )}
+                          {/* Item & Menge */}
+                          <p className="font-bold text-lg text-white">
+                            {request.quantity}x {request.component.name}
+                          </p>
+                          {/* Wer → Wessen Lager */}
+                          <div className="flex flex-wrap items-center gap-x-2 text-sm mt-1">
+                            <span className="text-gray-400">Von:</span>
+                            <span className="text-krt-orange">{request.requester.display_name || request.requester.username}</span>
+                            <span className="text-gray-500">→</span>
+                            <span className="text-gray-400">Aus Lager:</span>
+                            <span className="text-gray-300">{request.owner.display_name || request.owner.username}</span>
+                          </div>
+                          {/* Status */}
+                          <div className="mt-2">
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              request.status === 'pending' ? 'bg-yellow-900/50 text-yellow-400' :
+                              request.status === 'approved' ? 'bg-blue-900/50 text-blue-400' :
+                              request.status === 'awaiting_receipt' ? 'bg-purple-900/50 text-purple-400' :
+                              request.status === 'completed' ? 'bg-green-900/50 text-green-400' :
+                              'bg-red-900/50 text-red-400'
+                            }`}>
+                              {request.status === 'pending' && 'Warte auf Freigabe'}
+                              {request.status === 'approved' && 'Freigegeben'}
+                              {request.status === 'awaiting_receipt' && 'Warte auf Empfang'}
+                              {request.status === 'completed' && 'Abgeschlossen'}
+                              {request.status === 'rejected' && 'Abgelehnt'}
+                            </span>
+                          </div>
+                          {/* Öffentlicher Kommentar */}
+                          {request.public_comment && (
+                            <div className="mt-2 p-2 bg-blue-900/20 border border-blue-700/30 rounded text-sm">
+                              <span className="text-blue-400">Anmerkung: </span>
+                              <span className="text-gray-200">{request.public_comment}</span>
+                            </div>
+                          )}
+                          {/* Pioneer-Kommentar (nur für Pioneers/Admins) */}
+                          {(isPioneer || isAdmin) && request.pioneer_comment && (
+                            <div className="mt-2 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-sm">
+                              <span className="text-yellow-400">Pioneer-Notiz: </span>
+                              <span className="text-gray-200">{request.pioneer_comment}</span>
+                            </div>
+                          )}
+                          {/* Datum */}
+                          <p className="text-xs text-gray-500 mt-2">
+                            {new Date(request.created_at).toLocaleDateString('de-DE')}
+                          </p>
+                        </div>
+                        {/* Kommentar-Button für Pioneers */}
+                        {(isPioneer || isAdmin) && (
+                          <button
+                            onClick={() => {
+                              setCommentModal({
+                                requestId: request.id,
+                                orderNumber: request.order_number,
+                                currentPioneerComment: request.pioneer_comment,
+                                currentPublicComment: request.public_comment
+                              })
+                              setPioneerComment(request.pioneer_comment || '')
+                              setPublicComment(request.public_comment || '')
+                            }}
+                            className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+                            title="Kommentar bearbeiten"
+                          >
+                            <MessageCircle size={18} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-sm">Keine Anfragen gefunden für "{orderSearchTerm}"</p>
+              )}
+            </div>
+          )}
+
+          {!orderSearchResults && (
+            transferRequests && transferRequests.length > 0 ? (
             <div className="space-y-4">
               {/* 1. Neue Anfragen freigeben (PENDING → APPROVED) */}
               {transferRequests.filter(r =>
@@ -662,12 +855,46 @@ export default function InventoryPage() {
                                   <span className="text-gray-200 italic">"{request.notes}"</span>
                                 </div>
                               )}
+                              {/* Öffentlicher Kommentar */}
+                              {request.public_comment && (
+                                <div className="mt-2 p-2 bg-blue-900/20 border border-blue-700/30 rounded text-sm">
+                                  <span className="text-blue-400">Anmerkung: </span>
+                                  <span className="text-gray-200">{request.public_comment}</span>
+                                </div>
+                              )}
+                              {/* Pioneer-Kommentar (nur für Pioneers/Admins) */}
+                              {(isPioneer || isAdmin) && request.pioneer_comment && (
+                                <div className="mt-2 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-sm">
+                                  <span className="text-yellow-400">Pioneer-Notiz: </span>
+                                  <span className="text-gray-200">{request.pioneer_comment}</span>
+                                </div>
+                              )}
                               {/* Datum */}
                               <p className="text-xs text-gray-500 mt-2">
                                 Angefragt am {new Date(request.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })} um {new Date(request.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
                               </p>
                             </div>
-                            <div className="flex gap-2 flex-shrink-0">
+                            <div className="flex flex-col gap-2 flex-shrink-0">
+                              {/* Kommentar-Button für Pioneers */}
+                              {(isPioneer || isAdmin) && (
+                                <button
+                                  onClick={() => {
+                                    setCommentModal({
+                                      requestId: request.id,
+                                      orderNumber: request.order_number,
+                                      currentPioneerComment: request.pioneer_comment,
+                                      currentPublicComment: request.public_comment
+                                    })
+                                    setPioneerComment(request.pioneer_comment || '')
+                                    setPublicComment(request.public_comment || '')
+                                  }}
+                                  className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+                                  title="Kommentar bearbeiten"
+                                >
+                                  <MessageCircle size={18} />
+                                </button>
+                              )}
+                              <div className="flex gap-2">
                               <button
                                 onClick={() => setRejectModal({
                                   requestId: request.id,
@@ -688,6 +915,7 @@ export default function InventoryPage() {
                                 <Check size={16} className="mr-1" />
                                 Freigeben
                               </button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -752,6 +980,20 @@ export default function InventoryPage() {
                                   </span>
                                 )}
                               </div>
+                              {/* Öffentlicher Kommentar */}
+                              {request.public_comment && (
+                                <div className="mt-2 p-2 bg-blue-900/20 border border-blue-700/30 rounded text-sm">
+                                  <span className="text-blue-400">Anmerkung: </span>
+                                  <span className="text-gray-200">{request.public_comment}</span>
+                                </div>
+                              )}
+                              {/* Pioneer-Kommentar (nur für Pioneers/Admins) */}
+                              {(isPioneer || isAdmin) && request.pioneer_comment && (
+                                <div className="mt-2 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-sm">
+                                  <span className="text-yellow-400">Pioneer-Notiz: </span>
+                                  <span className="text-gray-200">{request.pioneer_comment}</span>
+                                </div>
+                              )}
                               {/* Discord Hinweis */}
                               <div className="mt-3 p-2 bg-blue-900/30 border border-blue-700/30 rounded text-sm">
                                 <p className="text-blue-300 flex items-center gap-2">
@@ -767,15 +1009,36 @@ export default function InventoryPage() {
                                 Freigegeben am {new Date(request.updated_at || request.created_at).toLocaleDateString('de-DE')}
                               </p>
                             </div>
-                            <button
-                              onClick={() => deliverMutation.mutate(request.id)}
-                              disabled={deliverMutation.isPending}
-                              className="btn bg-blue-600 hover:bg-blue-700 text-sm py-1.5 px-3 flex-shrink-0 flex items-center gap-1"
-                              title="Als ausgeliefert markieren"
-                            >
-                              <Truck size={16} />
-                              Ausgeliefert
-                            </button>
+                            <div className="flex flex-col gap-2 flex-shrink-0">
+                              {/* Kommentar-Button für Pioneers */}
+                              {(isPioneer || isAdmin) && (
+                                <button
+                                  onClick={() => {
+                                    setCommentModal({
+                                      requestId: request.id,
+                                      orderNumber: request.order_number,
+                                      currentPioneerComment: request.pioneer_comment,
+                                      currentPublicComment: request.public_comment
+                                    })
+                                    setPioneerComment(request.pioneer_comment || '')
+                                    setPublicComment(request.public_comment || '')
+                                  }}
+                                  className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+                                  title="Kommentar bearbeiten"
+                                >
+                                  <MessageCircle size={18} />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => deliverMutation.mutate(request.id)}
+                                disabled={deliverMutation.isPending}
+                                className="btn bg-blue-600 hover:bg-blue-700 text-sm py-1.5 px-3 flex items-center gap-1"
+                                title="Als ausgeliefert markieren"
+                              >
+                                <Truck size={16} />
+                                Ausgeliefert
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -822,6 +1085,20 @@ export default function InventoryPage() {
                               <p className="text-sm text-gray-400 mt-1">
                                 An: <span className="text-krt-orange font-medium">{request.requester.display_name || request.requester.username}</span>
                               </p>
+                              {/* Öffentlicher Kommentar */}
+                              {request.public_comment && (
+                                <div className="mt-2 p-2 bg-blue-900/20 border border-blue-700/30 rounded text-sm">
+                                  <span className="text-blue-400">Anmerkung: </span>
+                                  <span className="text-gray-200">{request.public_comment}</span>
+                                </div>
+                              )}
+                              {/* Pioneer-Kommentar (nur für Pioneers/Admins) */}
+                              {(isPioneer || isAdmin) && request.pioneer_comment && (
+                                <div className="mt-2 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-sm">
+                                  <span className="text-yellow-400">Pioneer-Notiz: </span>
+                                  <span className="text-gray-200">{request.pioneer_comment}</span>
+                                </div>
+                              )}
                               {/* Status */}
                               <p className="text-sm text-yellow-400 mt-2">
                                 Ausgeliefert - warte auf Bestätigung durch Empfänger
@@ -831,8 +1108,29 @@ export default function InventoryPage() {
                                 Angefragt am {new Date(request.created_at).toLocaleDateString('de-DE')}
                               </p>
                             </div>
-                            <div className="text-yellow-400">
-                              <Clock size={24} />
+                            <div className="flex flex-col gap-2 items-center">
+                              {/* Kommentar-Button für Pioneers */}
+                              {(isPioneer || isAdmin) && (
+                                <button
+                                  onClick={() => {
+                                    setCommentModal({
+                                      requestId: request.id,
+                                      orderNumber: request.order_number,
+                                      currentPioneerComment: request.pioneer_comment,
+                                      currentPublicComment: request.public_comment
+                                    })
+                                    setPioneerComment(request.pioneer_comment || '')
+                                    setPublicComment(request.public_comment || '')
+                                  }}
+                                  className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+                                  title="Kommentar bearbeiten"
+                                >
+                                  <MessageCircle size={18} />
+                                </button>
+                              )}
+                              <div className="text-yellow-400">
+                                <Clock size={24} />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -873,6 +1171,13 @@ export default function InventoryPage() {
                               <p className="text-sm text-gray-400 mt-1">
                                 Von: <span className="text-krt-orange font-medium">{request.owner.display_name || request.owner.username}</span>
                               </p>
+                              {/* Öffentlicher Kommentar */}
+                              {request.public_comment && (
+                                <div className="mt-2 p-2 bg-blue-900/20 border border-blue-700/30 rounded text-sm">
+                                  <span className="text-blue-400">Anmerkung vom Pioneer: </span>
+                                  <span className="text-gray-200">{request.public_comment}</span>
+                                </div>
+                              )}
                               {/* Status */}
                               <p className="text-sm text-green-400 mt-2">
                                 Pioneer hat ausgeliefert - bitte bestätige den Erhalt
@@ -1137,6 +1442,7 @@ export default function InventoryPage() {
             </div>
           ) : (
             <p className="text-gray-400">Noch keine Transfer-Anfragen vorhanden.</p>
+          )
           )}
         </div>
       )}
@@ -2021,6 +2327,84 @@ export default function InventoryPage() {
                   className="btn bg-red-600 hover:bg-red-700 text-white flex-1"
                 >
                   {rejectRequestMutation.isPending ? 'Wird abgelehnt...' : 'Ablehnen'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Comment Modal (für Pioneers) */}
+      {commentModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="card max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <MessageCircle size={24} className="text-krt-orange" />
+              Kommentar bearbeiten
+            </h2>
+
+            {commentModal.orderNumber && (
+              <div className="mb-4">
+                <span className="text-sm font-mono bg-gray-700 px-2 py-1 rounded text-gray-300">
+                  {commentModal.orderNumber}
+                </span>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Öffentlicher Kommentar */}
+              <div>
+                <label className="label">
+                  Öffentlicher Kommentar
+                  <span className="text-xs text-gray-500 ml-2">(sichtbar für den Bestellenden)</span>
+                </label>
+                <textarea
+                  value={publicComment}
+                  onChange={(e) => setPublicComment(e.target.value)}
+                  placeholder="Anmerkung zur Bestellung..."
+                  className="input resize-none"
+                  rows={2}
+                />
+              </div>
+
+              {/* Pioneer-Kommentar */}
+              <div>
+                <label className="label">
+                  Pioneer-Notiz
+                  <span className="text-xs text-yellow-500 ml-2">(nur für Pioneers sichtbar)</span>
+                </label>
+                <textarea
+                  value={pioneerComment}
+                  onChange={(e) => setPioneerComment(e.target.value)}
+                  placeholder="Interne Notiz für Pioneers..."
+                  className="input resize-none"
+                  rows={2}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setCommentModal(null)
+                    setPioneerComment('')
+                    setPublicComment('')
+                  }}
+                  className="btn btn-secondary flex-1"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => {
+                    updateCommentMutation.mutate({
+                      requestId: commentModal.requestId,
+                      pioneer_comment: pioneerComment || null,
+                      public_comment: publicComment || null
+                    })
+                  }}
+                  disabled={updateCommentMutation.isPending}
+                  className="btn btn-primary flex-1"
+                >
+                  {updateCommentMutation.isPending ? 'Wird gespeichert...' : 'Speichern'}
                 </button>
               </div>
             </div>

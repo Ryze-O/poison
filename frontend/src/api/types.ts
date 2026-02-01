@@ -327,7 +327,7 @@ export type TransferRequestStatus = 'pending' | 'approved' | 'awaiting_receipt' 
 
 export interface TransferRequest {
   id: number
-  order_number: string | null     // Bestellnummer für Discord-Koordination (z.B. "TR-2026-0042")
+  order_number: string | null     // Bestellnummer für Discord-Koordination (z.B. "VPR-2026-0042")
   requester: User       // Wer will haben
   owner: User           // Wessen Lager
   component: Component
@@ -340,8 +340,15 @@ export interface TransferRequest {
   delivered_by: User | null     // Wer hat als ausgeliefert markiert
   confirmed_by: User | null     // Wer hat Erhalt bestätigt
   rejection_reason: string | null  // Begründung bei Ablehnung
+  pioneer_comment: string | null   // Nur für Pioneers sichtbar (interne Notizen)
+  public_comment: string | null    // Für alle sichtbar (Anmerkung an Bestellenden)
   created_at: string
   updated_at: string | null
+}
+
+export interface TransferRequestCommentUpdate {
+  pioneer_comment?: string | null
+  public_comment?: string | null
 }
 
 export interface TransferRequestCreate {

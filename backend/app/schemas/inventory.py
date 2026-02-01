@@ -118,6 +118,8 @@ class TransferRequestResponse(BaseModel):
     delivered_by: Optional[UserResponse]   # Wer hat als ausgeliefert markiert
     confirmed_by: Optional[UserResponse]   # Wer hat Erhalt bestätigt
     rejection_reason: Optional[str]        # Begründung bei Ablehnung
+    pioneer_comment: Optional[str] = None  # Nur für Pioneers sichtbar (wird im Router gefiltert)
+    public_comment: Optional[str] = None   # Für alle sichtbar
     created_at: datetime
     updated_at: Optional[datetime]
 
@@ -128,3 +130,9 @@ class TransferRequestResponse(BaseModel):
 class TransferRequestReject(BaseModel):
     """Ablehnung einer Transfer-Anfrage mit Begründung."""
     reason: str  # Pflichtfeld: Begründung für die Ablehnung
+
+
+class TransferRequestCommentUpdate(BaseModel):
+    """Kommentar für eine Transfer-Anfrage setzen."""
+    pioneer_comment: Optional[str] = None  # Nur für Pioneers sichtbar
+    public_comment: Optional[str] = None   # Für alle sichtbar (Anmerkung an Bestellenden)
