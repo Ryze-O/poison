@@ -36,7 +36,6 @@ export default function StaffelstrukturPage() {
   const queryClient = useQueryClient()
 
   // States
-  const [activeGroupId, setActiveGroupId] = useState<number>(1)
   const [addMemberModal, setAddMemberModal] = useState<{ groupId: number; groupName: string } | null>(null)
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [selectedStatus, setSelectedStatus] = useState<MemberStatus>('ACTIVE')
@@ -144,8 +143,6 @@ export default function StaffelstrukturPage() {
     return <div className="text-center text-gray-400 py-12">Keine Daten verfügbar</div>
   }
 
-  const activeGroup = overview.command_groups.find(g => g.id === activeGroupId) || overview.command_groups[0]
-
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Staffelstruktur</h1>
@@ -175,157 +172,140 @@ export default function StaffelstrukturPage() {
         </div>
       )}
 
-      {/* Kommandogruppen mit Tabs */}
-      <div className="card">
-        <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-          <Users className="text-krt-orange" size={20} />
-          Kommandogruppen
-        </h2>
+      {/* Kommandogruppen - 3 Spalten mit gleicher Höhe */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {overview.command_groups.map(group => {
+          const Icon = kgIcons[group.name] || Users
+          const membersByStatus = {
+            RECRUIT: group.members.filter(m => m.status === 'RECRUIT'),
+            ACTIVE: group.members.filter(m => m.status === 'ACTIVE'),
+            INACTIVE: group.members.filter(m => m.status === 'INACTIVE'),
+            ABSENT: group.members.filter(m => m.status === 'ABSENT'),
+          }
 
-        {/* Tab Navigation */}
-        <div className="flex gap-2 mb-6">
-          {overview.command_groups.map(group => {
-            const Icon = kgIcons[group.name] || Users
-            const isActive = group.id === activeGroupId
-            return (
-              <button
-                key={group.id}
-                onClick={() => setActiveGroupId(group.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                  isActive
-                    ? 'bg-krt-orange text-white'
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                }`}
-              >
-                <Icon size={18} />
-                <span>{group.name}</span>
-                <span className="text-xs opacity-75">({group.members.length})</span>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Active Group Content */}
-        {activeGroup && (
-          <div className="space-y-6">
-            {/* Header & Description */}
-            <div className="p-4 bg-gray-800/50 rounded-lg">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h3 className="text-xl font-bold">{activeGroup.full_name}</h3>
-                  <p className="text-sm text-gray-400">{activeGroup.name}</p>
+          return (
+            <div key={group.id} className="card flex flex-col">
+              {/* Header - gleiche Höhe */}
+              <div className="flex items-start justify-between mb-4 min-h-[60px]">
+                <div className="flex items-center gap-3">
+                  <Icon className="text-krt-orange flex-shrink-0" size={28} />
+                  <div>
+                    <h2 className="text-xl font-bold">{group.name}</h2>
+                    <p className="text-sm text-gray-400">{group.full_name}</p>
+                  </div>
                 </div>
                 {canManage && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-1 flex-shrink-0">
                     <button
                       onClick={() => {
-                        setEditDescription(activeGroup.description || '')
-                        setEditGroupModal(activeGroup)
+                        setEditDescription(group.description || '')
+                        setEditGroupModal(group)
                       }}
-                      className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg"
+                      className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
                       title="Beschreibung bearbeiten"
                     >
-                      <Pencil size={16} />
+                      <Pencil size={14} />
                     </button>
                     <button
-                      onClick={() => setManageShipsModal(activeGroup)}
-                      className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg"
+                      onClick={() => setManageShipsModal(group)}
+                      className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
                       title="Schiffe verwalten"
                     >
-                      <Anchor size={16} />
+                      <Anchor size={14} />
                     </button>
                   </div>
                 )}
               </div>
 
-              {activeGroup.description && (
-                <p className="text-gray-300 text-sm mb-4 border-l-2 border-krt-orange/50 pl-3">
-                  {activeGroup.description}
-                </p>
-              )}
-
-              {/* Schiffe */}
-              <div className="flex flex-wrap gap-2">
-                {activeGroup.ships.map(ship => (
-                  <span
-                    key={ship.id}
-                    className="px-3 py-1 text-sm bg-gray-700/50 border border-gray-600/30 rounded-full"
-                  >
-                    {ship.ship_name}
-                  </span>
-                ))}
+              {/* Beschreibung - feste Mindesthöhe */}
+              <div className="min-h-[80px] mb-4">
+                {group.description && (
+                  <p className="text-gray-300 text-sm border-l-2 border-krt-orange/50 pl-3 line-clamp-4">
+                    {group.description}
+                  </p>
+                )}
               </div>
-            </div>
 
-            {/* Einsatzrollen */}
-            {activeGroup.operational_roles.length > 0 && (
-              <div>
-                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">
+              {/* Schiffe - feste Höhe */}
+              <div className="min-h-[60px] mb-4">
+                <div className="flex flex-wrap gap-1.5">
+                  {group.ships.map(ship => (
+                    <span
+                      key={ship.id}
+                      className="px-2 py-0.5 text-xs bg-gray-700/50 border border-gray-600/30 rounded"
+                    >
+                      {ship.ship_name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Einsatzrollen - feste Höhe */}
+              <div className="min-h-[140px] mb-4">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                   Einsatzrollen
-                </h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {activeGroup.operational_roles.map(role => (
+                </h3>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {group.operational_roles.slice(0, 8).map(role => (
                     <div
                       key={role.id}
-                      className="p-3 bg-gray-800/30 rounded-lg border border-gray-700/50"
+                      className="px-2 py-1 bg-gray-800/30 rounded text-xs"
+                      title={role.description || ''}
                     >
-                      <div className="font-medium text-sm text-krt-orange mb-1">{role.name}</div>
-                      {role.description && (
-                        <div className="text-xs text-gray-500">{role.description}</div>
-                      )}
+                      <span className="text-krt-orange">{role.name}</span>
                     </div>
                   ))}
                 </div>
               </div>
-            )}
 
-            {/* Mitglieder */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
-                  Mitglieder ({activeGroup.members.length})
-                </h4>
-                {canManage && (
-                  <button
-                    onClick={() => setAddMemberModal({ groupId: activeGroup.id, groupName: activeGroup.full_name })}
-                    className="btn btn-sm btn-secondary flex items-center gap-1"
-                  >
-                    <UserPlus size={14} />
-                    Hinzufügen
-                  </button>
-                )}
-              </div>
+              {/* Mitglieder - flex-grow für Rest */}
+              <div className="flex-grow">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Mitglieder ({group.members.length})
+                  </h3>
+                  {canManage && (
+                    <button
+                      onClick={() => setAddMemberModal({ groupId: group.id, groupName: group.full_name })}
+                      className="p-1 text-gray-400 hover:text-krt-orange hover:bg-gray-700 rounded"
+                      title="Mitglied hinzufügen"
+                    >
+                      <UserPlus size={14} />
+                    </button>
+                  )}
+                </div>
 
-              <div className="space-y-3">
-                {(['RECRUIT', 'ACTIVE', 'INACTIVE', 'ABSENT'] as MemberStatus[]).map(status => {
-                  const members = activeGroup.members.filter(m => m.status === status)
-                  if (members.length === 0) return null
-                  return (
-                    <div key={status}>
-                      <div className={`text-xs font-medium mb-2 ${statusColors[status]}`}>
-                        {statusLabels[status]} ({members.length})
+                <div className="space-y-2">
+                  {(['RECRUIT', 'ACTIVE', 'INACTIVE', 'ABSENT'] as MemberStatus[]).map(status => {
+                    const members = membersByStatus[status]
+                    if (members.length === 0) return null
+                    return (
+                      <div key={status}>
+                        <div className={`text-xs font-medium mb-1 ${statusColors[status]}`}>
+                          {statusLabels[status]} ({members.length})
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {members.map(member => (
+                            <MemberBadge
+                              key={member.id}
+                              member={member}
+                              status={status}
+                              canManage={canManage}
+                              onStatusChange={(newStatus) =>
+                                updateStatusMutation.mutate({ membershipId: member.id, status: newStatus })
+                              }
+                              onRemove={() => removeMemberMutation.mutate(member.id)}
+                            />
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {members.map(member => (
-                          <MemberBadge
-                            key={member.id}
-                            member={member}
-                            status={status}
-                            canManage={canManage}
-                            onStatusChange={(newStatus) =>
-                              updateStatusMutation.mutate({ membershipId: member.id, status: newStatus })
-                            }
-                            onRemove={() => removeMemberMutation.mutate(member.id)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )
+        })}
       </div>
 
       {/* Funktionsrollen */}
@@ -594,7 +574,7 @@ function LeadershipCard({
   onRemove: (assignmentId: number) => void
 }) {
   return (
-    <div className="p-4 bg-gray-800/50 border border-gray-600/30 rounded-lg">
+    <div className="p-4 bg-gray-800/50 border border-gray-600/30 rounded-lg min-h-[100px]">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-bold text-krt-orange">{role.name}</h3>
         {canManage && (
@@ -648,7 +628,7 @@ function FunctionRoleCard({
   onRemove: (assignmentId: number) => void
 }) {
   return (
-    <div className="p-3 bg-gray-800/50 border border-gray-600/30 rounded-lg">
+    <div className="p-3 bg-gray-800/50 border border-gray-600/30 rounded-lg min-h-[80px]">
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-medium text-sm text-krt-orange truncate">{role.name}</h3>
         {canManage && (
@@ -706,12 +686,12 @@ function MemberBadge({
     <div className="relative">
       <button
         onClick={() => canManage && setShowMenu(!showMenu)}
-        className={`flex items-center gap-1 px-2 py-1 rounded text-sm ${statusColors[status]} ${
+        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${statusColors[status]} ${
           canManage ? 'hover:bg-gray-700 cursor-pointer' : ''
         } bg-gray-800/50 border border-gray-600/30`}
       >
         {member.user.avatar && (
-          <img src={member.user.avatar} alt="" className="w-4 h-4 rounded-full" />
+          <img src={member.user.avatar} alt="" className="w-3 h-3 rounded-full" />
         )}
         {member.user.display_name || member.user.username}
       </button>
