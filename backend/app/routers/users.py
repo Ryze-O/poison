@@ -288,6 +288,9 @@ async def merge_users(
     if source.is_kg_verwalter:
         target.is_kg_verwalter = True
 
+    # Änderungen flushen bevor wir source löschen (verhindert Relationship-Konflikte)
+    db.flush()
+
     # Source-User löschen
     source_username = source.username
     db.delete(source)
@@ -541,6 +544,9 @@ async def approve_pending_merge(
     # Display-Name übernehmen falls nicht vorhanden
     if not discord_user.display_name and existing_user.display_name:
         discord_user.display_name = existing_user.display_name
+
+    # Änderungen flushen bevor wir existing_user löschen (verhindert Relationship-Konflikte)
+    db.flush()
 
     # Existierenden User löschen
     existing_username = existing_user.username
