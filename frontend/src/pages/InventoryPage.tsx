@@ -256,7 +256,7 @@ export default function InventoryPage() {
   })
 
   // Dashboard Query
-  const { data: dashboard } = useQuery<InventoryDashboard>({
+  const { data: dashboard, isLoading: isDashboardLoading, error: dashboardError } = useQuery<InventoryDashboard>({
     queryKey: ['inventory', 'dashboard'],
     queryFn: () => apiClient.get('/api/inventory/dashboard').then((r) => r.data),
     enabled: showDashboard,
@@ -798,17 +798,36 @@ export default function InventoryPage() {
         )}
 
         {/* Dashboard */}
-        {showDashboard && dashboard && (
+        {showDashboard && (
           <div className="mt-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Package size={20} className="text-krt-orange" />
                 Pioneer-Lager Übersicht
               </h3>
-              <div className="text-sm text-gray-400">
-                {dashboard.total_quantity} Items bei {dashboard.total_pioneers} Pioneer{dashboard.total_pioneers !== 1 ? 's' : ''}
-              </div>
+              {dashboard && (
+                <div className="text-sm text-gray-400">
+                  {dashboard.total_quantity} Items bei {dashboard.total_pioneers} Pioneer{dashboard.total_pioneers !== 1 ? 's' : ''}
+                </div>
+              )}
             </div>
+            {isDashboardLoading && (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-8 h-8 border-2 border-krt-orange border-t-transparent rounded-full animate-spin" />
+                <span className="ml-3 text-gray-400">Dashboard wird geladen...</span>
+              </div>
+            )}
+            {dashboardError && (
+              <div className="p-4 bg-red-900/20 border border-red-700/30 rounded text-red-400">
+                Fehler beim Laden des Dashboards. Bitte versuche es erneut.
+              </div>
+            )}
+            {dashboard && dashboard.pioneers.length === 0 && (
+              <div className="p-4 bg-gray-800/50 border border-gray-600/30 rounded text-gray-400 text-center">
+                Keine Pioneer-Lager mit Bestand gefunden.
+              </div>
+            )}
+            {dashboard && dashboard.pioneers.length > 0 && (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {dashboard.pioneers.map((pioneer) => (
                 <div
@@ -863,6 +882,7 @@ export default function InventoryPage() {
                 </div>
               ))}
             </div>
+            )}
           </div>
         )}
       </div>

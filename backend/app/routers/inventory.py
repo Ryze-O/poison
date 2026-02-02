@@ -1,7 +1,8 @@
+import re
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 
 from app.database import get_db
 from app.models.user import User, UserRole
@@ -12,12 +13,18 @@ from app.models.location import Location
 from app.schemas.inventory import (
     InventoryResponse, InventoryUpdate, TransferCreate, TransferResponse,
     InventoryLogResponse, BulkLocationTransfer, BulkTransferToOfficer, PatchResetRequest,
-    TransferRequestCreate, TransferRequestResponse, TransferRequestReject, TransferRequestCommentUpdate
+    TransferRequestCreate, TransferRequestResponse, TransferRequestReject, TransferRequestCommentUpdate,
+    ComponentSearchResult, InventoryDashboardResponse, PioneerInventoryStats, LocationStats, CategoryStats
 )
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
 
 router = APIRouter()
+
+
+def normalize_search(text: str) -> str:
+    """Normalisiert Suchtext für fuzzy matching (entfernt Trennzeichen)."""
+    return re.sub(r'[-_\s.]', '', text.lower())
 
 
 def log_inventory_change(
@@ -1592,12 +1599,6 @@ async def get_transfer_request(
 
 # ============== Komponenten-Suche & Dashboard ==============
 
-from app.schemas.inventory import (
-    ComponentSearchResult, InventoryDashboardResponse, PioneerInventoryStats,
-    LocationStats, CategoryStats
-)
-from sqlalchemy import func as sql_func
-
 
 @router.get("/search-component", response_model=list)
 async def search_component_in_pioneer_inventory(
@@ -1606,25 +1607,36 @@ async def search_component_in_pioneer_inventory(
     current_user: User = Depends(get_current_user)
 ):
     """Sucht nach einer Komponente in allen Pioneer-Lagern.
-    Zeigt welcher Pioneer sie hat, wo und wie viele."""
+    Zeigt welcher Pioneer sie hat, wo und wie viele.
+    Verwendet fuzzy matching (ts2 findet TS-2)."""
     if not q or len(q.strip()) < 2:
         return []
 
-    search_term = f"%{q.strip()}%"
+    search_term = q.strip().lower()
+    normalized_search = normalize_search(search_term)
 
-    # Nur Pioneer-Lager durchsuchen
-    results = db.query(Inventory).join(
+    # Alle Pioneer-Inventare mit quantity > 0 laden
+    all_inventory = db.query(Inventory).join(
         User, Inventory.user_id == User.id
     ).join(
         Component, Inventory.component_id == Component.id
     ).filter(
         User.is_pioneer == True,
-        Inventory.quantity > 0,
-        or_(
-            Component.name.ilike(search_term),
-            Component.manufacturer.ilike(search_term)
-        )
+        Inventory.quantity > 0
     ).all()
+
+    # Fuzzy Filter im Python-Code
+    results = []
+    for inv in all_inventory:
+        name_normalized = normalize_search(inv.component.name)
+        manufacturer_normalized = normalize_search(inv.component.manufacturer or "")
+
+        # Match wenn normalisierte Suche im normalisierten Namen oder Hersteller enthalten ist
+        if normalized_search in name_normalized or normalized_search in manufacturer_normalized:
+            results.append(inv)
+        # Zusätzlich: Original-Suche als Fallback (z.B. für exakte Treffer)
+        elif search_term in inv.component.name.lower() or search_term in (inv.component.manufacturer or "").lower():
+            results.append(inv)
 
     # Gruppieren nach Komponente und formatieren
     response = []
