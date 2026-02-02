@@ -119,7 +119,7 @@ class FunctionRoleResponse(FunctionRoleBase):
 
 class CommandGroupResponse(CommandGroupBase):
     id: int
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -185,7 +185,7 @@ class FunctionRoleWithUsersResponse(FunctionRoleBase):
 class CommandGroupDetailResponse(CommandGroupBase):
     """Kommandogruppe mit allen Details."""
     id: int
-    created_at: datetime
+    created_at: Optional[datetime] = None
     ships: List[ShipResponse]
     operational_roles: List[OperationalRoleResponse]
     members: List[UserCommandGroupResponse]
