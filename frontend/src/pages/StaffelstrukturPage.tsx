@@ -7,8 +7,7 @@ import {
 } from 'lucide-react'
 import type {
   StaffelOverview, User, MemberStatus, UserCommandGroup,
-  FunctionRoleWithUsers, CommandGroupDetail, OperationalRoleWithUsers,
-  UserOperationalRole
+  FunctionRoleWithUsers, CommandGroupDetail, OperationalRoleWithUsers
 } from '../api/types'
 
 // Status Farben
