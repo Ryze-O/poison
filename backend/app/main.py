@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.config import get_settings
 from app.database import engine, Base
-from app.routers import auth, users, components, inventory, treasury, attendance, loot, locations, sc_import, data_import, officer_accounts, admin
+from app.routers import auth, users, components, inventory, treasury, attendance, loot, locations, sc_import, data_import, officer_accounts, admin, staffel
 
 settings = get_settings()
 
@@ -48,6 +48,7 @@ app.include_router(locations.router, prefix="/api/locations", tags=["Standorte"]
 app.include_router(sc_import.router, prefix="/api/sc", tags=["Star Citizen Import"])
 app.include_router(data_import.router, prefix="/api/import", tags=["Daten-Import"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(staffel.router, prefix="/api/staffel", tags=["Staffelstruktur"])
 
 
 @app.get("/")

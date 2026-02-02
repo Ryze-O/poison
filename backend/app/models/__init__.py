@@ -8,6 +8,11 @@ from app.models.inventory_log import InventoryLog, InventoryAction
 from app.models.treasury import Treasury, TreasuryTransaction
 from app.models.officer_account import OfficerAccount, OfficerTransaction
 from app.models.item_price import ItemPrice, UEXSyncLog
+from app.models.staffel import (
+    CommandGroup, OperationalRole, FunctionRole,
+    UserCommandGroup, UserOperationalRole, UserFunctionRole,
+    CommandGroupShip, MemberStatus
+)
 
 __all__ = [
     "User",
@@ -33,4 +38,13 @@ __all__ = [
     "OfficerTransaction",
     "ItemPrice",
     "UEXSyncLog",
+    # Staffelstruktur
+    "CommandGroup",
+    "OperationalRole",
+    "FunctionRole",
+    "UserCommandGroup",
+    "UserOperationalRole",
+    "UserFunctionRole",
+    "CommandGroupShip",
+    "MemberStatus",
 ]

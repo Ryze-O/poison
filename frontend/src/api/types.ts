@@ -406,3 +406,87 @@ export interface InventoryDashboard {
   total_quantity: number
   total_pioneers: number
 }
+
+// ============== Staffelstruktur ==============
+
+export type MemberStatus = 'ACTIVE' | 'RECRUIT' | 'INACTIVE' | 'ABSENT'
+
+export interface CommandGroup {
+  id: number
+  name: string           // "CW", "SW", "P"
+  full_name: string      // "Capital Warfare"
+  description: string | null
+  sort_order: number
+  created_at: string
+}
+
+export interface CommandGroupShip {
+  id: number
+  command_group_id: number
+  ship_name: string
+  ship_image: string | null
+  sort_order: number
+}
+
+export interface OperationalRole {
+  id: number
+  command_group_id: number
+  name: string
+  description: string | null
+  sort_order: number
+}
+
+export interface FunctionRole {
+  id: number
+  name: string
+  description: string | null
+  is_leadership: boolean
+  sort_order: number
+}
+
+export interface UserCommandGroup {
+  id: number
+  user: User
+  command_group_id: number
+  status: MemberStatus
+  joined_at: string
+  notes: string | null
+}
+
+export interface UserOperationalRole {
+  id: number
+  user: User
+  operational_role_id: number
+  is_training: boolean
+  assigned_at: string
+}
+
+export interface UserFunctionRole {
+  id: number
+  user: User
+  function_role_id: number
+  assigned_at: string
+}
+
+export interface CommandGroupDetail extends CommandGroup {
+  ships: CommandGroupShip[]
+  operational_roles: OperationalRole[]
+  members: UserCommandGroup[]
+}
+
+export interface FunctionRoleWithUsers extends FunctionRole {
+  users: UserFunctionRole[]
+}
+
+export interface StaffelOverview {
+  command_groups: CommandGroupDetail[]
+  function_roles: FunctionRoleWithUsers[]
+  leadership_roles: FunctionRoleWithUsers[]
+}
+
+export interface UserStaffelProfile {
+  user: User
+  command_groups: UserCommandGroup[]
+  operational_roles: UserOperationalRole[]
+  function_roles: UserFunctionRole[]
+}

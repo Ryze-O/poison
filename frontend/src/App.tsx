@@ -16,6 +16,7 @@ import TreasuryPage from './pages/TreasuryPage'
 import UsersPage from './pages/UsersPage'
 import AdminPage from './pages/AdminPage'
 import GuestLoginPage from './pages/GuestLoginPage'
+import StaffelstrukturPage from './pages/StaffelstrukturPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, user } = useAuthStore()
@@ -69,6 +70,7 @@ function App() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="struktur" element={<StaffelstrukturPage />} />
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="loot" element={<LootPage />} />
         <Route path="inventory" element={<InventoryPage />} />
