@@ -236,3 +236,62 @@ class StaffelOverviewResponse(BaseModel):
     function_roles: List[FunctionRoleWithUsersResponse]
     leadership_roles: List[FunctionRoleWithUsersResponse]
     can_manage: bool = False  # True wenn User Admin oder KG-Verwalter ist
+
+
+# ============== Self-Service & Matrix Schemas ==============
+
+class MyCommandGroupsResponse(BaseModel):
+    """Eigene KG-Mitgliedschaften."""
+    command_group_ids: List[int]
+    can_self_assign: bool  # False wenn bereits zugewiesen (einmalig)
+
+
+class MyCommandGroupsUpdate(BaseModel):
+    """KG-Mitgliedschaften setzen (einmalig für Member)."""
+    command_group_ids: List[int]
+
+
+class AssignmentCell(BaseModel):
+    """Eine Zelle in der Assignment-Matrix."""
+    user_id: int
+    operational_role_id: int
+    is_assigned: bool
+    is_training: bool = False
+    assignment_id: Optional[int] = None  # ID wenn zugewiesen
+
+
+class AssignmentMatrixUser(BaseModel):
+    """User in der Matrix."""
+    id: int
+    username: str
+    display_name: Optional[str]
+    avatar: Optional[str]
+
+
+class AssignmentMatrixRole(BaseModel):
+    """Rolle in der Matrix."""
+    id: int
+    name: str
+    description: Optional[str]
+
+
+class AssignmentMatrixResponse(BaseModel):
+    """Matrix-Daten für Einsatzrollen-UI."""
+    command_group_id: int
+    command_group_name: str
+    users: List[AssignmentMatrixUser]
+    roles: List[AssignmentMatrixRole]
+    assignments: List[AssignmentCell]  # Alle aktuellen Zuweisungen
+
+
+class AssignmentEntry(BaseModel):
+    """Einzelne Zuweisung für Bulk-Update."""
+    user_id: int
+    operational_role_id: int
+    is_assigned: bool
+    is_training: bool = False
+
+
+class BulkAssignmentUpdate(BaseModel):
+    """Bulk-Update für Einsatzrollen."""
+    assignments: List[AssignmentEntry]

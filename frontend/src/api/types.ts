@@ -496,3 +496,50 @@ export interface UserStaffelProfile {
   operational_roles: UserOperationalRole[]
   function_roles: UserFunctionRole[]
 }
+
+// ============== Self-Service & Matrix ==============
+
+export interface MyCommandGroupsResponse {
+  command_group_ids: number[]
+  can_self_assign: boolean
+}
+
+export interface AssignmentCell {
+  user_id: number
+  operational_role_id: number
+  is_assigned: boolean
+  is_training: boolean
+  assignment_id: number | null
+}
+
+export interface AssignmentMatrixUser {
+  id: number
+  username: string
+  display_name: string | null
+  avatar: string | null
+}
+
+export interface AssignmentMatrixRole {
+  id: number
+  name: string
+  description: string | null
+}
+
+export interface AssignmentMatrixResponse {
+  command_group_id: number
+  command_group_name: string
+  users: AssignmentMatrixUser[]
+  roles: AssignmentMatrixRole[]
+  assignments: AssignmentCell[]
+}
+
+export interface AssignmentEntry {
+  user_id: number
+  operational_role_id: number
+  is_assigned: boolean
+  is_training: boolean
+}
+
+export interface BulkAssignmentUpdate {
+  assignments: AssignmentEntry[]
+}

@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
+import { Link } from 'react-router-dom'
 import {
   Users, Shield, Anchor, Rocket, Truck, X, UserPlus,
-  Pencil, Plus
+  Pencil, Plus, Grid3X3, UserCheck
 } from 'lucide-react'
 import type {
   StaffelOverview, User, MemberStatus, UserCommandGroup,
-  FunctionRoleWithUsers, CommandGroupDetail, OperationalRoleWithUsers
+  FunctionRoleWithUsers, CommandGroupDetail, OperationalRoleWithUsers,
+  MyCommandGroupsResponse
 } from '../api/types'
 
 // Status Farben
@@ -54,6 +56,10 @@ export default function StaffelstrukturPage() {
   const [editOpRoleName, setEditOpRoleName] = useState('')
   const [editOpRoleDescription, setEditOpRoleDescription] = useState('')
 
+  // Self-Service Modal
+  const [selfServiceModal, setSelfServiceModal] = useState(false)
+  const [selectedKGs, setSelectedKGs] = useState<number[]>([])
+
   // Data fetching
   const { data: overview, isLoading } = useQuery<StaffelOverview>({
     queryKey: ['staffel', 'overview'],
@@ -61,6 +67,12 @@ export default function StaffelstrukturPage() {
   })
 
   const canManage = overview?.can_manage ?? false
+
+  // Self-Service: Eigene KG-Mitgliedschaften
+  const { data: myKGs } = useQuery<MyCommandGroupsResponse>({
+    queryKey: ['staffel', 'my-command-groups'],
+    queryFn: () => apiClient.get('/api/staffel/my-command-groups').then(r => r.data),
+  })
 
   const { data: allUsers } = useQuery<User[]>({
     queryKey: ['users'],
@@ -193,6 +205,17 @@ export default function StaffelstrukturPage() {
     },
   })
 
+  // Self-Service: KG-Anmeldung
+  const setMyKGsMutation = useMutation({
+    mutationFn: (command_group_ids: number[]) =>
+      apiClient.post('/api/staffel/my-command-groups', { command_group_ids }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staffel'] })
+      setSelfServiceModal(false)
+      setSelectedKGs([])
+    },
+  })
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -207,7 +230,34 @@ export default function StaffelstrukturPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Staffelstruktur</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Staffelstruktur</h1>
+        <div className="flex items-center gap-3">
+          {/* Self-Service Button - nur wenn User noch keine KGs hat */}
+          {myKGs?.can_self_assign && (
+            <button
+              onClick={() => {
+                setSelectedKGs([])
+                setSelfServiceModal(true)
+              }}
+              className="btn btn-primary flex items-center gap-2"
+            >
+              <UserCheck size={18} />
+              Für KGs anmelden
+            </button>
+          )}
+          {/* Matrix-Link - nur für Manager */}
+          {canManage && (
+            <Link
+              to="/struktur/matrix"
+              className="btn btn-secondary flex items-center gap-2"
+            >
+              <Grid3X3 size={18} />
+              Einsatzrollen-Matrix
+            </Link>
+          )}
+        </div>
+      </div>
 
       {/* Staffelleitung */}
       {overview.leadership_roles.length > 0 && (
@@ -803,6 +853,71 @@ export default function StaffelstrukturPage() {
               className="btn btn-primary"
             >
               {updateOperationalRoleMutation.isPending ? 'Wird gespeichert...' : 'Speichern'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: Self-Service KG-Anmeldung (einmalig) */}
+      {selfServiceModal && overview && (
+        <Modal
+          onClose={() => setSelfServiceModal(false)}
+          title="Für Kommandogruppen anmelden"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-gray-400">
+              Wähle die Kommandogruppen aus, die dich interessieren. Du kannst dich für mehrere KGs anmelden.
+            </p>
+            <p className="text-xs text-yellow-500 bg-yellow-900/20 px-3 py-2 rounded border border-yellow-700/30">
+              Hinweis: Diese Auswahl kann nur einmal getroffen werden. Für spätere Änderungen wende dich an einen KG-Verwalter.
+            </p>
+            <div className="space-y-3">
+              {overview.command_groups.map(group => {
+                const Icon = kgIcons[group.name] || Users
+                const isSelected = selectedKGs.includes(group.id)
+                return (
+                  <label
+                    key={group.id}
+                    className={`flex items-center gap-3 p-3 rounded border cursor-pointer transition-colors ${
+                      isSelected
+                        ? 'bg-krt-orange/10 border-krt-orange'
+                        : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedKGs([...selectedKGs, group.id])
+                        } else {
+                          setSelectedKGs(selectedKGs.filter(id => id !== group.id))
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-krt-orange focus:ring-krt-orange"
+                    />
+                    <Icon size={20} className={isSelected ? 'text-krt-orange' : 'text-gray-400'} />
+                    <div className="flex-1">
+                      <div className="font-medium">{group.full_name}</div>
+                      {group.description && (
+                        <div className="text-xs text-gray-500 line-clamp-1">{group.description}</div>
+                      )}
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-6">
+            <button onClick={() => setSelfServiceModal(false)} className="btn btn-secondary">
+              Abbrechen
+            </button>
+            <button
+              onClick={() => setMyKGsMutation.mutate(selectedKGs)}
+              disabled={selectedKGs.length === 0 || setMyKGsMutation.isPending}
+              className="btn btn-primary"
+            >
+              {setMyKGsMutation.isPending ? 'Wird gespeichert...' : 'Anmelden'}
             </button>
           </div>
         </Modal>

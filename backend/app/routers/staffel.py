@@ -29,7 +29,11 @@ from app.schemas.staffel import (
     UserCommandGroupCreate, AddMemberToGroup, UserCommandGroupResponse, MemberStatusUpdate,
     UserOperationalRoleCreate, UserOperationalRoleResponse, UserOperationalRoleUpdate,
     UserFunctionRoleCreate, UserFunctionRoleResponse,
-    StaffelOverviewResponse, UserStaffelProfile
+    StaffelOverviewResponse, UserStaffelProfile,
+    # Self-Service & Matrix
+    MyCommandGroupsResponse, MyCommandGroupsUpdate,
+    AssignmentMatrixResponse, AssignmentMatrixUser, AssignmentMatrixRole, AssignmentCell,
+    BulkAssignmentUpdate
 )
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
@@ -686,4 +690,205 @@ async def get_user_staffel_profile(
         "command_groups": command_groups,
         "operational_roles": operational_roles,
         "function_roles": function_roles
+    }
+
+
+# ============== Self-Service KG-Anmeldung ==============
+
+@router.get("/my-command-groups", response_model=MyCommandGroupsResponse)
+async def get_my_command_groups(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Eigene KG-Mitgliedschaften abrufen."""
+    memberships = db.query(UserCommandGroup).filter(
+        UserCommandGroup.user_id == current_user.id
+    ).all()
+
+    # User kann sich nur einmal selbst zuweisen (wenn noch keine Mitgliedschaften)
+    can_self_assign = len(memberships) == 0
+
+    return {
+        "command_group_ids": [m.command_group_id for m in memberships],
+        "can_self_assign": can_self_assign
+    }
+
+
+@router.post("/my-command-groups", response_model=MyCommandGroupsResponse)
+async def set_my_command_groups(
+    data: MyCommandGroupsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Eigene KG-Mitgliedschaften setzen (einmalig für Member)."""
+    # Prüfen ob User bereits Mitgliedschaften hat
+    existing = db.query(UserCommandGroup).filter(
+        UserCommandGroup.user_id == current_user.id
+    ).count()
+
+    if existing > 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Du hast dich bereits für Kommandogruppen angemeldet. Wende dich an einen KG-Verwalter für Änderungen."
+        )
+
+    # Prüfen ob mindestens eine KG gewählt wurde
+    if not data.command_group_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bitte wähle mindestens eine Kommandogruppe aus."
+        )
+
+    # Prüfen ob alle KGs existieren
+    valid_groups = db.query(CommandGroup).filter(
+        CommandGroup.id.in_(data.command_group_ids)
+    ).all()
+
+    if len(valid_groups) != len(data.command_group_ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Eine oder mehrere Kommandogruppen existieren nicht."
+        )
+
+    # Mitgliedschaften erstellen
+    for group_id in data.command_group_ids:
+        membership = UserCommandGroup(
+            user_id=current_user.id,
+            command_group_id=group_id,
+            status=MemberStatus.ACTIVE
+        )
+        db.add(membership)
+
+    db.commit()
+
+    return {
+        "command_group_ids": data.command_group_ids,
+        "can_self_assign": False
+    }
+
+
+# ============== Assignment Matrix ==============
+
+@router.get("/command-groups/{group_id}/assignment-matrix", response_model=AssignmentMatrixResponse)
+async def get_assignment_matrix(
+    group_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Matrix-Daten für Einsatzrollen-UI (KG-Verwalter)."""
+    check_staffel_manager(current_user, db)
+
+    # Kommandogruppe laden
+    group = db.query(CommandGroup).filter(CommandGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Kommandogruppe nicht gefunden")
+
+    # Alle Mitglieder der KG
+    memberships = db.query(UserCommandGroup).filter(
+        UserCommandGroup.command_group_id == group_id
+    ).all()
+
+    users = []
+    for m in memberships:
+        users.append({
+            "id": m.user.id,
+            "username": m.user.username,
+            "display_name": m.user.display_name,
+            "avatar": m.user.avatar
+        })
+
+    # Alle Einsatzrollen der KG
+    roles = db.query(OperationalRole).filter(
+        OperationalRole.command_group_id == group_id
+    ).order_by(OperationalRole.sort_order).all()
+
+    role_list = [{"id": r.id, "name": r.name, "description": r.description} for r in roles]
+
+    # Alle Zuweisungen für diese KG laden
+    role_ids = [r.id for r in roles]
+    user_ids = [u["id"] for u in users]
+
+    assignments_query = db.query(UserOperationalRole).filter(
+        UserOperationalRole.operational_role_id.in_(role_ids),
+        UserOperationalRole.user_id.in_(user_ids)
+    ).all()
+
+    assignments = []
+    for a in assignments_query:
+        assignments.append({
+            "user_id": a.user_id,
+            "operational_role_id": a.operational_role_id,
+            "is_assigned": True,
+            "is_training": a.is_training,
+            "assignment_id": a.id
+        })
+
+    return {
+        "command_group_id": group_id,
+        "command_group_name": group.name,
+        "users": users,
+        "roles": role_list,
+        "assignments": assignments
+    }
+
+
+@router.post("/command-groups/{group_id}/assignments/bulk")
+async def bulk_update_assignments(
+    group_id: int,
+    data: BulkAssignmentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bulk-Update für Einsatzrollen (KG-Verwalter)."""
+    check_staffel_manager(current_user, db)
+
+    # Prüfen ob KG existiert
+    group = db.query(CommandGroup).filter(CommandGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Kommandogruppe nicht gefunden")
+
+    # Nur Rollen dieser KG erlauben
+    valid_role_ids = {r.id for r in group.operational_roles}
+
+    added = 0
+    removed = 0
+    updated = 0
+
+    for entry in data.assignments:
+        if entry.operational_role_id not in valid_role_ids:
+            continue  # Ignoriere Rollen die nicht zu dieser KG gehören
+
+        existing = db.query(UserOperationalRole).filter(
+            UserOperationalRole.user_id == entry.user_id,
+            UserOperationalRole.operational_role_id == entry.operational_role_id
+        ).first()
+
+        if entry.is_assigned:
+            if existing:
+                # Update is_training falls unterschiedlich
+                if existing.is_training != entry.is_training:
+                    existing.is_training = entry.is_training
+                    updated += 1
+            else:
+                # Neue Zuweisung erstellen
+                assignment = UserOperationalRole(
+                    user_id=entry.user_id,
+                    operational_role_id=entry.operational_role_id,
+                    is_training=entry.is_training
+                )
+                db.add(assignment)
+                added += 1
+        else:
+            if existing:
+                # Zuweisung entfernen
+                db.delete(existing)
+                removed += 1
+
+    db.commit()
+
+    return {
+        "message": "Zuweisungen aktualisiert",
+        "added": added,
+        "removed": removed,
+        "updated": updated
     }
