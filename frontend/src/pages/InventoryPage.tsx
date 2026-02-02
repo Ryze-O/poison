@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
 import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft, ChevronDown, ChevronRight, Bell, Check, X, Send, Copy, Truck, MessageCircle, Clock } from 'lucide-react'
+import AutocompleteInput, { AutocompleteSuggestion } from '../components/AutocompleteInput'
 import type { InventoryItem, User, Component, Location, TransferRequest, PendingRequestsCount, ComponentSearchResult, InventoryDashboard } from '../api/types'
 
 type InventoryAction = 'add' | 'remove' | 'loot' | 'transfer_in' | 'transfer_out'
@@ -481,6 +482,45 @@ export default function InventoryPage() {
     return () => clearTimeout(timer)
   }, [componentSearch])
 
+  // Autocomplete Suggestions für "Wer hat was?" Suche
+  const componentSearchSuggestions = useMemo<AutocompleteSuggestion[]>(() => {
+    if (!componentSearchResults || componentSearchResults.length === 0) return []
+    // Gruppiere nach Komponente (dedupliziert)
+    const seen = new Set<number>()
+    return componentSearchResults
+      .filter(r => {
+        if (seen.has(r.component.id)) return false
+        seen.add(r.component.id)
+        return true
+      })
+      .slice(0, 10)
+      .map(r => ({
+        id: r.component.id,
+        label: r.component.name,
+        sublabel: [r.component.manufacturer, r.component.category].filter(Boolean).join(' • ')
+      }))
+  }, [componentSearchResults])
+
+  // Autocomplete Suggestions für Lager-Filter (basierend auf eigenem Inventar)
+  const inventorySearchSuggestions = useMemo<AutocompleteSuggestion[]>(() => {
+    if (!search || search.length < 2 || !myInventory) return []
+    const searchLower = search.toLowerCase()
+    const seen = new Set<number>()
+    return myInventory
+      .filter(item => {
+        if (seen.has(item.component.id)) return false
+        if (!item.component.name.toLowerCase().includes(searchLower)) return false
+        seen.add(item.component.id)
+        return true
+      })
+      .slice(0, 10)
+      .map(item => ({
+        id: item.component.id,
+        label: item.component.name,
+        sublabel: [item.component.manufacturer, item.component.category].filter(Boolean).join(' • ')
+      }))
+  }, [search, myInventory])
+
   // Hilfsfunktion zum Kopieren der Bestellnummer
   const copyOrderNumber = (orderNumber: string) => {
     navigator.clipboard.writeText(orderNumber)
@@ -637,19 +677,13 @@ export default function InventoryPage() {
       {/* Such- und Filterleiste */}
       <div className="card mb-6">
         <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={20}
-            />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Komponente suchen..."
-              className="input pl-10"
-            />
-          </div>
+          <AutocompleteInput
+            value={search}
+            onChange={setSearch}
+            suggestions={inventorySearchSuggestions}
+            placeholder="Komponente suchen..."
+            className="flex-1"
+          />
           <select
             value={filterCategory}
             onChange={(e) => {
@@ -703,24 +737,14 @@ export default function InventoryPage() {
       <div className="card mb-6">
         <div className="flex flex-col md:flex-row md:items-center gap-4">
           {/* Komponenten-Suche */}
-          <div className="flex-1 relative">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={20}
-            />
-            <input
-              type="text"
-              value={componentSearch}
-              onChange={(e) => setComponentSearch(e.target.value)}
-              placeholder="Wer hat was? (z.B. FR-76, Cooler...)"
-              className="input pl-10 w-full"
-            />
-            {isSearchingComponents && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <div className="w-4 h-4 border-2 border-krt-orange border-t-transparent rounded-full animate-spin" />
-              </div>
-            )}
-          </div>
+          <AutocompleteInput
+            value={componentSearch}
+            onChange={setComponentSearch}
+            suggestions={componentSearchSuggestions}
+            isLoading={isSearchingComponents}
+            placeholder="Wer hat was? (z.B. FR-76, Cooler...)"
+            className="flex-1"
+          />
           {/* Dashboard Toggle */}
           <button
             onClick={() => setShowDashboard(!showDashboard)}

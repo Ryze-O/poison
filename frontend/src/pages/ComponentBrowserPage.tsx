@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
@@ -16,6 +16,7 @@ import {
   MapPin,
   Package,
 } from 'lucide-react'
+import AutocompleteInput, { AutocompleteSuggestion } from '../components/AutocompleteInput'
 import type { Component, ComponentDetail, ItemPrice, UEXSyncStats, InventoryItem, User } from '../api/types'
 
 // Formatiert aUEC Preise
@@ -85,6 +86,16 @@ export default function ComponentBrowserPage() {
     },
     enabled: hasSearchCriteria,
   })
+
+  // Autocomplete Suggestions aus Suchergebnissen
+  const autocompleteSuggestions = useMemo<AutocompleteSuggestion[]>(() => {
+    if (!searchResults || !hasSearchText) return []
+    return searchResults.slice(0, 10).map(item => ({
+      id: item.id,
+      label: item.name,
+      sublabel: [item.manufacturer, item.category, item.sub_category].filter(Boolean).join(' • ')
+    }))
+  }, [searchResults, hasSearchText])
 
   // Alle Kategorien laden
   const { data: categories } = useQuery<string[]>({
@@ -217,20 +228,19 @@ export default function ComponentBrowserPage() {
       {/* Such-Bereich */}
       <div className="card mb-6">
         <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={20}
-            />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder='Suche nach Item (z.B. "FR-76", "Sukoran", "P4-AR")...'
-              className="input pl-10"
-              autoFocus
-            />
-          </div>
+          <AutocompleteInput
+            value={search}
+            onChange={setSearch}
+            onSelect={(suggestion) => {
+              const item = searchResults?.find(r => r.id === suggestion.id)
+              if (item) setSelectedComponent(item)
+            }}
+            suggestions={autocompleteSuggestions}
+            isLoading={isSearching}
+            placeholder='Suche nach Item (z.B. "FR-76", "Sukoran", "P4-AR")...'
+            className="flex-1"
+            autoFocus
+          />
           <select
             value={categoryFilter}
             onChange={(e) => {
