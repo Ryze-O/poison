@@ -330,11 +330,20 @@ async def merge_users(
         )
 
     # Alle Referenzen übertragen
-    from app.models.inventory import Inventory, InventoryTransfer
+    from app.models.inventory import Inventory, InventoryTransfer, TransferRequest
     from app.models.treasury import TreasuryTransaction
     from app.models.attendance import AttendanceRecord, AttendanceSession
     from app.models.loot import LootSession, LootDistribution
     from app.models.staffel import UserCommandGroup, UserOperationalRole, UserFunctionRole
+    from app.models.location import Location
+    from app.models.inventory_log import InventoryLog
+    from app.models.officer_account import OfficerAccount, OfficerTransaction
+    from app.models.user import GuestToken, UserRequest
+
+    # Pending Merges die diesen User betreffen löschen
+    db.query(PendingMerge).filter(
+        (PendingMerge.discord_user_id == source.id) | (PendingMerge.existing_user_id == source.id)
+    ).delete(synchronize_session=False)
 
     # Staffel-Zuordnungen übertragen oder löschen (bei Duplikaten)
     # KG-Mitgliedschaften
@@ -412,6 +421,65 @@ async def merge_users(
     # Loot-Verteilungen
     db.query(LootDistribution).filter(LootDistribution.user_id == source.id).update(
         {LootDistribution.user_id: target.id}
+    )
+
+    # Transfer-Requests (alle User-Referenzen)
+    db.query(TransferRequest).filter(TransferRequest.requester_id == source.id).update(
+        {TransferRequest.requester_id: target.id}
+    )
+    db.query(TransferRequest).filter(TransferRequest.owner_id == source.id).update(
+        {TransferRequest.owner_id: target.id}
+    )
+    db.query(TransferRequest).filter(TransferRequest.approved_by_id == source.id).update(
+        {TransferRequest.approved_by_id: target.id}
+    )
+    db.query(TransferRequest).filter(TransferRequest.delivered_by_id == source.id).update(
+        {TransferRequest.delivered_by_id: target.id}
+    )
+    db.query(TransferRequest).filter(TransferRequest.confirmed_by_id == source.id).update(
+        {TransferRequest.confirmed_by_id: target.id}
+    )
+
+    # Locations (created_by)
+    db.query(Location).filter(Location.created_by_id == source.id).update(
+        {Location.created_by_id: target.id}
+    )
+
+    # Inventory Logs
+    db.query(InventoryLog).filter(InventoryLog.user_id == source.id).update(
+        {InventoryLog.user_id: target.id}
+    )
+    db.query(InventoryLog).filter(InventoryLog.related_user_id == source.id).update(
+        {InventoryLog.related_user_id: target.id}
+    )
+
+    # Officer Account - prüfe ob target bereits eins hat
+    source_officer_account = db.query(OfficerAccount).filter(OfficerAccount.user_id == source.id).first()
+    target_officer_account = db.query(OfficerAccount).filter(OfficerAccount.user_id == target.id).first()
+    if source_officer_account and not target_officer_account:
+        source_officer_account.user_id = target.id
+    elif source_officer_account and target_officer_account:
+        # Beide haben ein Konto - Source-Konto-Transaktionen zum Target übertragen
+        db.query(OfficerTransaction).filter(OfficerTransaction.officer_account_id == source_officer_account.id).update(
+            {OfficerTransaction.officer_account_id: target_officer_account.id}
+        )
+        # Guthaben addieren
+        target_officer_account.balance += source_officer_account.balance
+        db.delete(source_officer_account)
+
+    # Officer Transactions (created_by)
+    db.query(OfficerTransaction).filter(OfficerTransaction.created_by_id == source.id).update(
+        {OfficerTransaction.created_by_id: target.id}
+    )
+
+    # Guest Tokens (created_by)
+    db.query(GuestToken).filter(GuestToken.created_by_id == source.id).update(
+        {GuestToken.created_by_id: target.id}
+    )
+
+    # User Requests (requested_by)
+    db.query(UserRequest).filter(UserRequest.requested_by_id == source.id).update(
+        {UserRequest.requested_by_id: target.id}
     )
 
     # Source-Username als Alias zum Target hinzufügen
@@ -506,11 +574,21 @@ async def approve_pending_merge(
         raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
 
     # Alle Referenzen vom existierenden User auf Discord-User übertragen
-    from app.models.inventory import Inventory, InventoryTransfer
+    from app.models.inventory import Inventory, InventoryTransfer, TransferRequest
     from app.models.treasury import TreasuryTransaction
     from app.models.attendance import AttendanceRecord, AttendanceSession
     from app.models.loot import LootSession, LootDistribution
     from app.models.staffel import UserCommandGroup, UserOperationalRole, UserFunctionRole
+    from app.models.location import Location
+    from app.models.inventory_log import InventoryLog
+    from app.models.officer_account import OfficerAccount, OfficerTransaction
+    from app.models.user import GuestToken, UserRequest
+
+    # Andere Pending Merges die existing_user betreffen löschen (außer dem aktuellen)
+    db.query(PendingMerge).filter(
+        PendingMerge.id != merge_id,
+        (PendingMerge.discord_user_id == existing_user.id) | (PendingMerge.existing_user_id == existing_user.id)
+    ).delete(synchronize_session=False)
 
     # Staffel-Zuordnungen übertragen oder löschen (bei Duplikaten)
     # KG-Mitgliedschaften
@@ -585,6 +663,65 @@ async def approve_pending_merge(
     # Loot-Verteilungen
     db.query(LootDistribution).filter(LootDistribution.user_id == existing_user.id).update(
         {LootDistribution.user_id: discord_user.id}
+    )
+
+    # Transfer-Requests (alle User-Referenzen)
+    db.query(TransferRequest).filter(TransferRequest.requester_id == existing_user.id).update(
+        {TransferRequest.requester_id: discord_user.id}
+    )
+    db.query(TransferRequest).filter(TransferRequest.owner_id == existing_user.id).update(
+        {TransferRequest.owner_id: discord_user.id}
+    )
+    db.query(TransferRequest).filter(TransferRequest.approved_by_id == existing_user.id).update(
+        {TransferRequest.approved_by_id: discord_user.id}
+    )
+    db.query(TransferRequest).filter(TransferRequest.delivered_by_id == existing_user.id).update(
+        {TransferRequest.delivered_by_id: discord_user.id}
+    )
+    db.query(TransferRequest).filter(TransferRequest.confirmed_by_id == existing_user.id).update(
+        {TransferRequest.confirmed_by_id: discord_user.id}
+    )
+
+    # Locations (created_by)
+    db.query(Location).filter(Location.created_by_id == existing_user.id).update(
+        {Location.created_by_id: discord_user.id}
+    )
+
+    # Inventory Logs
+    db.query(InventoryLog).filter(InventoryLog.user_id == existing_user.id).update(
+        {InventoryLog.user_id: discord_user.id}
+    )
+    db.query(InventoryLog).filter(InventoryLog.related_user_id == existing_user.id).update(
+        {InventoryLog.related_user_id: discord_user.id}
+    )
+
+    # Officer Account - prüfe ob discord_user bereits eins hat
+    source_officer_account = db.query(OfficerAccount).filter(OfficerAccount.user_id == existing_user.id).first()
+    target_officer_account = db.query(OfficerAccount).filter(OfficerAccount.user_id == discord_user.id).first()
+    if source_officer_account and not target_officer_account:
+        source_officer_account.user_id = discord_user.id
+    elif source_officer_account and target_officer_account:
+        # Beide haben ein Konto - Source-Konto-Transaktionen zum Target übertragen
+        db.query(OfficerTransaction).filter(OfficerTransaction.officer_account_id == source_officer_account.id).update(
+            {OfficerTransaction.officer_account_id: target_officer_account.id}
+        )
+        # Guthaben addieren
+        target_officer_account.balance += source_officer_account.balance
+        db.delete(source_officer_account)
+
+    # Officer Transactions (created_by)
+    db.query(OfficerTransaction).filter(OfficerTransaction.created_by_id == existing_user.id).update(
+        {OfficerTransaction.created_by_id: discord_user.id}
+    )
+
+    # Guest Tokens (created_by)
+    db.query(GuestToken).filter(GuestToken.created_by_id == existing_user.id).update(
+        {GuestToken.created_by_id: discord_user.id}
+    )
+
+    # User Requests (requested_by)
+    db.query(UserRequest).filter(UserRequest.requested_by_id == existing_user.id).update(
+        {UserRequest.requested_by_id: discord_user.id}
     )
 
     # Aliase vom existierenden User übernehmen
