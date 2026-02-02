@@ -835,9 +835,9 @@ export default function InventoryPage() {
                   className="p-4 bg-gray-800/50 border border-gray-600/30 rounded-lg"
                 >
                   <div className="flex items-center gap-2 mb-3">
-                    {pioneer.pioneer.avatar && pioneer.pioneer.discord_id ? (
+                    {pioneer.pioneer.avatar ? (
                       <img
-                        src={`https://cdn.discordapp.com/avatars/${pioneer.pioneer.discord_id}/${pioneer.pioneer.avatar}.png`}
+                        src={pioneer.pioneer.avatar}
                         alt={pioneer.pioneer.display_name || pioneer.pioneer.username}
                         className="w-8 h-8 rounded-full"
                       />
