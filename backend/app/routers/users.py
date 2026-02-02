@@ -70,229 +70,9 @@ async def get_pioneers(
     return db.query(User).filter(User.is_pioneer == True).all()
 
 
-@router.get("/{user_id}", response_model=UserResponse)
-async def get_user(
-    user_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Gibt einen einzelnen Benutzer zurück."""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Benutzer nicht gefunden"
-        )
-    return user
-
-
-@router.patch("/{user_id}", response_model=UserResponse)
-async def update_user(
-    user_id: int,
-    user_update: UserUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Aktualisiert einen Benutzer. Nur Admins können Rollen ändern."""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Benutzer nicht gefunden"
-        )
-
-    # Eigenen Display-Namen darf jeder ändern
-    if user_update.display_name is not None:
-        if user.id != current_user.id:
-            check_role(current_user, UserRole.ADMIN)
-        user.display_name = user_update.display_name
-
-    # Username darf nur Admin ändern
-    if user_update.username is not None:
-        check_role(current_user, UserRole.ADMIN)
-        # Prüfen ob Username bereits vergeben
-        existing = db.query(User).filter(User.username == user_update.username, User.id != user_id).first()
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username bereits vergeben"
-            )
-        user.username = user_update.username
-
-    # Rollen dürfen nur Admins ändern
-    if user_update.role is not None:
-        check_role(current_user, UserRole.ADMIN)
-        user.role = user_update.role
-
-    # Pioneer-Status darf nur Admin ändern
-    if user_update.is_pioneer is not None:
-        check_role(current_user, UserRole.ADMIN)
-        user.is_pioneer = user_update.is_pioneer
-
-    # Kassenwart-Status darf nur Admin ändern
-    if user_update.is_treasurer is not None:
-        check_role(current_user, UserRole.ADMIN)
-        user.is_treasurer = user_update.is_treasurer
-
-    db.commit()
-    db.refresh(user)
-    return user
-
-
-@router.post("/{user_id}/aliases")
-async def add_alias(
-    user_id: int,
-    alias: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Fügt einen OCR-Alias zu einem Benutzer hinzu.
-    Aliase werden für das automatische Matching bei der Anwesenheitserfassung verwendet.
-    Nur Offiziere+ können Aliase hinzufügen.
-    """
-    check_role(current_user, UserRole.OFFICER)
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Benutzer nicht gefunden"
-        )
-
-    # Alias bereinigen
-    alias = alias.strip()
-    if not alias or len(alias) < 2:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Alias muss mindestens 2 Zeichen lang sein"
-        )
-
-    # Bestehende Aliase laden
-    existing = user.aliases.split(',') if user.aliases else []
-    existing = [a.strip() for a in existing if a.strip()]
-
-    # Prüfen ob Alias bereits existiert (case-insensitive)
-    if any(a.lower() == alias.lower() for a in existing):
-        return {"message": "Alias existiert bereits", "aliases": existing}
-
-    # Alias hinzufügen
-    existing.append(alias)
-    user.aliases = ','.join(existing)
-
-    db.commit()
-    return {"message": "Alias hinzugefügt", "aliases": existing}
-
-
-@router.delete("/{user_id}/aliases/{alias}")
-async def remove_alias(
-    user_id: int,
-    alias: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Entfernt einen OCR-Alias von einem Benutzer."""
-    check_role(current_user, UserRole.OFFICER)
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Benutzer nicht gefunden"
-        )
-
-    if not user.aliases:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Benutzer hat keine Aliase"
-        )
-
-    # Alias entfernen (case-insensitive)
-    existing = user.aliases.split(',')
-    existing = [a.strip() for a in existing if a.strip()]
-    new_aliases = [a for a in existing if a.lower() != alias.lower()]
-
-    if len(new_aliases) == len(existing):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alias nicht gefunden"
-        )
-
-    user.aliases = ','.join(new_aliases) if new_aliases else None
-    db.commit()
-
-    return {"message": "Alias entfernt", "aliases": new_aliases}
-
-
-@router.get("/{user_id}/aliases")
-async def get_aliases(
-    user_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Gibt alle OCR-Aliase eines Benutzers zurück."""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Benutzer nicht gefunden"
-        )
-
-    aliases = user.aliases.split(',') if user.aliases else []
-    aliases = [a.strip() for a in aliases if a.strip()]
-
-    return {"user_id": user_id, "aliases": aliases}
-
-
-@router.delete("/{user_id}")
-async def delete_user(
-    user_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Löscht einen Benutzer. Nur Admins.
-    ACHTUNG: Kann nicht rückgängig gemacht werden!
-    Prüft ob der User noch Referenzen hat (Inventar, Transaktionen, etc.)
-    """
-    check_role(current_user, UserRole.ADMIN)
-
-    if user_id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Du kannst dich nicht selbst löschen"
-        )
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Benutzer nicht gefunden"
-        )
-
-    # Prüfen ob User noch Referenzen hat
-    from app.models.inventory import Inventory
-    from app.models.treasury import TreasuryTransaction
-    from app.models.attendance import AttendanceRecord
-    from app.models.loot import LootDistribution
-
-    inventory_count = db.query(Inventory).filter(Inventory.user_id == user_id).count()
-    transaction_count = db.query(TreasuryTransaction).filter(TreasuryTransaction.created_by_id == user_id).count()
-    attendance_count = db.query(AttendanceRecord).filter(AttendanceRecord.user_id == user_id).count()
-    loot_count = db.query(LootDistribution).filter(LootDistribution.user_id == user_id).count()
-
-    if inventory_count > 0 or transaction_count > 0 or attendance_count > 0 or loot_count > 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"User hat noch Referenzen: {inventory_count} Inventar, {transaction_count} Transaktionen, {attendance_count} Anwesenheiten, {loot_count} Loot-Verteilungen. Erst zusammenführen oder Daten löschen."
-        )
-
-    username = user.username
-    db.delete(user)
-    db.commit()
-
-    return {"message": f"Benutzer '{username}' gelöscht"}
-
+# ============================================================================
+# MERGE ENDPOINTS - Diese müssen VOR /{user_id} definiert sein!
+# ============================================================================
 
 @router.post("/merge")
 async def merge_users(
@@ -800,3 +580,231 @@ async def reject_pending_merge(
     db.commit()
 
     return {"message": "Merge-Vorschlag abgelehnt"}
+
+
+# ============================================================================
+# USER ENDPOINTS - Mit /{user_id} Parameter (muss NACH den spezifischen Routen sein)
+# ============================================================================
+
+@router.get("/{user_id}", response_model=UserResponse)
+async def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt einen einzelnen Benutzer zurück."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer nicht gefunden"
+        )
+    return user
+
+
+@router.patch("/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    user_update: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Aktualisiert einen Benutzer. Nur Admins können Rollen ändern."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer nicht gefunden"
+        )
+
+    # Eigenen Display-Namen darf jeder ändern
+    if user_update.display_name is not None:
+        if user.id != current_user.id:
+            check_role(current_user, UserRole.ADMIN)
+        user.display_name = user_update.display_name
+
+    # Username darf nur Admin ändern
+    if user_update.username is not None:
+        check_role(current_user, UserRole.ADMIN)
+        # Prüfen ob Username bereits vergeben
+        existing = db.query(User).filter(User.username == user_update.username, User.id != user_id).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username bereits vergeben"
+            )
+        user.username = user_update.username
+
+    # Rollen dürfen nur Admins ändern
+    if user_update.role is not None:
+        check_role(current_user, UserRole.ADMIN)
+        user.role = user_update.role
+
+    # Pioneer-Status darf nur Admin ändern
+    if user_update.is_pioneer is not None:
+        check_role(current_user, UserRole.ADMIN)
+        user.is_pioneer = user_update.is_pioneer
+
+    # Kassenwart-Status darf nur Admin ändern
+    if user_update.is_treasurer is not None:
+        check_role(current_user, UserRole.ADMIN)
+        user.is_treasurer = user_update.is_treasurer
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.post("/{user_id}/aliases")
+async def add_alias(
+    user_id: int,
+    alias: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Fügt einen OCR-Alias zu einem Benutzer hinzu.
+    Aliase werden für das automatische Matching bei der Anwesenheitserfassung verwendet.
+    Nur Offiziere+ können Aliase hinzufügen.
+    """
+    check_role(current_user, UserRole.OFFICER)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer nicht gefunden"
+        )
+
+    # Alias bereinigen
+    alias = alias.strip()
+    if not alias or len(alias) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Alias muss mindestens 2 Zeichen lang sein"
+        )
+
+    # Bestehende Aliase laden
+    existing = user.aliases.split(',') if user.aliases else []
+    existing = [a.strip() for a in existing if a.strip()]
+
+    # Prüfen ob Alias bereits existiert (case-insensitive)
+    if any(a.lower() == alias.lower() for a in existing):
+        return {"message": "Alias existiert bereits", "aliases": existing}
+
+    # Alias hinzufügen
+    existing.append(alias)
+    user.aliases = ','.join(existing)
+
+    db.commit()
+    return {"message": "Alias hinzugefügt", "aliases": existing}
+
+
+@router.delete("/{user_id}/aliases/{alias}")
+async def remove_alias(
+    user_id: int,
+    alias: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Entfernt einen OCR-Alias von einem Benutzer."""
+    check_role(current_user, UserRole.OFFICER)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer nicht gefunden"
+        )
+
+    if not user.aliases:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer hat keine Aliase"
+        )
+
+    # Alias entfernen (case-insensitive)
+    existing = user.aliases.split(',')
+    existing = [a.strip() for a in existing if a.strip()]
+    new_aliases = [a for a in existing if a.lower() != alias.lower()]
+
+    if len(new_aliases) == len(existing):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alias nicht gefunden"
+        )
+
+    user.aliases = ','.join(new_aliases) if new_aliases else None
+    db.commit()
+
+    return {"message": "Alias entfernt", "aliases": new_aliases}
+
+
+@router.get("/{user_id}/aliases")
+async def get_aliases(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt alle OCR-Aliase eines Benutzers zurück."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer nicht gefunden"
+        )
+
+    aliases = user.aliases.split(',') if user.aliases else []
+    aliases = [a.strip() for a in aliases if a.strip()]
+
+    return {"user_id": user_id, "aliases": aliases}
+
+
+@router.delete("/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Löscht einen Benutzer. Nur Admins.
+    ACHTUNG: Kann nicht rückgängig gemacht werden!
+    Prüft ob der User noch Referenzen hat (Inventar, Transaktionen, etc.)
+    """
+    check_role(current_user, UserRole.ADMIN)
+
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Du kannst dich nicht selbst löschen"
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benutzer nicht gefunden"
+        )
+
+    # Prüfen ob User noch Referenzen hat
+    from app.models.inventory import Inventory
+    from app.models.treasury import TreasuryTransaction
+    from app.models.attendance import AttendanceRecord
+    from app.models.loot import LootDistribution
+
+    inventory_count = db.query(Inventory).filter(Inventory.user_id == user_id).count()
+    transaction_count = db.query(TreasuryTransaction).filter(TreasuryTransaction.created_by_id == user_id).count()
+    attendance_count = db.query(AttendanceRecord).filter(AttendanceRecord.user_id == user_id).count()
+    loot_count = db.query(LootDistribution).filter(LootDistribution.user_id == user_id).count()
+
+    if inventory_count > 0 or transaction_count > 0 or attendance_count > 0 or loot_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User hat noch Referenzen: {inventory_count} Inventar, {transaction_count} Transaktionen, {attendance_count} Anwesenheiten, {loot_count} Loot-Verteilungen. Erst zusammenführen oder Daten löschen."
+        )
+
+    username = user.username
+    db.delete(user)
+    db.commit()
+
+    return {"message": f"Benutzer '{username}' gelöscht"}
