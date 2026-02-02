@@ -3,11 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import {
   Users, Shield, Anchor, Rocket, Truck, X, UserPlus,
-  Pencil, Plus, Trash2
+  Pencil, Plus
 } from 'lucide-react'
 import type {
   StaffelOverview, User, MemberStatus, UserCommandGroup,
-  FunctionRoleWithUsers, CommandGroupDetail, CommandGroupShip
+  FunctionRoleWithUsers, CommandGroupDetail
 } from '../api/types'
 
 // Status Farben
