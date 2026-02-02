@@ -656,6 +656,11 @@ async def update_user(
         check_role(current_user, UserRole.ADMIN)
         user.is_treasurer = user_update.is_treasurer
 
+    # KG-Verwalter-Status darf nur Admin ändern
+    if user_update.is_kg_verwalter is not None:
+        check_role(current_user, UserRole.ADMIN)
+        user.is_kg_verwalter = user_update.is_kg_verwalter
+
     db.commit()
     db.refresh(user)
     return user
