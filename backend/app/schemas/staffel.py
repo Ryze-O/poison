@@ -213,7 +213,7 @@ class CommandGroupDetailResponse(CommandGroupBase):
     id: int
     created_at: Optional[datetime] = None
     ships: List[ShipResponse]
-    operational_roles: List[OperationalRoleResponse]
+    operational_roles: List[OperationalRoleWithUsersResponse]  # Mit User-Zuweisungen
     members: List[UserCommandGroupResponse]
 
     class Config:

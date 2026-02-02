@@ -622,8 +622,36 @@ async def get_staffel_overview(
             "users": assignments
         }
 
+    # User-Zuweisungen für Einsatzrollen laden
+    def get_operational_role_with_users(role):
+        assignments = db.query(UserOperationalRole).filter(
+            UserOperationalRole.operational_role_id == role.id
+        ).all()
+        return {
+            "id": role.id,
+            "command_group_id": role.command_group_id,
+            "name": role.name,
+            "description": role.description,
+            "sort_order": role.sort_order,
+            "users": assignments
+        }
+
+    # Kommandogruppen mit erweiterten Einsatzrollen bauen
+    def get_command_group_detail(group):
+        return {
+            "id": group.id,
+            "name": group.name,
+            "full_name": group.full_name,
+            "description": group.description,
+            "sort_order": group.sort_order,
+            "created_at": group.created_at,
+            "ships": group.ships,
+            "operational_roles": [get_operational_role_with_users(r) for r in group.operational_roles],
+            "members": group.members
+        }
+
     return {
-        "command_groups": command_groups,
+        "command_groups": [get_command_group_detail(g) for g in command_groups],
         "function_roles": [get_function_role_with_users(r) for r in function_roles],
         "leadership_roles": [get_function_role_with_users(r) for r in leadership_roles],
         "can_manage": is_staffel_manager(current_user, db)

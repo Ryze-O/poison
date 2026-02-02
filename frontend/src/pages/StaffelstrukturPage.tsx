@@ -7,7 +7,8 @@ import {
 } from 'lucide-react'
 import type {
   StaffelOverview, User, MemberStatus, UserCommandGroup,
-  FunctionRoleWithUsers, CommandGroupDetail
+  FunctionRoleWithUsers, CommandGroupDetail, OperationalRoleWithUsers,
+  UserOperationalRole
 } from '../api/types'
 
 // Status Farben
@@ -42,10 +43,17 @@ export default function StaffelstrukturPage() {
 
   // Modal States
   const [assignRoleModal, setAssignRoleModal] = useState<{ role: FunctionRoleWithUsers; type: 'leadership' | 'function' } | null>(null)
+  const [assignOpRoleModal, setAssignOpRoleModal] = useState<{ role: OperationalRoleWithUsers; groupId: number } | null>(null)
   const [editGroupModal, setEditGroupModal] = useState<CommandGroupDetail | null>(null)
   const [manageShipsModal, setManageShipsModal] = useState<CommandGroupDetail | null>(null)
   const [editDescription, setEditDescription] = useState('')
   const [newShipName, setNewShipName] = useState('')
+  const [isTraining, setIsTraining] = useState(false)
+  const [editingShipId, setEditingShipId] = useState<number | null>(null)
+  const [editingShipName, setEditingShipName] = useState('')
+  const [editOpRoleModal, setEditOpRoleModal] = useState<{ id: number; name: string; description: string | null } | null>(null)
+  const [editOpRoleName, setEditOpRoleName] = useState('')
+  const [editOpRoleDescription, setEditOpRoleDescription] = useState('')
 
   // Data fetching
   const { data: overview, isLoading } = useQuery<StaffelOverview>({
@@ -138,6 +146,52 @@ export default function StaffelstrukturPage() {
   const removeShipMutation = useMutation({
     mutationFn: (shipId: number) => apiClient.delete(`/api/staffel/ships/${shipId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staffel'] }),
+  })
+
+  // Einsatzrollen-Zuweisung
+  const assignOperationalRoleMutation = useMutation({
+    mutationFn: (data: { userId: number; roleId: number; isTraining: boolean }) =>
+      apiClient.post(`/api/staffel/users/${data.userId}/operational-roles`, {
+        user_id: data.userId,
+        operational_role_id: data.roleId,
+        is_training: data.isTraining,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staffel'] })
+      setAssignOpRoleModal(null)
+      setSelectedUserId(null)
+      setIsTraining(false)
+    },
+  })
+
+  const removeOperationalRoleMutation = useMutation({
+    mutationFn: (assignmentId: number) =>
+      apiClient.delete(`/api/staffel/user-operational-roles/${assignmentId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staffel'] }),
+  })
+
+  // Schiff bearbeiten
+  const updateShipMutation = useMutation({
+    mutationFn: (data: { shipId: number; shipName: string }) =>
+      apiClient.patch(`/api/staffel/ships/${data.shipId}`, { ship_name: data.shipName }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staffel'] })
+      setEditingShipId(null)
+      setEditingShipName('')
+    },
+  })
+
+  // Einsatzrolle bearbeiten
+  const updateOperationalRoleMutation = useMutation({
+    mutationFn: (data: { roleId: number; name: string; description: string | null }) =>
+      apiClient.patch(`/api/staffel/operational-roles/${data.roleId}`, {
+        name: data.name,
+        description: data.description,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staffel'] })
+      setEditOpRoleModal(null)
+    },
   })
 
   if (isLoading) {
@@ -264,20 +318,29 @@ export default function StaffelstrukturPage() {
                 </div>
               </div>
 
-              {/* Einsatzrollen - feste Höhe */}
-              <div className="min-h-[140px] mb-4">
+              {/* Einsatzrollen - mit User-Zuweisungen */}
+              <div className="mb-4">
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                   Einsatzrollen
                 </h3>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {group.operational_roles.slice(0, 8).map(role => (
-                    <div
+                <div className="space-y-2">
+                  {group.operational_roles.map(role => (
+                    <OperationalRoleCard
                       key={role.id}
-                      className="px-2 py-1 bg-gray-800/30 rounded text-xs"
-                      title={role.description || ''}
-                    >
-                      <span className="text-krt-orange">{role.name}</span>
-                    </div>
+                      role={role}
+                      canManage={canManage}
+                      onAssign={() => setAssignOpRoleModal({ role, groupId: group.id })}
+                      onEdit={() => {
+                        setEditOpRoleName(role.name)
+                        setEditOpRoleDescription(role.description || '')
+                        setEditOpRoleModal({ id: role.id, name: role.name, description: role.description })
+                      }}
+                      onRemove={(assignmentId) => {
+                        if (confirm('User wirklich aus dieser Rolle entfernen?')) {
+                          removeOperationalRoleMutation.mutate(assignmentId)
+                        }
+                      }}
+                    />
                   ))}
                 </div>
               </div>
@@ -516,25 +579,74 @@ export default function StaffelstrukturPage() {
 
       {/* Modal: Schiffe verwalten */}
       {manageShipsModal && (
-        <Modal onClose={() => setManageShipsModal(null)} title={`Schiffe: ${manageShipsModal.name}`}>
+        <Modal onClose={() => { setManageShipsModal(null); setEditingShipId(null) }} title={`Schiffe: ${manageShipsModal.name}`}>
           <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-2">
               {manageShipsModal.ships.map(ship => (
                 <div
                   key={ship.id}
-                  className="flex items-center gap-2 px-3 py-1 bg-gray-700/50 border border-gray-600/30 rounded-full"
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-700/50 border border-gray-600/30 rounded"
                 >
-                  <span className="text-sm">{ship.ship_name}</span>
-                  <button
-                    onClick={() => {
-                      if (confirm(`"${ship.ship_name}" wirklich entfernen?`)) {
-                        removeShipMutation.mutate(ship.id)
-                      }
-                    }}
-                    className="text-gray-400 hover:text-red-400"
-                  >
-                    <X size={14} />
-                  </button>
+                  {editingShipId === ship.id ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="text"
+                        value={editingShipName}
+                        onChange={(e) => setEditingShipName(e.target.value)}
+                        className="input flex-1 py-1 text-sm"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && editingShipName.trim()) {
+                            updateShipMutation.mutate({ shipId: ship.id, shipName: editingShipName.trim() })
+                          } else if (e.key === 'Escape') {
+                            setEditingShipId(null)
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          if (editingShipName.trim()) {
+                            updateShipMutation.mutate({ shipId: ship.id, shipName: editingShipName.trim() })
+                          }
+                        }}
+                        disabled={!editingShipName.trim() || updateShipMutation.isPending}
+                        className="text-green-400 hover:text-green-300"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        onClick={() => setEditingShipId(null)}
+                        className="text-gray-400 hover:text-gray-300"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-sm flex-1">{ship.ship_name}</span>
+                      <button
+                        onClick={() => {
+                          setEditingShipId(ship.id)
+                          setEditingShipName(ship.ship_name)
+                        }}
+                        className="text-gray-400 hover:text-krt-orange"
+                        title="Bearbeiten"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`"${ship.ship_name}" wirklich entfernen?`)) {
+                            removeShipMutation.mutate(ship.id)
+                          }
+                        }}
+                        className="text-gray-400 hover:text-red-400"
+                        title="Entfernen"
+                      >
+                        <X size={14} />
+                      </button>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -572,8 +684,126 @@ export default function StaffelstrukturPage() {
             </div>
           </div>
           <div className="flex justify-end mt-6">
-            <button onClick={() => setManageShipsModal(null)} className="btn btn-secondary">
+            <button onClick={() => { setManageShipsModal(null); setEditingShipId(null) }} className="btn btn-secondary">
               Schließen
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: User zu Einsatzrolle zuweisen */}
+      {assignOpRoleModal && (
+        <Modal
+          onClose={() => { setAssignOpRoleModal(null); setSelectedUserId(null); setIsTraining(false) }}
+          title={`${assignOpRoleModal.role.name} zuweisen`}
+        >
+          {!allUsers ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-6 h-6 border-2 border-krt-orange border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">User auswählen</label>
+                  <select
+                    value={selectedUserId || ''}
+                    onChange={(e) => setSelectedUserId(parseInt(e.target.value) || null)}
+                    className="input w-full"
+                  >
+                    <option value="">User auswählen...</option>
+                    {sortedUsers
+                      .filter(u => !assignOpRoleModal.role.users.some(ru => ru.user.id === u.id))
+                      .map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.display_name || u.username}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="is_training"
+                    checked={isTraining}
+                    onChange={(e) => setIsTraining(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-krt-orange focus:ring-krt-orange"
+                  />
+                  <label htmlFor="is_training" className="text-sm text-gray-300">
+                    In Ausbildung
+                  </label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-6">
+                <button onClick={() => { setAssignOpRoleModal(null); setSelectedUserId(null); setIsTraining(false) }} className="btn btn-secondary">
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedUserId) {
+                      assignOperationalRoleMutation.mutate({
+                        userId: selectedUserId,
+                        roleId: assignOpRoleModal.role.id,
+                        isTraining: isTraining,
+                      })
+                    }
+                  }}
+                  disabled={!selectedUserId || assignOperationalRoleMutation.isPending}
+                  className="btn btn-primary"
+                >
+                  {assignOperationalRoleMutation.isPending ? 'Wird zugewiesen...' : 'Zuweisen'}
+                </button>
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
+
+      {/* Modal: Einsatzrolle bearbeiten */}
+      {editOpRoleModal && (
+        <Modal
+          onClose={() => setEditOpRoleModal(null)}
+          title="Einsatzrolle bearbeiten"
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Name</label>
+              <input
+                type="text"
+                value={editOpRoleName}
+                onChange={(e) => setEditOpRoleName(e.target.value)}
+                className="input w-full"
+                placeholder="Name der Rolle..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Beschreibung</label>
+              <textarea
+                value={editOpRoleDescription}
+                onChange={(e) => setEditOpRoleDescription(e.target.value)}
+                className="input w-full h-24 resize-none"
+                placeholder="Beschreibung der Rolle..."
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-6">
+            <button onClick={() => setEditOpRoleModal(null)} className="btn btn-secondary">
+              Abbrechen
+            </button>
+            <button
+              onClick={() => {
+                if (editOpRoleName.trim()) {
+                  updateOperationalRoleMutation.mutate({
+                    roleId: editOpRoleModal.id,
+                    name: editOpRoleName.trim(),
+                    description: editOpRoleDescription.trim() || null,
+                  })
+                }
+              }}
+              disabled={!editOpRoleName.trim() || updateOperationalRoleMutation.isPending}
+              className="btn btn-primary"
+            >
+              {updateOperationalRoleMutation.isPending ? 'Wird gespeichert...' : 'Speichern'}
             </button>
           </div>
         </Modal>
@@ -700,6 +930,81 @@ function FunctionRoleCard({
         </ul>
       ) : (
         <p className="text-xs text-gray-500">-</p>
+      )}
+    </div>
+  )
+}
+
+function OperationalRoleCard({
+  role,
+  canManage,
+  onAssign,
+  onEdit,
+  onRemove,
+}: {
+  role: OperationalRoleWithUsers
+  canManage: boolean
+  onAssign: () => void
+  onEdit: () => void
+  onRemove: (assignmentId: number) => void
+}) {
+  return (
+    <div className="px-2 py-1.5 bg-gray-800/30 border border-gray-700/30 rounded">
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0">
+          <span className="text-krt-orange text-sm font-medium">{role.name}</span>
+          {role.description && (
+            <span className="text-gray-500 text-xs ml-2" title={role.description}>
+              - {role.description.slice(0, 30)}{role.description.length > 30 ? '...' : ''}
+            </span>
+          )}
+        </div>
+        {canManage && (
+          <div className="flex gap-1">
+            <button
+              onClick={onEdit}
+              className="p-1 text-gray-400 hover:text-krt-orange hover:bg-gray-700 rounded flex-shrink-0"
+              title="Rolle bearbeiten"
+            >
+              <Pencil size={12} />
+            </button>
+            <button
+              onClick={onAssign}
+              className="p-1 text-gray-400 hover:text-krt-orange hover:bg-gray-700 rounded flex-shrink-0"
+              title="User zuweisen"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+      {role.users.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          {role.users.map(u => (
+            <span
+              key={u.id}
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs group ${
+                u.is_training ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-700/30' : 'bg-gray-700/50 text-gray-300'
+              }`}
+              title={u.is_training ? 'In Ausbildung' : ''}
+            >
+              {u.user.avatar && (
+                <img src={u.user.avatar} alt="" className="w-3 h-3 rounded-full" />
+              )}
+              {u.user.display_name || u.user.username}
+              {u.is_training && <span className="text-yellow-500 text-[10px]">(A)</span>}
+              {canManage && (
+                <button
+                  onClick={() => onRemove(u.id)}
+                  className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5"
+                  title="Entfernen"
+                >
+                  <X size={10} />
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   )

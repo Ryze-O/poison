@@ -437,6 +437,10 @@ export interface OperationalRole {
   sort_order: number
 }
 
+export interface OperationalRoleWithUsers extends OperationalRole {
+  users: UserOperationalRole[]
+}
+
 export interface FunctionRole {
   id: number
   name: string
@@ -471,7 +475,7 @@ export interface UserFunctionRole {
 
 export interface CommandGroupDetail extends CommandGroup {
   ships: CommandGroupShip[]
-  operational_roles: OperationalRole[]
+  operational_roles: OperationalRoleWithUsers[]
   members: UserCommandGroup[]
 }
 
