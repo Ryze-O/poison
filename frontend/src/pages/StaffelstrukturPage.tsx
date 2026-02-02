@@ -334,111 +334,127 @@ export default function StaffelstrukturPage() {
       )}
 
       {/* Modal: Mitglied zu KG hinzufügen */}
-      {addMemberModal && allUsers && (
+      {addMemberModal && (
         <Modal onClose={() => setAddMemberModal(null)} title="Mitglied hinzufügen">
           <p className="text-gray-400 mb-4">
             Zu <span className="text-krt-orange">{addMemberModal.groupName}</span> hinzufügen
           </p>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">User</label>
-              <select
-                value={selectedUserId || ''}
-                onChange={(e) => setSelectedUserId(parseInt(e.target.value) || null)}
-                className="input w-full"
-              >
-                <option value="">User auswählen...</option>
-                {allUsers
-                  .filter(u => u.role !== 'guest' && u.role !== 'loot_guest')
-                  .map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.display_name || u.username}
-                    </option>
-                  ))}
-              </select>
+          {!allUsers ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-6 h-6 border-2 border-krt-orange border-t-transparent rounded-full animate-spin" />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Status</label>
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value as MemberStatus)}
-                className="input w-full"
-              >
-                <option value="ACTIVE">Aktiv</option>
-                <option value="RECRUIT">Rekrut</option>
-                <option value="INACTIVE">Inaktiv</option>
-                <option value="ABSENT">Abwesend</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-6">
-            <button onClick={() => setAddMemberModal(null)} className="btn btn-secondary">
-              Abbrechen
-            </button>
-            <button
-              onClick={() => {
-                if (selectedUserId) {
-                  addMemberMutation.mutate({
-                    groupId: addMemberModal.groupId,
-                    userId: selectedUserId,
-                    status: selectedStatus,
-                  })
-                }
-              }}
-              disabled={!selectedUserId || addMemberMutation.isPending}
-              className="btn btn-primary"
-            >
-              {addMemberMutation.isPending ? 'Wird hinzugefügt...' : 'Hinzufügen'}
-            </button>
-          </div>
+          ) : (
+            <>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">User</label>
+                  <select
+                    value={selectedUserId || ''}
+                    onChange={(e) => setSelectedUserId(parseInt(e.target.value) || null)}
+                    className="input w-full"
+                  >
+                    <option value="">User auswählen...</option>
+                    {allUsers
+                      .filter(u => u.role !== 'guest' && u.role !== 'loot_guest')
+                      .map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.display_name || u.username}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Status</label>
+                  <select
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value as MemberStatus)}
+                    className="input w-full"
+                  >
+                    <option value="ACTIVE">Aktiv</option>
+                    <option value="RECRUIT">Rekrut</option>
+                    <option value="INACTIVE">Inaktiv</option>
+                    <option value="ABSENT">Abwesend</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-6">
+                <button onClick={() => setAddMemberModal(null)} className="btn btn-secondary">
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedUserId) {
+                      addMemberMutation.mutate({
+                        groupId: addMemberModal.groupId,
+                        userId: selectedUserId,
+                        status: selectedStatus,
+                      })
+                    }
+                  }}
+                  disabled={!selectedUserId || addMemberMutation.isPending}
+                  className="btn btn-primary"
+                >
+                  {addMemberMutation.isPending ? 'Wird hinzugefügt...' : 'Hinzufügen'}
+                </button>
+              </div>
+            </>
+          )}
         </Modal>
       )}
 
       {/* Modal: User zu Rolle zuweisen */}
-      {assignRoleModal && allUsers && (
+      {assignRoleModal && (
         <Modal
           onClose={() => { setAssignRoleModal(null); setSelectedUserId(null) }}
           title={`${assignRoleModal.role.name} zuweisen`}
         >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">User auswählen</label>
-              <select
-                value={selectedUserId || ''}
-                onChange={(e) => setSelectedUserId(parseInt(e.target.value) || null)}
-                className="input w-full"
-              >
-                <option value="">User auswählen...</option>
-                {allUsers
-                  .filter(u => u.role !== 'guest' && u.role !== 'loot_guest')
-                  .filter(u => !assignRoleModal.role.users.some(ru => ru.user.id === u.id))
-                  .map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.display_name || u.username}
-                    </option>
-                  ))}
-              </select>
+          {!allUsers ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-6 h-6 border-2 border-krt-orange border-t-transparent rounded-full animate-spin" />
             </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-6">
-            <button onClick={() => { setAssignRoleModal(null); setSelectedUserId(null) }} className="btn btn-secondary">
-              Abbrechen
-            </button>
-            <button
-              onClick={() => {
-                if (selectedUserId) {
-                  assignFunctionRoleMutation.mutate({
-                    userId: selectedUserId,
-                    roleId: assignRoleModal.role.id,
-                  })
-                }
-              }}
-              disabled={!selectedUserId || assignFunctionRoleMutation.isPending}
-              className="btn btn-primary"
-            >
-              {assignFunctionRoleMutation.isPending ? 'Wird zugewiesen...' : 'Zuweisen'}
-            </button>
-          </div>
+          ) : (
+            <>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">User auswählen</label>
+                  <select
+                    value={selectedUserId || ''}
+                    onChange={(e) => setSelectedUserId(parseInt(e.target.value) || null)}
+                    className="input w-full"
+                  >
+                    <option value="">User auswählen...</option>
+                    {allUsers
+                      .filter(u => u.role !== 'guest' && u.role !== 'loot_guest')
+                      .filter(u => !assignRoleModal.role.users.some(ru => ru.user.id === u.id))
+                      .map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.display_name || u.username}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-6">
+                <button onClick={() => { setAssignRoleModal(null); setSelectedUserId(null) }} className="btn btn-secondary">
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedUserId) {
+                      assignFunctionRoleMutation.mutate({
+                        userId: selectedUserId,
+                        roleId: assignRoleModal.role.id,
+                      })
+                    }
+                  }}
+                  disabled={!selectedUserId || assignFunctionRoleMutation.isPending}
+                  className="btn btn-primary"
+                >
+                  {assignFunctionRoleMutation.isPending ? 'Wird zugewiesen...' : 'Zuweisen'}
+                </button>
+              </div>
+            </>
+          )}
         </Modal>
       )}
 

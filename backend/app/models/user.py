@@ -27,6 +27,7 @@ class User(Base):
     role = Column(Enum(UserRole), default=UserRole.MEMBER, nullable=False)
     is_pioneer = Column(Boolean, default=False, nullable=False)  # Pioneer: verantwortlich für Versorgung
     is_treasurer = Column(Boolean, default=False, nullable=False)  # Kassenwart: verwaltet Teil der Staffelkasse
+    is_kg_verwalter = Column(Boolean, default=False, nullable=False)  # KG-Verwalter: kann Staffelstruktur bearbeiten
     aliases = Column(String(500), nullable=True)  # Komma-separierte OCR-Aliase (z.B. "ry-ze,ry_ze")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

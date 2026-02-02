@@ -20,6 +20,7 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
     is_pioneer: Optional[bool] = None
     is_treasurer: Optional[bool] = None
+    is_kg_verwalter: Optional[bool] = None
 
 
 class UserResponse(UserBase):
@@ -29,6 +30,7 @@ class UserResponse(UserBase):
     role: UserRole
     is_pioneer: bool = False  # Pioneer: verantwortlich für Versorgung
     is_treasurer: bool = False  # Kassenwart: verwaltet Teil der Staffelkasse
+    is_kg_verwalter: bool = False  # KG-Verwalter: kann Staffelstruktur bearbeiten
     aliases: Optional[str] = None  # Komma-separierte OCR-Aliase
     created_at: datetime
 

@@ -11,6 +11,7 @@ export interface User {
   role: UserRole
   is_pioneer: boolean  // Pioneer: verantwortlich für Versorgung
   is_treasurer: boolean  // Kassenwart: verwaltet Teil der Staffelkasse
+  is_kg_verwalter: boolean  // KG-Verwalter: kann Staffelstruktur bearbeiten
   created_at: string
 }
 

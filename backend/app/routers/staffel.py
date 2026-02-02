@@ -38,21 +38,15 @@ router = APIRouter()
 
 
 def is_staffel_manager(user: User, db: Session) -> bool:
-    """Prüft ob User Admin ist oder die Funktionsrolle 'KG-Verwalter' hat."""
+    """Prüft ob User Admin ist oder KG-Verwalter Flag hat."""
     if user.role == UserRole.ADMIN:
         return True
 
-    # Prüfe ob User die Funktionsrolle "KG-Verwalter" hat
-    manager_role = db.query(FunctionRole).filter(FunctionRole.name == "KG-Verwalter").first()
-    if not manager_role:
-        return False
+    # Prüfe das is_kg_verwalter Flag
+    if hasattr(user, 'is_kg_verwalter') and user.is_kg_verwalter:
+        return True
 
-    assignment = db.query(UserFunctionRole).filter(
-        UserFunctionRole.user_id == user.id,
-        UserFunctionRole.function_role_id == manager_role.id
-    ).first()
-
-    return assignment is not None
+    return False
 
 
 def check_staffel_manager(user: User, db: Session):

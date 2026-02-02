@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Shield, User as UserIcon, Compass, Trash2, Link2, X, Plus, Tag, Wallet, Edit3, GitMerge, Check, XCircle } from 'lucide-react'
+import { Shield, User as UserIcon, Compass, Trash2, Link2, X, Plus, Tag, Wallet, Edit3, GitMerge, Check, XCircle, Users } from 'lucide-react'
 import type { User, UserRole, PendingMerge } from '../api/types'
 
 const roleLabels: Record<UserRole, string> = {
@@ -112,6 +112,14 @@ export default function UsersPage() {
     },
   })
 
+  const toggleKgVerwalterMutation = useMutation({
+    mutationFn: ({ userId, is_kg_verwalter }: { userId: number; is_kg_verwalter: boolean }) =>
+      apiClient.patch(`/api/users/${userId}`, { is_kg_verwalter }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+  })
+
   const deleteUserMutation = useMutation({
     mutationFn: (userId: number) => apiClient.delete(`/api/users/${userId}`),
     onSuccess: () => {
@@ -199,6 +207,10 @@ export default function UsersPage() {
 
   const handleToggleTreasurer = (u: User) => {
     toggleTreasurerMutation.mutate({ userId: u.id, is_treasurer: !u.is_treasurer })
+  }
+
+  const handleToggleKgVerwalter = (u: User) => {
+    toggleKgVerwalterMutation.mutate({ userId: u.id, is_kg_verwalter: !u.is_kg_verwalter })
   }
 
   const handleDeleteUser = (u: User) => {
@@ -315,6 +327,10 @@ export default function UsersPage() {
           <div className="flex items-center gap-2">
             <Compass size={14} className="text-emerald-500" />
             <span>Pioneer - Versorgung</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users size={14} className="text-blue-500" />
+            <span>KG-Verwalter - Staffelstruktur</span>
           </div>
         </div>
       </div>
@@ -469,6 +485,13 @@ export default function UsersPage() {
                     </span>
                   )}
 
+                  {u.is_kg_verwalter && (
+                    <span className="px-3 py-1 rounded-full text-sm bg-blue-600 text-white flex items-center gap-1">
+                      <Users size={14} />
+                      KG-Verwalter
+                    </span>
+                  )}
+
                   {!mergeMode && (
                     <>
                       {isOfficer && (
@@ -514,6 +537,20 @@ export default function UsersPage() {
                             title={u.is_treasurer ? 'Kassenwart-Status entfernen' : 'Als Kassenwart markieren'}
                           >
                             <Wallet size={20} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleToggleKgVerwalter(u)
+                            }}
+                            className={`p-2 rounded-lg transition-colors ${
+                              u.is_kg_verwalter
+                                ? 'text-blue-500 bg-blue-500/20 hover:bg-blue-500/30'
+                                : 'text-gray-400 hover:text-blue-500 hover:bg-gray-700'
+                            }`}
+                            title={u.is_kg_verwalter ? 'KG-Verwalter-Status entfernen' : 'Als KG-Verwalter markieren'}
+                          >
+                            <Users size={20} />
                           </button>
                         </>
                       )}
