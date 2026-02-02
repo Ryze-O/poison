@@ -194,10 +194,17 @@ export default function StaffelstrukturPage() {
 
           return (
             <div key={group.id} className="flex flex-col">
-              {/* GIF Platzhalter */}
-              <div className="h-32 bg-krt-orange/80 rounded-t-lg flex items-center justify-center mb-0">
-                {/* TODO: GIF hier einfügen - z.B. /assets/kg_{group.name.toLowerCase()}.gif */}
-                <span className="text-white/50 text-sm">GIF: {group.full_name}</span>
+              {/* GIF/Bild Platzhalter */}
+              <div className="h-32 rounded-t-lg overflow-hidden border border-gray-700 border-b-0 flex items-center justify-center bg-gray-900/50">
+                {group.name === 'SW' ? (
+                  <img
+                    src="/assets/kg_sw.gif"
+                    alt={group.full_name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-gray-600 text-sm">Bild: {group.full_name}</span>
+                )}
               </div>
 
               {/* Card Content */}
