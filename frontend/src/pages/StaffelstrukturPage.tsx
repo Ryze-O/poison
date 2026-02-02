@@ -61,6 +61,15 @@ export default function StaffelstrukturPage() {
     enabled: canManage,
   })
 
+  // Alphabetisch sortierte User-Liste
+  const sortedUsers = allUsers
+    ?.filter(u => u.role !== 'guest' && u.role !== 'loot_guest')
+    .sort((a, b) => {
+      const nameA = (a.display_name || a.username).toLowerCase()
+      const nameB = (b.display_name || b.username).toLowerCase()
+      return nameA.localeCompare(nameB, 'de')
+    }) ?? []
+
   // Mutations
   const addMemberMutation = useMutation({
     mutationFn: (data: { groupId: number; userId: number; status: MemberStatus }) =>
@@ -184,7 +193,15 @@ export default function StaffelstrukturPage() {
           }
 
           return (
-            <div key={group.id} className="card flex flex-col">
+            <div key={group.id} className="flex flex-col">
+              {/* GIF Platzhalter */}
+              <div className="h-32 bg-krt-orange/80 rounded-t-lg flex items-center justify-center mb-0">
+                {/* TODO: GIF hier einfügen - z.B. /assets/kg_{group.name.toLowerCase()}.gif */}
+                <span className="text-white/50 text-sm">GIF: {group.full_name}</span>
+              </div>
+
+              {/* Card Content */}
+              <div className="card rounded-t-none flex flex-col flex-grow">
               {/* Header - gleiche Höhe */}
               <div className="flex items-start justify-between mb-4 min-h-[60px]">
                 <div className="flex items-center gap-3">
@@ -303,6 +320,7 @@ export default function StaffelstrukturPage() {
                   })}
                 </div>
               </div>
+              </div>
             </div>
           )
         })}
@@ -354,13 +372,11 @@ export default function StaffelstrukturPage() {
                     className="input w-full"
                   >
                     <option value="">User auswählen...</option>
-                    {allUsers
-                      .filter(u => u.role !== 'guest' && u.role !== 'loot_guest')
-                      .map(u => (
-                        <option key={u.id} value={u.id}>
-                          {u.display_name || u.username}
-                        </option>
-                      ))}
+                    {sortedUsers.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.display_name || u.username}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -423,8 +439,7 @@ export default function StaffelstrukturPage() {
                     className="input w-full"
                   >
                     <option value="">User auswählen...</option>
-                    {allUsers
-                      .filter(u => u.role !== 'guest' && u.role !== 'loot_guest')
+                    {sortedUsers
                       .filter(u => !assignRoleModal.role.users.some(ru => ru.user.id === u.id))
                       .map(u => (
                         <option key={u.id} value={u.id}>

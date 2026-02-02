@@ -334,6 +334,47 @@ async def merge_users(
     from app.models.treasury import TreasuryTransaction
     from app.models.attendance import AttendanceRecord, AttendanceSession
     from app.models.loot import LootSession, LootDistribution
+    from app.models.staffel import UserCommandGroup, UserOperationalRole, UserFunctionRole
+
+    # Staffel-Zuordnungen übertragen oder löschen (bei Duplikaten)
+    # KG-Mitgliedschaften
+    source_kg_memberships = db.query(UserCommandGroup).filter(UserCommandGroup.user_id == source.id).all()
+    for membership in source_kg_memberships:
+        # Prüfe ob target bereits in dieser KG ist
+        existing = db.query(UserCommandGroup).filter(
+            UserCommandGroup.user_id == target.id,
+            UserCommandGroup.command_group_id == membership.command_group_id
+        ).first()
+        if existing:
+            # Target ist bereits Mitglied, lösche source-Eintrag
+            db.delete(membership)
+        else:
+            # Übertrage zum target
+            membership.user_id = target.id
+
+    # Einsatzrollen
+    source_op_roles = db.query(UserOperationalRole).filter(UserOperationalRole.user_id == source.id).all()
+    for role in source_op_roles:
+        existing = db.query(UserOperationalRole).filter(
+            UserOperationalRole.user_id == target.id,
+            UserOperationalRole.operational_role_id == role.operational_role_id
+        ).first()
+        if existing:
+            db.delete(role)
+        else:
+            role.user_id = target.id
+
+    # Funktionsrollen
+    source_func_roles = db.query(UserFunctionRole).filter(UserFunctionRole.user_id == source.id).all()
+    for role in source_func_roles:
+        existing = db.query(UserFunctionRole).filter(
+            UserFunctionRole.user_id == target.id,
+            UserFunctionRole.function_role_id == role.function_role_id
+        ).first()
+        if existing:
+            db.delete(role)
+        else:
+            role.user_id = target.id
 
     # Inventar übertragen
     db.query(Inventory).filter(Inventory.user_id == source.id).update(
@@ -390,6 +431,14 @@ async def merge_users(
     if not target.discord_id and source.discord_id:
         target.discord_id = source.discord_id
         target.avatar = source.avatar
+
+    # Flags übertragen (OR-Logik: wenn source True hat, übernehmen)
+    if source.is_pioneer:
+        target.is_pioneer = True
+    if source.is_treasurer:
+        target.is_treasurer = True
+    if source.is_kg_verwalter:
+        target.is_kg_verwalter = True
 
     # Source-User löschen
     source_username = source.username
@@ -461,6 +510,44 @@ async def approve_pending_merge(
     from app.models.treasury import TreasuryTransaction
     from app.models.attendance import AttendanceRecord, AttendanceSession
     from app.models.loot import LootSession, LootDistribution
+    from app.models.staffel import UserCommandGroup, UserOperationalRole, UserFunctionRole
+
+    # Staffel-Zuordnungen übertragen oder löschen (bei Duplikaten)
+    # KG-Mitgliedschaften
+    source_kg_memberships = db.query(UserCommandGroup).filter(UserCommandGroup.user_id == existing_user.id).all()
+    for membership in source_kg_memberships:
+        existing = db.query(UserCommandGroup).filter(
+            UserCommandGroup.user_id == discord_user.id,
+            UserCommandGroup.command_group_id == membership.command_group_id
+        ).first()
+        if existing:
+            db.delete(membership)
+        else:
+            membership.user_id = discord_user.id
+
+    # Einsatzrollen
+    source_op_roles = db.query(UserOperationalRole).filter(UserOperationalRole.user_id == existing_user.id).all()
+    for role in source_op_roles:
+        existing = db.query(UserOperationalRole).filter(
+            UserOperationalRole.user_id == discord_user.id,
+            UserOperationalRole.operational_role_id == role.operational_role_id
+        ).first()
+        if existing:
+            db.delete(role)
+        else:
+            role.user_id = discord_user.id
+
+    # Funktionsrollen
+    source_func_roles = db.query(UserFunctionRole).filter(UserFunctionRole.user_id == existing_user.id).all()
+    for role in source_func_roles:
+        existing = db.query(UserFunctionRole).filter(
+            UserFunctionRole.user_id == discord_user.id,
+            UserFunctionRole.function_role_id == role.function_role_id
+        ).first()
+        if existing:
+            db.delete(role)
+        else:
+            role.user_id = discord_user.id
 
     # Inventar übertragen
     db.query(Inventory).filter(Inventory.user_id == existing_user.id).update(
@@ -526,11 +613,13 @@ async def approve_pending_merge(
     if role_hierarchy.get(existing_user.role, 0) > role_hierarchy.get(discord_user.role, 0):
         discord_user.role = existing_user.role
 
-    # Pioneer/Kassenwart-Status übernehmen
+    # Pioneer/Kassenwart/KG-Verwalter-Status übernehmen
     if existing_user.is_pioneer:
         discord_user.is_pioneer = True
     if existing_user.is_treasurer:
         discord_user.is_treasurer = True
+    if existing_user.is_kg_verwalter:
+        discord_user.is_kg_verwalter = True
 
     # Display-Name übernehmen falls nicht vorhanden
     if not discord_user.display_name and existing_user.display_name:

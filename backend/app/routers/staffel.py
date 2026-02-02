@@ -26,7 +26,7 @@ from app.schemas.staffel import (
     OperationalRoleCreate, OperationalRoleUpdate, OperationalRoleResponse, OperationalRoleWithUsersResponse,
     FunctionRoleCreate, FunctionRoleUpdate, FunctionRoleResponse, FunctionRoleWithUsersResponse,
     ShipCreate, ShipUpdate, ShipResponse,
-    UserCommandGroupCreate, UserCommandGroupResponse, MemberStatusUpdate,
+    UserCommandGroupCreate, AddMemberToGroup, UserCommandGroupResponse, MemberStatusUpdate,
     UserOperationalRoleCreate, UserOperationalRoleResponse, UserOperationalRoleUpdate,
     UserFunctionRoleCreate, UserFunctionRoleResponse,
     StaffelOverviewResponse, UserStaffelProfile
@@ -142,7 +142,7 @@ async def get_group_members(
 @router.post("/command-groups/{group_id}/members", response_model=UserCommandGroupResponse)
 async def add_member_to_group(
     group_id: int,
-    data: UserCommandGroupCreate,
+    data: AddMemberToGroup,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):

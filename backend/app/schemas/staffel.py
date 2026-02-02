@@ -63,6 +63,13 @@ class UserCommandGroupCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class AddMemberToGroup(BaseModel):
+    """Schema zum Hinzufügen eines Mitglieds (command_group_id kommt aus URL)."""
+    user_id: int
+    status: MemberStatus = MemberStatus.ACTIVE
+    notes: Optional[str] = None
+
+
 class UserOperationalRoleCreate(BaseModel):
     user_id: int
     operational_role_id: int
