@@ -482,6 +482,7 @@ export interface StaffelOverview {
   command_groups: CommandGroupDetail[]
   function_roles: FunctionRoleWithUsers[]
   leadership_roles: FunctionRoleWithUsers[]
+  can_manage: boolean  // True wenn User Admin oder KG-Verwalter ist
 }
 
 export interface UserStaffelProfile {

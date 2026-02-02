@@ -167,6 +167,7 @@ def upgrade() -> None:
     # Funktionsrollen (Allgemein)
     op.execute("""
         INSERT INTO function_roles (name, description, is_leadership, sort_order) VALUES
+        ('KG-Verwalter', 'Kann Kommandogruppen-Mitglieder und Rollen verwalten', 0, 5),
         ('Schatzmeister', 'Verwaltung der Staffelkasse', 0, 10),
         ('Forschung', 'Erforschung von Spielmechaniken und Meta', 0, 11),
         ('Einsatzleiter', 'Leitung von Staffelabenden und Operationen', 0, 12),

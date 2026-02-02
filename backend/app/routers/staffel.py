@@ -37,6 +37,33 @@ from app.auth.dependencies import check_role
 router = APIRouter()
 
 
+def is_staffel_manager(user: User, db: Session) -> bool:
+    """Prüft ob User Admin ist oder die Funktionsrolle 'KG-Verwalter' hat."""
+    if user.role == UserRole.ADMIN:
+        return True
+
+    # Prüfe ob User die Funktionsrolle "KG-Verwalter" hat
+    manager_role = db.query(FunctionRole).filter(FunctionRole.name == "KG-Verwalter").first()
+    if not manager_role:
+        return False
+
+    assignment = db.query(UserFunctionRole).filter(
+        UserFunctionRole.user_id == user.id,
+        UserFunctionRole.function_role_id == manager_role.id
+    ).first()
+
+    return assignment is not None
+
+
+def check_staffel_manager(user: User, db: Session):
+    """Wirft Exception wenn User kein Staffel-Manager ist."""
+    if not is_staffel_manager(user, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Nur Admins oder KG-Verwalter können diese Aktion ausführen"
+        )
+
+
 # ============== Kommandogruppen ==============
 
 @router.get("/command-groups", response_model=List[CommandGroupResponse])
@@ -88,8 +115,8 @@ async def update_command_group(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Kommandogruppe bearbeiten (Admin)."""
-    check_role(current_user, UserRole.ADMIN)
+    """Kommandogruppe bearbeiten (Admin/KG-Verwalter)."""
+    check_staffel_manager(current_user, db)
 
     group = db.query(CommandGroup).filter(CommandGroup.id == group_id).first()
     if not group:
@@ -125,8 +152,8 @@ async def add_member_to_group(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """User zu Kommandogruppe hinzufügen (Admin)."""
-    check_role(current_user, UserRole.ADMIN)
+    """User zu Kommandogruppe hinzufügen (Admin/KG-Verwalter)."""
+    check_staffel_manager(current_user, db)
 
     # Prüfen ob User existiert
     user = db.query(User).filter(User.id == data.user_id).first()
@@ -165,8 +192,8 @@ async def update_member_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Mitgliedsstatus ändern (Admin)."""
-    check_role(current_user, UserRole.ADMIN)
+    """Mitgliedsstatus ändern (Admin/KG-Verwalter)."""
+    check_staffel_manager(current_user, db)
 
     membership = db.query(UserCommandGroup).filter(UserCommandGroup.id == membership_id).first()
     if not membership:
@@ -187,8 +214,8 @@ async def remove_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """User aus Kommandogruppe entfernen (Admin)."""
-    check_role(current_user, UserRole.ADMIN)
+    """User aus Kommandogruppe entfernen (Admin/KG-Verwalter)."""
+    check_staffel_manager(current_user, db)
 
     membership = db.query(UserCommandGroup).filter(UserCommandGroup.id == membership_id).first()
     if not membership:
@@ -262,8 +289,8 @@ async def assign_operational_role(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Einsatzrolle einem User zuweisen (Admin)."""
-    check_role(current_user, UserRole.ADMIN)
+    """Einsatzrolle einem User zuweisen (Admin/KG-Verwalter)."""
+    check_staffel_manager(current_user, db)
 
     # Prüfen ob User existiert
     user = db.query(User).filter(User.id == user_id).first()
@@ -301,8 +328,8 @@ async def update_operational_role_assignment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Einsatzrollen-Zuweisung bearbeiten (Admin)."""
-    check_role(current_user, UserRole.ADMIN)
+    """Einsatzrollen-Zuweisung bearbeiten (Admin/KG-Verwalter)."""
+    check_staffel_manager(current_user, db)
 
     assignment = db.query(UserOperationalRole).filter(UserOperationalRole.id == assignment_id).first()
     if not assignment:
@@ -322,8 +349,8 @@ async def remove_operational_role(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Einsatzrolle entfernen (Admin)."""
-    check_role(current_user, UserRole.ADMIN)
+    """Einsatzrolle entfernen (Admin/KG-Verwalter)."""
+    check_staffel_manager(current_user, db)
 
     assignment = db.query(UserOperationalRole).filter(UserOperationalRole.id == assignment_id).first()
     if not assignment:
@@ -392,8 +419,8 @@ async def assign_function_role(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Funktionsrolle einem User zuweisen (Admin)."""
-    check_role(current_user, UserRole.ADMIN)
+    """Funktionsrolle einem User zuweisen (Admin/KG-Verwalter)."""
+    check_staffel_manager(current_user, db)
 
     # Prüfen ob User existiert
     user = db.query(User).filter(User.id == user_id).first()
@@ -429,8 +456,8 @@ async def remove_function_role(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Funktionsrolle entfernen (Admin)."""
-    check_role(current_user, UserRole.ADMIN)
+    """Funktionsrolle entfernen (Admin/KG-Verwalter)."""
+    check_staffel_manager(current_user, db)
 
     assignment = db.query(UserFunctionRole).filter(UserFunctionRole.id == assignment_id).first()
     if not assignment:
@@ -535,7 +562,8 @@ async def get_staffel_overview(
     return {
         "command_groups": command_groups,
         "function_roles": [get_function_role_with_users(r) for r in function_roles],
-        "leadership_roles": [get_function_role_with_users(r) for r in leadership_roles]
+        "leadership_roles": [get_function_role_with_users(r) for r in leadership_roles],
+        "can_manage": is_staffel_manager(current_user, db)
     }
 
 

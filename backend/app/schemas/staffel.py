@@ -209,3 +209,4 @@ class StaffelOverviewResponse(BaseModel):
     command_groups: List[CommandGroupDetailResponse]
     function_roles: List[FunctionRoleWithUsersResponse]
     leadership_roles: List[FunctionRoleWithUsersResponse]
+    can_manage: bool = False  # True wenn User Admin oder KG-Verwalter ist

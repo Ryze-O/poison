@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
-import { useAuthStore } from '../hooks/useAuth'
 import { Users, Shield, Anchor, Rocket, Truck, ChevronDown, ChevronRight, X, UserPlus } from 'lucide-react'
 import type { StaffelOverview, User, MemberStatus, UserCommandGroup } from '../api/types'
 
@@ -29,8 +28,6 @@ const kgIcons: Record<string, typeof Shield> = {
 
 export default function StaffelstrukturPage() {
   const queryClient = useQueryClient()
-  const effectiveRole = useAuthStore.getState().getEffectiveRole()
-  const isAdmin = effectiveRole === 'admin'
 
   // States
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set([1, 2, 3]))
@@ -44,10 +41,13 @@ export default function StaffelstrukturPage() {
     queryFn: () => apiClient.get('/api/staffel/overview').then(r => r.data),
   })
 
+  // canManage: Admin oder KG-Verwalter (kommt vom Backend)
+  const canManage = overview?.can_manage ?? false
+
   const { data: allUsers } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: () => apiClient.get('/api/users').then(r => r.data),
-    enabled: isAdmin,
+    enabled: canManage,
   })
 
   // Mutations
@@ -210,7 +210,7 @@ export default function StaffelstrukturPage() {
                     <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
                       Mitglieder ({group.members.length})
                     </h3>
-                    {isAdmin && (
+                    {canManage && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -240,7 +240,7 @@ export default function StaffelstrukturPage() {
                                 key={member.id}
                                 member={member}
                                 status={status}
-                                isAdmin={isAdmin}
+                                canManage={canManage}
                                 onStatusChange={(newStatus) =>
                                   updateStatusMutation.mutate({ membershipId: member.id, status: newStatus })
                                 }
@@ -370,13 +370,13 @@ export default function StaffelstrukturPage() {
 function MemberBadge({
   member,
   status,
-  isAdmin,
+  canManage,
   onStatusChange,
   onRemove,
 }: {
   member: UserCommandGroup
   status: MemberStatus
-  isAdmin: boolean
+  canManage: boolean
   onStatusChange: (status: MemberStatus) => void
   onRemove: () => void
 }) {
@@ -385,9 +385,9 @@ function MemberBadge({
   return (
     <div className="relative">
       <button
-        onClick={() => isAdmin && setShowMenu(!showMenu)}
+        onClick={() => canManage && setShowMenu(!showMenu)}
         className={`flex items-center gap-1 px-2 py-1 rounded text-sm ${statusColors[status]} ${
-          isAdmin ? 'hover:bg-gray-700 cursor-pointer' : ''
+          canManage ? 'hover:bg-gray-700 cursor-pointer' : ''
         } bg-gray-800/50 border border-gray-600/30`}
       >
         {member.user.avatar && (
@@ -396,7 +396,7 @@ function MemberBadge({
         {member.user.display_name || member.user.username}
       </button>
 
-      {showMenu && isAdmin && (
+      {showMenu && canManage && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
           <div className="absolute top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded shadow-lg z-50 min-w-[140px]">

@@ -18,10 +18,10 @@ from app.database import Base
 
 class MemberStatus(str, Enum):
     """Status eines Mitglieds in einer Kommandogruppe."""
-    ACTIVE = "active"        # Normales aktives Mitglied
-    RECRUIT = "recruit"      # Rekrut <4 Wochen (orange)
-    INACTIVE = "inactive"    # Keine aktive Einsatzrolle (rot)
-    ABSENT = "absent"        # Abwesend >4 Wochen (grau)
+    ACTIVE = "ACTIVE"        # Normales aktives Mitglied
+    RECRUIT = "RECRUIT"      # Rekrut <4 Wochen (orange)
+    INACTIVE = "INACTIVE"    # Keine aktive Einsatzrolle (rot)
+    ABSENT = "ABSENT"        # Abwesend >4 Wochen (grau)
 
 
 class CommandGroup(Base):
