@@ -23,9 +23,9 @@ from app.models.staffel import (
 )
 from app.schemas.staffel import (
     CommandGroupCreate, CommandGroupUpdate, CommandGroupResponse, CommandGroupDetailResponse,
-    OperationalRoleCreate, OperationalRoleResponse, OperationalRoleWithUsersResponse,
-    FunctionRoleCreate, FunctionRoleResponse, FunctionRoleWithUsersResponse,
-    ShipCreate, ShipResponse,
+    OperationalRoleCreate, OperationalRoleUpdate, OperationalRoleResponse, OperationalRoleWithUsersResponse,
+    FunctionRoleCreate, FunctionRoleUpdate, FunctionRoleResponse, FunctionRoleWithUsersResponse,
+    ShipCreate, ShipUpdate, ShipResponse,
     UserCommandGroupCreate, UserCommandGroupResponse, MemberStatusUpdate,
     UserOperationalRoleCreate, UserOperationalRoleResponse, UserOperationalRoleUpdate,
     UserFunctionRoleCreate, UserFunctionRoleResponse,
@@ -262,6 +262,29 @@ async def create_operational_role(
     return role
 
 
+@router.patch("/operational-roles/{role_id}", response_model=OperationalRoleResponse)
+async def update_operational_role(
+    role_id: int,
+    data: OperationalRoleUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Einsatzrolle bearbeiten (Admin)."""
+    check_role(current_user, UserRole.ADMIN)
+
+    role = db.query(OperationalRole).filter(OperationalRole.id == role_id).first()
+    if not role:
+        raise HTTPException(status_code=404, detail="Einsatzrolle nicht gefunden")
+
+    update_data = data.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(role, key, value)
+
+    db.commit()
+    db.refresh(role)
+    return role
+
+
 @router.delete("/operational-roles/{role_id}")
 async def delete_operational_role(
     role_id: int,
@@ -392,6 +415,29 @@ async def create_function_role(
     return role
 
 
+@router.patch("/function-roles/{role_id}", response_model=FunctionRoleResponse)
+async def update_function_role(
+    role_id: int,
+    data: FunctionRoleUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Funktionsrolle bearbeiten (Admin)."""
+    check_role(current_user, UserRole.ADMIN)
+
+    role = db.query(FunctionRole).filter(FunctionRole.id == role_id).first()
+    if not role:
+        raise HTTPException(status_code=404, detail="Funktionsrolle nicht gefunden")
+
+    update_data = data.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(role, key, value)
+
+    db.commit()
+    db.refresh(role)
+    return role
+
+
 @router.delete("/function-roles/{role_id}")
 async def delete_function_role(
     role_id: int,
@@ -503,6 +549,29 @@ async def add_ship_to_group(
         sort_order=data.sort_order
     )
     db.add(ship)
+    db.commit()
+    db.refresh(ship)
+    return ship
+
+
+@router.patch("/ships/{ship_id}", response_model=ShipResponse)
+async def update_ship(
+    ship_id: int,
+    data: ShipUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Schiff bearbeiten (Admin)."""
+    check_role(current_user, UserRole.ADMIN)
+
+    ship = db.query(CommandGroupShip).filter(CommandGroupShip.id == ship_id).first()
+    if not ship:
+        raise HTTPException(status_code=404, detail="Schiff nicht gefunden")
+
+    update_data = data.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(ship, key, value)
+
     db.commit()
     db.refresh(ship)
     return ship

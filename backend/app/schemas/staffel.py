@@ -92,6 +92,25 @@ class UserOperationalRoleUpdate(BaseModel):
     is_training: Optional[bool] = None
 
 
+class FunctionRoleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_leadership: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class OperationalRoleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
+class ShipUpdate(BaseModel):
+    ship_name: Optional[str] = None
+    ship_image: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
 # ============== Response Schemas ==============
 
 class ShipResponse(ShipBase):
