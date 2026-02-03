@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import { ArrowLeft, Check, GraduationCap, Save, UserPlus, X, AlertCircle, Clock, UserX } from 'lucide-react'
+import { useAuthStore } from '../hooks/useAuth'
 import type {
   AssignmentMatrixResponse,
   CommandGroup,
@@ -18,6 +19,7 @@ type CellState = {
 export default function AssignmentMatrixPage() {
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
+  const { user: currentUser } = useAuthStore()
 
   // Ausgewählte KG - initial aus URL-Parameter
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(() => {
@@ -77,12 +79,24 @@ export default function AssignmentMatrixPage() {
   })
 
   // User die noch nicht in dieser KG sind
-  const availableUsers = allUsers?.filter(u =>
-    !matrix?.users.some(mu => mu.id === u.id) &&
-    u.role !== 'guest' &&
-    (u.display_name?.toLowerCase().includes(userSearch.toLowerCase()) ||
-     u.username.toLowerCase().includes(userSearch.toLowerCase()))
-  ) ?? []
+  // Nur Viper-Mitglieder: member, officer (und ich selbst falls Admin)
+  const availableUsers = allUsers?.filter(u => {
+    // Bereits in KG? -> Nicht anzeigen
+    if (matrix?.users.some(mu => mu.id === u.id)) return false
+
+    // Nur member und officer anzeigen
+    // Admin nur wenn es der aktuelle User ist
+    const isViper = u.role === 'member' || u.role === 'officer'
+    const isCurrentUserAdmin = u.id === currentUser?.id && currentUser?.role === 'admin'
+    if (!isViper && !isCurrentUserAdmin) return false
+
+    // Suche
+    const searchLower = userSearch.toLowerCase()
+    return (
+      u.display_name?.toLowerCase().includes(searchLower) ||
+      u.username.toLowerCase().includes(searchLower)
+    )
+  }) ?? []
 
   // Zelle toggle
   const getCellKey = (userId: number, roleId: number) => `${userId}-${roleId}`
