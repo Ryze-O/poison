@@ -263,6 +263,7 @@ class AssignmentCell(BaseModel):
 class AssignmentMatrixUser(BaseModel):
     """User in der Matrix."""
     id: int
+    membership_id: int  # ID der Mitgliedschaft für Status-Updates
     username: str
     display_name: Optional[str]
     avatar: Optional[str]

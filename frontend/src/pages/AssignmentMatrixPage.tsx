@@ -9,6 +9,7 @@ import type {
   CommandGroup,
   AssignmentEntry,
   User,
+  MemberStatus,
 } from '../api/types'
 
 type CellState = {
@@ -75,6 +76,16 @@ export default function AssignmentMatrixPage() {
       queryClient.invalidateQueries({ queryKey: ['staffel', 'overview'] })
       setShowAddUserModal(false)
       setUserSearch('')
+    },
+  })
+
+  // Mitgliedsstatus ändern
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ membershipId, status }: { membershipId: number; status: MemberStatus }) =>
+      apiClient.patch(`/api/staffel/members/${membershipId}`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staffel', 'matrix', selectedGroupId] })
+      queryClient.invalidateQueries({ queryKey: ['staffel', 'overview'] })
     },
   })
 
@@ -247,25 +258,26 @@ export default function AssignmentMatrixPage() {
           <span>Nicht zugewiesen</span>
         </div>
         <span className="text-gray-600">|</span>
-        {/* Mitglieder-Status */}
+        {/* Mitglieder-Status (Dropdown) */}
+        <span className="text-gray-500">Status per Dropdown ändern:</span>
         <div className="flex items-center gap-1.5">
-          <span className="px-1.5 py-0.5 text-xs bg-krt-orange/20 text-krt-orange rounded">R</span>
-          <span>Rekrut</span>
+          <span className="px-1.5 py-0.5 text-[10px] bg-green-900/30 border border-green-700/50 text-green-400 rounded">Aktiv</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="px-1.5 py-0.5 text-[10px] bg-krt-orange/20 border border-krt-orange/50 text-krt-orange rounded">Rekrut</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="px-1.5 py-0.5 text-[10px] bg-gray-700/50 border border-gray-600 text-gray-400 rounded">Abwesend</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="px-1.5 py-0.5 text-[10px] bg-red-900/30 border border-red-700/50 text-red-400 rounded">Inaktiv</span>
         </div>
         <div className="flex items-center gap-1.5">
           <AlertCircle size={14} className="text-red-400" />
-          <span>Keine Rolle</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Clock size={14} className="text-gray-500" />
-          <span>Abwesend</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <UserX size={14} className="text-red-500" />
-          <span>Inaktiv</span>
+          <span>= Keine Rolle</span>
         </div>
         <span className="text-gray-600">|</span>
-        <span className="text-gray-500">Klick = Toggle | Shift+Klick = In Ausbildung</span>
+        <span className="text-gray-500">Rollen: Klick = Toggle | Shift+Klick = Ausbildung</span>
       </div>
 
       {/* Matrix */}
@@ -343,28 +355,33 @@ export default function AssignmentMatrixPage() {
                           <span className="text-sm">
                             {user.display_name || user.username}
                           </span>
-                          {/* Status Badges */}
-                          {(isRecruit || hasTrainingRole) && (
-                            <span
-                              className="px-1.5 py-0.5 text-[10px] font-medium bg-krt-orange/20 text-krt-orange rounded"
-                              title="Rekrut (unter 4 Wochen dabei)"
-                            >
-                              R
-                            </span>
-                          )}
-                          {hasNoRole && !isAbsent && !isInactive && (
+                          {/* Status Dropdown */}
+                          <select
+                            value={user.status || 'ACTIVE'}
+                            onChange={(e) => updateStatusMutation.mutate({
+                              membershipId: user.membership_id,
+                              status: e.target.value as MemberStatus
+                            })}
+                            className={`text-[10px] px-1.5 py-0.5 rounded border cursor-pointer ${
+                              user.status === 'RECRUIT' || hasTrainingRole
+                                ? 'bg-krt-orange/20 border-krt-orange/50 text-krt-orange'
+                                : user.status === 'ABSENT'
+                                  ? 'bg-gray-700/50 border-gray-600 text-gray-400'
+                                  : user.status === 'INACTIVE'
+                                    ? 'bg-red-900/30 border-red-700/50 text-red-400'
+                                    : 'bg-green-900/30 border-green-700/50 text-green-400'
+                            }`}
+                            title="Status ändern"
+                          >
+                            <option value="ACTIVE">Aktiv</option>
+                            <option value="RECRUIT">Rekrut</option>
+                            <option value="ABSENT">Abwesend</option>
+                            <option value="INACTIVE">Inaktiv</option>
+                          </select>
+                          {/* Warnung: Keine Rolle */}
+                          {hasNoRole && !isAbsent && !isInactive && !isRecruit && (
                             <span title="Keine aktive Einsatzrolle">
                               <AlertCircle size={14} className="text-red-400" />
-                            </span>
-                          )}
-                          {isAbsent && (
-                            <span title="Abwesend (über 4 Wochen)">
-                              <Clock size={14} className="text-gray-500" />
-                            </span>
-                          )}
-                          {isInactive && (
-                            <span title="Inaktiv">
-                              <UserX size={14} className="text-red-500" />
                             </span>
                           )}
                         </div>

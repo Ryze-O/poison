@@ -514,6 +514,7 @@ export interface AssignmentCell {
 
 export interface AssignmentMatrixUser {
   id: number
+  membership_id: number
   username: string
   display_name: string | null
   avatar: string | null

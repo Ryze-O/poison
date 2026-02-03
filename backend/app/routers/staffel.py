@@ -811,6 +811,7 @@ async def get_assignment_matrix(
     for m in memberships:
         users.append({
             "id": m.user.id,
+            "membership_id": m.id,  # Für Status-Updates
             "username": m.user.username,
             "display_name": m.user.display_name,
             "avatar": m.user.avatar,
