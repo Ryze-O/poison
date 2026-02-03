@@ -2,11 +2,12 @@ import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
-import { ArrowLeft, Check, GraduationCap, Save } from 'lucide-react'
+import { ArrowLeft, Check, GraduationCap, Save, UserPlus, X } from 'lucide-react'
 import type {
   AssignmentMatrixResponse,
   CommandGroup,
   AssignmentEntry,
+  User,
 } from '../api/types'
 
 type CellState = {
@@ -28,6 +29,10 @@ export default function AssignmentMatrixPage() {
   const [changes, setChanges] = useState<Map<string, CellState>>(new Map())
   const hasChanges = changes.size > 0
 
+  // Modal für User hinzufügen
+  const [showAddUserModal, setShowAddUserModal] = useState(false)
+  const [userSearch, setUserSearch] = useState('')
+
   // Alle KGs laden
   const { data: groups, isLoading: groupsLoading } = useQuery<CommandGroup[]>({
     queryKey: ['staffel', 'command-groups'],
@@ -41,6 +46,13 @@ export default function AssignmentMatrixPage() {
     enabled: !!selectedGroupId,
   })
 
+  // Alle User laden (für Add-Modal)
+  const { data: allUsers } = useQuery<User[]>({
+    queryKey: ['users'],
+    queryFn: () => apiClient.get('/api/users').then(r => r.data),
+    enabled: showAddUserModal,
+  })
+
   // Bulk-Update Mutation
   const bulkUpdateMutation = useMutation({
     mutationFn: (assignments: AssignmentEntry[]) =>
@@ -51,6 +63,26 @@ export default function AssignmentMatrixPage() {
       setChanges(new Map())
     },
   })
+
+  // User zur KG hinzufügen
+  const addUserMutation = useMutation({
+    mutationFn: (userId: number) =>
+      apiClient.post(`/api/staffel/command-groups/${selectedGroupId}/members`, { user_id: userId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staffel', 'matrix', selectedGroupId] })
+      queryClient.invalidateQueries({ queryKey: ['staffel', 'overview'] })
+      setShowAddUserModal(false)
+      setUserSearch('')
+    },
+  })
+
+  // User die noch nicht in dieser KG sind
+  const availableUsers = allUsers?.filter(u =>
+    !matrix?.users.some(mu => mu.id === u.id) &&
+    u.role !== 'guest' &&
+    (u.display_name?.toLowerCase().includes(userSearch.toLowerCase()) ||
+     u.username.toLowerCase().includes(userSearch.toLowerCase()))
+  ) ?? []
 
   // Zelle toggle
   const getCellKey = (userId: number, roleId: number) => `${userId}-${roleId}`
@@ -210,9 +242,26 @@ export default function AssignmentMatrixPage() {
         </div>
       ) : matrix ? (
         <div className="card overflow-x-auto">
+          {/* User hinzufügen Button */}
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => setShowAddUserModal(true)}
+              className="btn btn-secondary flex items-center gap-2"
+            >
+              <UserPlus size={18} />
+              Mitglied hinzufügen
+            </button>
+          </div>
+
           {matrix.users.length === 0 ? (
             <div className="text-center text-gray-400 py-8">
               Keine Mitglieder in dieser Kommandogruppe.
+              <button
+                onClick={() => setShowAddUserModal(true)}
+                className="block mx-auto mt-4 btn btn-primary"
+              >
+                Erstes Mitglied hinzufügen
+              </button>
             </div>
           ) : (
             <table className="w-full border-collapse">
@@ -284,6 +333,74 @@ export default function AssignmentMatrixPage() {
           )}
         </div>
       ) : null}
+
+      {/* Add User Modal */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-md w-full shadow-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <h2 className="text-xl font-bold">Mitglied zur KG hinzufügen</h2>
+              <button
+                onClick={() => {
+                  setShowAddUserModal(false)
+                  setUserSearch('')
+                }}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-4 border-b border-gray-700">
+              <input
+                type="text"
+                placeholder="User suchen..."
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-krt-orange"
+                autoFocus
+              />
+            </div>
+            <div className="p-4 overflow-y-auto flex-1">
+              {availableUsers.length === 0 ? (
+                <div className="text-center text-gray-500 py-4">
+                  {userSearch ? 'Kein User gefunden' : 'Alle User sind bereits Mitglied'}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {availableUsers.slice(0, 20).map(user => (
+                    <button
+                      key={user.id}
+                      onClick={() => addUserMutation.mutate(user.id)}
+                      disabled={addUserMutation.isPending}
+                      className="w-full flex items-center gap-3 p-3 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors text-left"
+                    >
+                      {user.avatar ? (
+                        <img src={user.avatar} alt="" className="w-8 h-8 rounded-full" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm text-gray-400">
+                          {(user.display_name || user.username).charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <div className="font-medium">{user.display_name || user.username}</div>
+                        {user.display_name && (
+                          <div className="text-xs text-gray-500">{user.username}</div>
+                        )}
+                      </div>
+                      <UserPlus size={18} className="text-gray-500" />
+                    </button>
+                  ))}
+                  {availableUsers.length > 20 && (
+                    <div className="text-center text-sm text-gray-500 pt-2">
+                      + {availableUsers.length - 20} weitere (Suche eingrenzen)
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

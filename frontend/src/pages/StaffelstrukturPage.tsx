@@ -26,6 +26,8 @@ export default function StaffelstrukturPage() {
   const queryClient = useQueryClient()
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isMuted, setIsMuted] = useState(false)
+  const [volume, setVolume] = useState(0.3)
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false)
   const [expandedKG, setExpandedKG] = useState<number | null>(null)
 
   // Self-Service Modal
@@ -49,7 +51,7 @@ export default function StaffelstrukturPage() {
   // Audio Setup - startet automatisch
   useEffect(() => {
     if (audioRef.current) {
-      audioRef.current.volume = 0.3
+      audioRef.current.volume = volume
       audioRef.current.loop = true
       // Autoplay versuchen (Browser kann blockieren)
       audioRef.current.play().catch(() => {
@@ -58,6 +60,14 @@ export default function StaffelstrukturPage() {
       })
     }
   }, [])
+
+  // Volume ändern
+  const handleVolumeChange = (newVolume: number) => {
+    setVolume(newVolume)
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume
+    }
+  }
 
   const toggleMusic = () => {
     if (audioRef.current) {
@@ -105,18 +115,42 @@ export default function StaffelstrukturPage() {
           <p className="text-gray-400 mt-1">Organisation der Staffel Viper</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Musik Toggle */}
-          <button
-            onClick={toggleMusic}
-            className="p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
-            title={isMuted ? 'Musik einschalten' : 'Musik ausschalten'}
+          {/* Musik Toggle mit Volume Slider */}
+          <div
+            className="relative"
+            onMouseEnter={() => setShowVolumeSlider(true)}
+            onMouseLeave={() => setShowVolumeSlider(false)}
           >
-            {isMuted ? (
-              <VolumeX size={20} className="text-gray-400" />
-            ) : (
-              <Volume2 size={20} className="text-krt-orange" />
+            <button
+              onClick={toggleMusic}
+              className="p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
+              title={isMuted ? 'Musik einschalten' : 'Musik ausschalten'}
+            >
+              {isMuted ? (
+                <VolumeX size={20} className="text-gray-400" />
+              ) : (
+                <Volume2 size={20} className="text-krt-orange" />
+              )}
+            </button>
+
+            {/* Volume Slider Popup */}
+            {showVolumeSlider && !isMuted && (
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 p-3 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50">
+                <div className="flex flex-col items-center gap-2">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={volume}
+                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                    className="w-24 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-krt-orange"
+                  />
+                  <span className="text-xs text-gray-400">{Math.round(volume * 100)}%</span>
+                </div>
+              </div>
             )}
-          </button>
+          </div>
 
           {/* Self-Service Button */}
           {myKGs?.can_self_assign && (
@@ -295,6 +329,17 @@ function KommandogruppeCard({
   const recruits = group.members.filter(m => m.status === 'RECRUIT')
   const inactive = group.members.filter(m => m.status === 'INACTIVE' || m.status === 'ABSENT')
 
+  // KG-Leitung aus Einsatzrollen finden (Rollen mit "Leiter", "Kommandant" oder "Stellvertreter" im Namen)
+  const leadershipRoles = group.operational_roles.filter(role =>
+    role.name.toLowerCase().includes('leiter') ||
+    role.name.toLowerCase().includes('kommandant') ||
+    role.name.toLowerCase().includes('stellvertreter') ||
+    role.name.toLowerCase().includes('co-leiter')
+  )
+  const kgLeaders = leadershipRoles.flatMap(role =>
+    role.users.map(u => ({ ...u, roleName: role.name }))
+  )
+
   return (
     <div className="rounded-xl overflow-hidden bg-gradient-to-b from-gray-800/50 to-gray-900/50 border border-gray-700/50">
       {/* Header mit GIF */}
@@ -349,6 +394,31 @@ function KommandogruppeCard({
                 {ship.ship_name}
               </span>
             ))}
+          </div>
+        )}
+
+        {/* KG-Leitung */}
+        {kgLeaders.length > 0 && (
+          <div className="flex items-center gap-3 bg-gradient-to-r from-krt-orange/10 to-transparent border border-krt-orange/20 rounded-lg px-4 py-3">
+            <Crown size={18} className="text-krt-orange flex-shrink-0" />
+            <span className="text-sm text-gray-400">Leitung:</span>
+            <div className="flex flex-wrap gap-2">
+              {kgLeaders.map(leader => (
+                <div key={`${leader.id}-${leader.roleName}`} className="flex items-center gap-2 bg-gray-800/60 px-2.5 py-1 rounded-lg">
+                  {leader.user.avatar ? (
+                    <img src={leader.user.avatar} alt="" className="w-5 h-5 rounded-full" />
+                  ) : (
+                    <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-xs text-gray-400">
+                      {(leader.user.display_name || leader.user.username).charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="text-sm font-medium text-white">
+                    {leader.user.display_name || leader.user.username}
+                  </span>
+                  <span className="text-xs text-gray-500">({leader.roleName})</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -441,7 +511,7 @@ function KommandogruppeCard({
                       {/* Zugewiesene User kompakt */}
                       {role.users.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
-                          {role.users.slice(0, 5).map(u => (
+                          {role.users.map(u => (
                             <span
                               key={u.id}
                               className={`text-xs px-1.5 py-0.5 rounded ${
@@ -453,9 +523,6 @@ function KommandogruppeCard({
                               {u.user.display_name || u.user.username}
                             </span>
                           ))}
-                          {role.users.length > 5 && (
-                            <span className="text-xs text-gray-500">+{role.users.length - 5}</span>
-                          )}
                         </div>
                       )}
                     </div>
