@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from 'react-router-dom'
+import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { useQuery } from '@tanstack/react-query'
@@ -27,7 +27,7 @@ import {
   ChevronRight,
   Shield,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import clsx from 'clsx'
 
 // Haupt-Navigation (für alle sichtbar)
@@ -56,8 +56,29 @@ const adminNavItems = [
 export default function Layout() {
   const { user, logout, previewRole, setPreviewRole, canUsePreviewMode } = useAuthStore()
   const { theme, toggleTheme } = useTheme()
+  const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarHover, setSidebarHover] = useState(false)
   const [databaseExpanded, setDatabaseExpanded] = useState(false)
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Staffelstruktur-Seite: Sidebar standardmäßig ausblenden
+  const isStrukturPage = location.pathname === '/struktur'
+  const shouldHideSidebar = isStrukturPage && !sidebarHover
+
+  const handleHoverZoneEnter = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+      hoverTimeoutRef.current = null
+    }
+    setSidebarHover(true)
+  }
+
+  const handleHoverZoneLeave = () => {
+    hoverTimeoutRef.current = setTimeout(() => {
+      setSidebarHover(false)
+    }, 300)
+  }
 
   const isInPreviewMode = previewRole !== null
   const effectiveRole = previewRole || user?.role
@@ -89,11 +110,23 @@ export default function Layout() {
         {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
 
+      {/* Hover Zone für Staffelstruktur-Seite (links am Rand) */}
+      {isStrukturPage && !sidebarHover && (
+        <div
+          className="fixed inset-y-0 left-0 w-4 z-50 hidden lg:block"
+          onMouseEnter={handleHoverZoneEnter}
+        />
+      )}
+
       {/* Sidebar */}
       <aside
+        onMouseEnter={isStrukturPage ? handleHoverZoneEnter : undefined}
+        onMouseLeave={isStrukturPage ? handleHoverZoneLeave : undefined}
         className={clsx(
           'fixed inset-y-0 left-0 z-40 w-64 bg-sidebar border-r border-default transform transition-transform duration-200 shadow-lg',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          // Desktop: Nur verstecken wenn Struktur-Seite und nicht gehovert
+          !sidebarOpen && !shouldHideSidebar && 'lg:translate-x-0'
         )}
       >
         <div className="flex flex-col h-full">
@@ -286,10 +319,17 @@ export default function Layout() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 p-6 lg:p-8 lg:ml-64 overflow-auto relative">
+      <main className={clsx(
+        'flex-1 p-6 lg:p-8 overflow-auto relative transition-[margin] duration-200',
+        // Margin für Sidebar, außer auf Staffelstruktur-Seite (wenn Sidebar versteckt)
+        shouldHideSidebar ? 'lg:ml-0' : 'lg:ml-64'
+      )}>
         {/* Vorschaumodus Banner */}
         {isInPreviewMode && (
-          <div className="fixed top-0 left-0 right-0 lg:left-64 z-50 bg-gray-800 border-b border-dashed border-gray-600 text-gray-300 py-2 px-4 flex items-center justify-center gap-4">
+          <div className={clsx(
+            'fixed top-0 left-0 right-0 z-50 bg-gray-800 border-b border-dashed border-gray-600 text-gray-300 py-2 px-4 flex items-center justify-center gap-4 transition-[left] duration-200',
+            shouldHideSidebar ? 'lg:left-0' : 'lg:left-64'
+          )}>
             <Eye size={18} />
             <span className="text-sm font-medium">Vorschaumodus aktiv - Du siehst die Seite als Viper (Mitglied)</span>
             <button

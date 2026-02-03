@@ -210,17 +210,23 @@ export default function StaffelstrukturPage() {
         </div>
       )}
 
-      {/* Kommandogruppen */}
-      <div className="space-y-6">
-        {overview.command_groups.map(group => (
-          <KommandogruppeCard
-            key={group.id}
-            group={group}
-            canManage={canManage}
-            isExpanded={expandedKG === group.id}
-            onToggleExpand={() => setExpandedKG(expandedKG === group.id ? null : group.id)}
-          />
-        ))}
+      {/* Kommandogruppen - nebeneinander: CW links, SW mitte, P rechts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Sortieren: CW=1, SW=2, P=3 */}
+        {[...overview.command_groups]
+          .sort((a, b) => {
+            const order: Record<string, number> = { CW: 1, SW: 2, P: 3 }
+            return (order[a.name] || 99) - (order[b.name] || 99)
+          })
+          .map(group => (
+            <KommandogruppeCard
+              key={group.id}
+              group={group}
+              canManage={canManage}
+              isExpanded={expandedKG === group.id}
+              onToggleExpand={() => setExpandedKG(expandedKG === group.id ? null : group.id)}
+            />
+          ))}
       </div>
 
       {/* Funktionsrollen */}
@@ -342,21 +348,18 @@ function KommandogruppeCard({
   const recruits = group.members.filter(m => m.status === 'RECRUIT')
   const inactive = group.members.filter(m => m.status === 'INACTIVE' || m.status === 'ABSENT')
 
-  // KG-Leitung aus Einsatzrollen finden (Rollen mit "Leiter", "Kommandant" oder "Stellvertreter" im Namen)
+  // KG-Leitung aus Einsatzrollen finden (nur exakt "KG-Leiter" und "Stellv. KG-Leiter")
   const leadershipRoles = group.operational_roles.filter(role =>
-    role.name.toLowerCase().includes('leiter') ||
-    role.name.toLowerCase().includes('kommandant') ||
-    role.name.toLowerCase().includes('stellvertreter') ||
-    role.name.toLowerCase().includes('co-leiter')
+    role.name === 'KG-Leiter' || role.name === 'Stellv. KG-Leiter'
   )
   const kgLeaders = leadershipRoles.flatMap(role =>
     role.users.map(u => ({ ...u, roleName: role.name }))
   )
 
   return (
-    <div className="rounded-xl overflow-hidden bg-gradient-to-b from-gray-800/50 to-gray-900/50 border border-gray-700/50">
-      {/* Header mit GIF */}
-      <div className="relative h-40 bg-gradient-to-r from-gray-900 to-gray-800 overflow-hidden">
+    <div className="rounded-xl overflow-hidden bg-gradient-to-b from-gray-800/50 to-gray-900/50 border border-gray-700/50 h-full flex flex-col">
+      {/* Header mit GIF - kompakter für 3-Spalten */}
+      <div className="relative h-32 bg-gradient-to-r from-gray-900 to-gray-800 overflow-hidden flex-shrink-0">
         {/* GIF Background - Pfad: frontend/public/assets/kg/cw.gif, sw.gif, p.gif */}
         <div
           className="absolute inset-0 bg-cover bg-center opacity-50"
@@ -365,44 +368,44 @@ function KommandogruppeCard({
         <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/50 to-transparent" />
 
         {/* KG Info Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-5 flex items-end justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-krt-orange/20 border border-krt-orange/50 flex items-center justify-center backdrop-blur-sm">
-              <Icon size={32} className="text-krt-orange" />
+        <div className="absolute bottom-0 left-0 right-0 p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-krt-orange/20 border border-krt-orange/50 flex items-center justify-center backdrop-blur-sm">
+              <Icon size={26} className="text-krt-orange" />
             </div>
-            <div>
-              <h3 className="text-3xl font-bold tracking-wide">{group.name}</h3>
-              <p className="text-sm text-gray-300">{group.full_name}</p>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-2xl font-bold tracking-wide">{group.name}</h3>
+              <p className="text-xs text-gray-300 truncate">{group.full_name}</p>
             </div>
           </div>
-
-          {/* Matrix Button für Manager */}
-          {canManage && (
-            <Link
-              to={`/struktur/matrix?kg=${group.id}`}
-              className="flex items-center gap-2 px-4 py-2.5 bg-krt-orange hover:bg-krt-orange/80 rounded-lg transition-colors shadow-lg"
-            >
-              <Grid3X3 size={18} />
-              <span className="font-medium">Rollen-Matrix</span>
-            </Link>
-          )}
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-5 space-y-5">
-        {/* Beschreibung */}
-        {group.description && (
-          <p className="text-sm text-gray-400 leading-relaxed">{group.description}</p>
+      <div className="p-4 space-y-4 flex-1 flex flex-col">
+        {/* Matrix Button für Manager */}
+        {canManage && (
+          <Link
+            to={`/struktur/matrix?kg=${group.id}`}
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-krt-orange/20 hover:bg-krt-orange/30 border border-krt-orange/50 rounded-lg transition-colors text-sm text-krt-orange"
+          >
+            <Grid3X3 size={16} />
+            <span className="font-medium">Rollen-Matrix</span>
+          </Link>
         )}
 
-        {/* Schiffe */}
+        {/* Beschreibung */}
+        {group.description && (
+          <p className="text-xs text-gray-400 leading-relaxed line-clamp-3">{group.description}</p>
+        )}
+
+        {/* Schiffe - kompakter */}
         {group.ships.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {group.ships.map(ship => (
               <span
                 key={ship.id}
-                className="px-3 py-1.5 bg-gray-800/70 rounded-lg text-sm text-gray-300 border border-gray-700/50"
+                className="px-2 py-1 bg-gray-800/70 rounded text-xs text-gray-300 border border-gray-700/50"
               >
                 {ship.ship_name}
               </span>
@@ -410,76 +413,78 @@ function KommandogruppeCard({
           </div>
         )}
 
-        {/* KG-Leitung */}
+        {/* KG-Leitung - kompakt */}
         {kgLeaders.length > 0 && (
-          <div className="flex items-center gap-3 bg-gradient-to-r from-krt-orange/10 to-transparent border border-krt-orange/20 rounded-lg px-4 py-3">
-            <Crown size={18} className="text-krt-orange flex-shrink-0" />
-            <span className="text-sm text-gray-400">Leitung:</span>
-            <div className="flex flex-wrap gap-2">
+          <div className="bg-gradient-to-r from-krt-orange/10 to-transparent border border-krt-orange/20 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Crown size={14} className="text-krt-orange" />
+              <span className="text-xs text-gray-400 font-medium">Leitung</span>
+            </div>
+            <div className="space-y-1.5">
               {kgLeaders.map(leader => (
-                <div key={`${leader.id}-${leader.roleName}`} className="flex items-center gap-2 bg-gray-800/60 px-2.5 py-1 rounded-lg">
+                <div key={`${leader.id}-${leader.roleName}`} className="flex items-center gap-2">
                   {leader.user.avatar ? (
                     <img src={leader.user.avatar} alt="" className="w-5 h-5 rounded-full" />
                   ) : (
-                    <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-xs text-gray-400">
+                    <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-[10px] text-gray-400">
                       {(leader.user.display_name || leader.user.username).charAt(0).toUpperCase()}
                     </div>
                   )}
-                  <span className="text-sm font-medium text-white">
+                  <span className="text-sm font-medium text-white flex-1 truncate">
                     {leader.user.display_name || leader.user.username}
                   </span>
-                  <span className="text-xs text-gray-500">({leader.roleName})</span>
+                  <span className="text-[10px] text-gray-500">{leader.roleName.replace('Stellv. ', 'Stv. ')}</span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-gray-800/40 rounded-xl p-4 text-center border border-gray-700/30">
-            <div className="text-3xl font-bold text-white">{activeMembers.length}</div>
-            <div className="text-xs text-gray-500 mt-1">Aktive Mitglieder</div>
+        {/* Quick Stats - kompakter für 3-Spalten-Layout */}
+        <div className="flex justify-between gap-2">
+          <div className="flex-1 bg-gray-800/40 rounded-lg p-3 text-center border border-gray-700/30">
+            <div className="text-2xl font-bold text-white">{activeMembers.length}</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">Aktiv</div>
           </div>
-          <div className="bg-gray-800/40 rounded-xl p-4 text-center border border-gray-700/30">
-            <div className="text-3xl font-bold text-krt-orange">{recruits.length}</div>
-            <div className="text-xs text-gray-500 mt-1">Rekruten</div>
+          <div className="flex-1 bg-gray-800/40 rounded-lg p-3 text-center border border-gray-700/30">
+            <div className="text-2xl font-bold text-krt-orange">{recruits.length}</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">Rekruten</div>
           </div>
-          <div className="bg-gray-800/40 rounded-xl p-4 text-center border border-gray-700/30">
-            <div className="text-3xl font-bold text-white">{group.operational_roles.length}</div>
-            <div className="text-xs text-gray-500 mt-1">Einsatzrollen</div>
+          <div className="flex-1 bg-gray-800/40 rounded-lg p-3 text-center border border-gray-700/30">
+            <div className="text-2xl font-bold text-white">{group.operational_roles.length}</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">Rollen</div>
           </div>
         </div>
 
         {/* Expand/Collapse Button */}
         <button
           onClick={onToggleExpand}
-          className="w-full flex items-center justify-center gap-2 py-3 text-sm text-gray-400 hover:text-white transition-colors border-t border-gray-700/50 -mx-5 px-5 mt-5"
-          style={{ width: 'calc(100% + 2.5rem)' }}
+          className="w-full flex items-center justify-center gap-2 py-2.5 text-xs text-gray-400 hover:text-white transition-colors border-t border-gray-700/50 -mx-4 px-4 mt-auto"
+          style={{ width: 'calc(100% + 2rem)' }}
         >
           {isExpanded ? (
             <>
-              <ChevronUp size={18} />
-              Details ausblenden
+              <ChevronUp size={16} />
+              Ausblenden
             </>
           ) : (
             <>
-              <ChevronDown size={18} />
-              Mitglieder & Einsatzrollen anzeigen
+              <ChevronDown size={16} />
+              Details anzeigen
             </>
           )}
         </button>
 
         {/* Expanded Content */}
         {isExpanded && (
-          <div className="space-y-6 pt-2">
+          <div className="space-y-4 pt-2">
             {/* Mitglieder */}
             <div>
-              <h4 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-                <Users size={16} className="text-krt-orange" />
+              <h4 className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-2">
+                <Users size={14} className="text-krt-orange" />
                 Mitglieder ({group.members.length})
               </h4>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {activeMembers.map(m => (
                   <MemberBadge key={m.id} member={m} />
                 ))}
@@ -488,7 +493,7 @@ function KommandogruppeCard({
                 ))}
               </div>
               {inactive.length > 0 && (
-                <div className="mt-3 text-xs text-gray-500">
+                <div className="mt-2 text-[10px] text-gray-500">
                   + {inactive.length} inaktiv/abwesend
                 </div>
               )}
@@ -496,38 +501,35 @@ function KommandogruppeCard({
 
             {/* Einsatzrollen Übersicht */}
             <div>
-              <h4 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-                <Shield size={16} className="text-krt-orange" />
+              <h4 className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-2">
+                <Shield size={14} className="text-krt-orange" />
                 Einsatzrollen
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
                 {group.operational_roles.map(role => {
                   const assignedCount = role.users.length
                   const trainingCount = role.users.filter(u => u.is_training).length
                   return (
                     <div
                       key={role.id}
-                      className="bg-gray-800/40 rounded-lg p-4 border border-gray-700/30"
+                      className="bg-gray-800/40 rounded-lg p-3 border border-gray-700/30"
                     >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="font-medium text-white">{role.name}</div>
-                        <div className="flex items-center gap-1 bg-gray-700/50 px-2 py-0.5 rounded text-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-sm font-medium text-white truncate">{role.name}</div>
+                        <div className="flex items-center gap-1 bg-gray-700/50 px-1.5 py-0.5 rounded text-xs flex-shrink-0">
                           <span className="font-bold text-krt-orange">{assignedCount}</span>
                           {trainingCount > 0 && (
                             <span className="text-yellow-500">({trainingCount}A)</span>
                           )}
                         </div>
                       </div>
-                      {role.description && (
-                        <div className="text-xs text-gray-500">{role.description}</div>
-                      )}
                       {/* Zugewiesene User kompakt */}
                       {role.users.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-1">
                           {role.users.map(u => (
                             <span
                               key={u.id}
-                              className={`text-xs px-1.5 py-0.5 rounded ${
+                              className={`text-[10px] px-1.5 py-0.5 rounded ${
                                 u.is_training
                                   ? 'bg-yellow-900/30 text-yellow-400'
                                   : 'bg-gray-700/50 text-gray-400'
@@ -561,14 +563,14 @@ function MemberBadge({
 }) {
   return (
     <div
-      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors ${
+      className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
         isRecruit
           ? 'bg-krt-orange/15 border border-krt-orange/40 text-krt-orange'
           : 'bg-gray-800/60 text-gray-300 hover:bg-gray-700/60'
       }`}
     >
       {member.user.avatar && (
-        <img src={member.user.avatar} alt="" className="w-5 h-5 rounded-full" />
+        <img src={member.user.avatar} alt="" className="w-4 h-4 rounded-full" />
       )}
       <span>{member.user.display_name || member.user.username}</span>
     </div>
