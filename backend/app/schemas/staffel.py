@@ -266,6 +266,8 @@ class AssignmentMatrixUser(BaseModel):
     username: str
     display_name: Optional[str]
     avatar: Optional[str]
+    status: Optional[str] = None  # ACTIVE, RECRUIT, INACTIVE, ABSENT
+    has_role: bool = False  # Hat mindestens eine Einsatzrolle
 
 
 class AssignmentMatrixRole(BaseModel):

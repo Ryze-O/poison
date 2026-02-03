@@ -517,6 +517,8 @@ export interface AssignmentMatrixUser {
   username: string
   display_name: string | null
   avatar: string | null
+  status: MemberStatus | null
+  has_role: boolean
 }
 
 export interface AssignmentMatrixRole {

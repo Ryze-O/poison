@@ -788,30 +788,35 @@ async def get_assignment_matrix(
         UserCommandGroup.command_group_id == group_id
     ).all()
 
-    users = []
-    for m in memberships:
-        users.append({
-            "id": m.user.id,
-            "username": m.user.username,
-            "display_name": m.user.display_name,
-            "avatar": m.user.avatar
-        })
-
     # Alle Einsatzrollen der KG
     roles = db.query(OperationalRole).filter(
         OperationalRole.command_group_id == group_id
     ).order_by(OperationalRole.sort_order).all()
 
     role_list = [{"id": r.id, "name": r.name, "description": r.description} for r in roles]
-
-    # Alle Zuweisungen für diese KG laden
     role_ids = [r.id for r in roles]
-    user_ids = [u["id"] for u in users]
+
+    # Alle Zuweisungen für diese KG laden (vorab, um has_role zu berechnen)
+    user_ids = [m.user.id for m in memberships]
 
     assignments_query = db.query(UserOperationalRole).filter(
         UserOperationalRole.operational_role_id.in_(role_ids),
         UserOperationalRole.user_id.in_(user_ids)
-    ).all()
+    ).all() if user_ids else []
+
+    # Set von User-IDs die mindestens eine Rolle haben
+    users_with_roles = set(a.user_id for a in assignments_query)
+
+    users = []
+    for m in memberships:
+        users.append({
+            "id": m.user.id,
+            "username": m.user.username,
+            "display_name": m.user.display_name,
+            "avatar": m.user.avatar,
+            "status": m.status.value if m.status else None,
+            "has_role": m.user.id in users_with_roles
+        })
 
     assignments = []
     for a in assignments_query:

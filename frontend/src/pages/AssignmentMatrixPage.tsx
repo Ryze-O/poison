@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
-import { ArrowLeft, Check, GraduationCap, Save, UserPlus, X } from 'lucide-react'
+import { ArrowLeft, Check, GraduationCap, Save, UserPlus, X, AlertCircle, Clock, UserX } from 'lucide-react'
 import type {
   AssignmentMatrixResponse,
   CommandGroup,
@@ -214,7 +214,8 @@ export default function AssignmentMatrixPage() {
       )}
 
       {/* Legende */}
-      <div className="flex items-center gap-6 text-sm text-gray-400">
+      <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
+        {/* Rollen-Status */}
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 bg-green-600/30 border border-green-500 rounded flex items-center justify-center">
             <Check size={14} className="text-green-400" />
@@ -231,8 +232,26 @@ export default function AssignmentMatrixPage() {
           <div className="w-6 h-6 bg-gray-700/50 border border-gray-600 rounded" />
           <span>Nicht zugewiesen</span>
         </div>
-        <span className="text-gray-500">|</span>
-        <span>Klick = Toggle | Shift+Klick = In Ausbildung</span>
+        <span className="text-gray-600">|</span>
+        {/* Mitglieder-Status */}
+        <div className="flex items-center gap-1.5">
+          <span className="px-1.5 py-0.5 text-xs bg-krt-orange/20 text-krt-orange rounded">R</span>
+          <span>Rekrut</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <AlertCircle size={14} className="text-red-400" />
+          <span>Keine Rolle</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Clock size={14} className="text-gray-500" />
+          <span>Abwesend</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <UserX size={14} className="text-red-500" />
+          <span>Inaktiv</span>
+        </div>
+        <span className="text-gray-600">|</span>
+        <span className="text-gray-500">Klick = Toggle | Shift+Klick = In Ausbildung</span>
       </div>
 
       {/* Matrix */}
@@ -284,18 +303,58 @@ export default function AssignmentMatrixPage() {
                 </tr>
               </thead>
               <tbody>
-                {matrix.users.map(user => (
-                  <tr key={user.id} className="hover:bg-gray-800/30">
-                    <td className="sticky left-0 bg-krt-dark z-10 p-2 border-b border-gray-700/50">
-                      <div className="flex items-center gap-2">
-                        {user.avatar && (
-                          <img src={user.avatar} alt="" className="w-6 h-6 rounded-full" />
-                        )}
-                        <span className="text-sm">
-                          {user.display_name || user.username}
-                        </span>
-                      </div>
-                    </td>
+                {matrix.users.map(user => {
+                  // Status-Flags berechnen
+                  const isRecruit = user.status === 'RECRUIT'
+                  const isAbsent = user.status === 'ABSENT'
+                  const isInactive = user.status === 'INACTIVE'
+                  const hasNoRole = !user.has_role && !isRecruit // Rekruten ohne Rolle ist OK
+
+                  // Prüfen ob User "In Ausbildung" ist (mindestens eine Rolle mit is_training)
+                  const hasTrainingRole = matrix.assignments.some(
+                    a => a.user_id === user.id && a.is_training
+                  )
+
+                  return (
+                    <tr key={user.id} className={`hover:bg-gray-800/30 ${isAbsent ? 'opacity-50' : ''}`}>
+                      <td className="sticky left-0 bg-krt-dark z-10 p-2 border-b border-gray-700/50">
+                        <div className="flex items-center gap-2">
+                          {user.avatar ? (
+                            <img src={user.avatar} alt="" className="w-6 h-6 rounded-full" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs text-gray-400">
+                              {(user.display_name || user.username).charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="text-sm">
+                            {user.display_name || user.username}
+                          </span>
+                          {/* Status Badges */}
+                          {(isRecruit || hasTrainingRole) && (
+                            <span
+                              className="px-1.5 py-0.5 text-[10px] font-medium bg-krt-orange/20 text-krt-orange rounded"
+                              title="Rekrut (unter 4 Wochen dabei)"
+                            >
+                              R
+                            </span>
+                          )}
+                          {hasNoRole && !isAbsent && !isInactive && (
+                            <span title="Keine aktive Einsatzrolle">
+                              <AlertCircle size={14} className="text-red-400" />
+                            </span>
+                          )}
+                          {isAbsent && (
+                            <span title="Abwesend (über 4 Wochen)">
+                              <Clock size={14} className="text-gray-500" />
+                            </span>
+                          )}
+                          {isInactive && (
+                            <span title="Inaktiv">
+                              <UserX size={14} className="text-red-500" />
+                            </span>
+                          )}
+                        </div>
+                      </td>
                     {matrix.roles.map(role => {
                       const state = getCellState(user.id, role.id)
                       const key = getCellKey(user.id, role.id)
@@ -327,7 +386,8 @@ export default function AssignmentMatrixPage() {
                       )
                     })}
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           )}
