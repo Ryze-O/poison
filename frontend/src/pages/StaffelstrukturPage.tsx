@@ -211,7 +211,7 @@ export default function StaffelstrukturPage() {
       )}
 
       {/* Kommandogruppen - nebeneinander: CW links, SW mitte, P rechts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Sortieren: CW=1, SW=2, P=3 */}
         {[...overview.command_groups]
           .sort((a, b) => {
@@ -343,9 +343,21 @@ function KommandogruppeCard({
 }) {
   const Icon = kgIcons[group.name] || Users
 
+  // User-IDs die "in Ausbildung" sind (mindestens eine Rolle mit is_training)
+  const usersInTraining = new Set(
+    group.operational_roles.flatMap(role =>
+      role.users.filter(u => u.is_training).map(u => u.user.id)
+    )
+  )
+
   // Mitglieder nach Status gruppieren
-  const activeMembers = group.members.filter(m => m.status === 'ACTIVE')
-  const recruits = group.members.filter(m => m.status === 'RECRUIT')
+  // Rekruten = Status RECRUIT ODER mindestens eine Ausbildungsrolle
+  const activeMembers = group.members.filter(m =>
+    m.status === 'ACTIVE' && !usersInTraining.has(m.user.id)
+  )
+  const recruits = group.members.filter(m =>
+    m.status === 'RECRUIT' || usersInTraining.has(m.user.id)
+  )
   const inactive = group.members.filter(m => m.status === 'INACTIVE' || m.status === 'ABSENT')
 
   // KG-Leitung aus Einsatzrollen finden (nur exakt "KG-Leiter" und "Stellv. KG-Leiter")
