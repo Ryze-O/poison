@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import { ArrowLeft, Check, GraduationCap, Save } from 'lucide-react'
 import type {
@@ -16,9 +16,13 @@ type CellState = {
 
 export default function AssignmentMatrixPage() {
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
 
-  // Ausgewählte KG
-  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
+  // Ausgewählte KG - initial aus URL-Parameter
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(() => {
+    const kgParam = searchParams.get('kg')
+    return kgParam ? parseInt(kgParam, 10) : null
+  })
 
   // Änderungen tracken
   const [changes, setChanges] = useState<Map<string, CellState>>(new Map())

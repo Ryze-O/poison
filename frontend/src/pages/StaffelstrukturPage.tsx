@@ -1,31 +1,16 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiClient } from '../api/client'
 import { Link } from 'react-router-dom'
+import { apiClient } from '../api/client'
 import {
-  Users, Shield, Anchor, Rocket, Truck, X, UserPlus,
-  Pencil, Plus, Grid3X3, UserCheck
+  Users, Shield, Anchor, Rocket, Truck, X,
+  Grid3X3, UserCheck, Volume2, VolumeX, ChevronDown, ChevronUp,
+  Crown, Star
 } from 'lucide-react'
 import type {
-  StaffelOverview, User, MemberStatus, UserCommandGroup,
-  FunctionRoleWithUsers, CommandGroupDetail, OperationalRoleWithUsers,
+  StaffelOverview, User, MemberStatus, CommandGroupDetail,
   MyCommandGroupsResponse
 } from '../api/types'
-
-// Status Farben
-const statusColors: Record<MemberStatus, string> = {
-  ACTIVE: 'text-white',
-  RECRUIT: 'text-krt-orange',
-  INACTIVE: 'text-red-400',
-  ABSENT: 'text-gray-500',
-}
-
-const statusLabels: Record<MemberStatus, string> = {
-  ACTIVE: 'Aktiv',
-  RECRUIT: 'Rekrut',
-  INACTIVE: 'Inaktiv',
-  ABSENT: 'Abwesend',
-}
 
 // KG Icons
 const kgIcons: Record<string, typeof Shield> = {
@@ -34,27 +19,14 @@ const kgIcons: Record<string, typeof Shield> = {
   P: Truck,
 }
 
+// Musik-Pfad - WAV-Datei hier ablegen: frontend/public/assets/music/ambient.wav
+const BACKGROUND_MUSIC_PATH = '/assets/music/ambient.wav'
+
 export default function StaffelstrukturPage() {
   const queryClient = useQueryClient()
-
-  // States
-  const [addMemberModal, setAddMemberModal] = useState<{ groupId: number; groupName: string } | null>(null)
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
-  const [selectedStatus, setSelectedStatus] = useState<MemberStatus>('ACTIVE')
-
-  // Modal States
-  const [assignRoleModal, setAssignRoleModal] = useState<{ role: FunctionRoleWithUsers; type: 'leadership' | 'function' } | null>(null)
-  const [assignOpRoleModal, setAssignOpRoleModal] = useState<{ role: OperationalRoleWithUsers; groupId: number } | null>(null)
-  const [editGroupModal, setEditGroupModal] = useState<CommandGroupDetail | null>(null)
-  const [manageShipsModal, setManageShipsModal] = useState<CommandGroupDetail | null>(null)
-  const [editDescription, setEditDescription] = useState('')
-  const [newShipName, setNewShipName] = useState('')
-  const [isTraining, setIsTraining] = useState(false)
-  const [editingShipId, setEditingShipId] = useState<number | null>(null)
-  const [editingShipName, setEditingShipName] = useState('')
-  const [editOpRoleModal, setEditOpRoleModal] = useState<{ id: number; name: string; description: string | null } | null>(null)
-  const [editOpRoleName, setEditOpRoleName] = useState('')
-  const [editOpRoleDescription, setEditOpRoleDescription] = useState('')
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [isMuted, setIsMuted] = useState(true)
+  const [expandedKG, setExpandedKG] = useState<number | null>(null)
 
   // Self-Service Modal
   const [selfServiceModal, setSelfServiceModal] = useState(false)
@@ -74,138 +46,26 @@ export default function StaffelstrukturPage() {
     queryFn: () => apiClient.get('/api/staffel/my-command-groups').then(r => r.data),
   })
 
-  const { data: allUsers } = useQuery<User[]>({
-    queryKey: ['users'],
-    queryFn: () => apiClient.get('/api/users').then(r => r.data),
-    enabled: canManage,
-  })
+  // Audio Setup
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = 0.15
+      audioRef.current.loop = true
+    }
+  }, [])
 
-  // Alphabetisch sortierte User-Liste
-  const sortedUsers = allUsers
-    ?.filter(u => u.role !== 'guest' && u.role !== 'loot_guest')
-    .sort((a, b) => {
-      const nameA = (a.display_name || a.username).toLowerCase()
-      const nameB = (b.display_name || b.username).toLowerCase()
-      return nameA.localeCompare(nameB, 'de')
-    }) ?? []
+  const toggleMusic = () => {
+    if (audioRef.current) {
+      if (isMuted) {
+        audioRef.current.play().catch(() => {})
+      } else {
+        audioRef.current.pause()
+      }
+      setIsMuted(!isMuted)
+    }
+  }
 
-  // Mutations
-  const addMemberMutation = useMutation({
-    mutationFn: (data: { groupId: number; userId: number; status: MemberStatus }) =>
-      apiClient.post(`/api/staffel/command-groups/${data.groupId}/members`, {
-        user_id: data.userId,
-        status: data.status,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staffel'] })
-      setAddMemberModal(null)
-      setSelectedUserId(null)
-    },
-  })
-
-  const updateStatusMutation = useMutation({
-    mutationFn: (data: { membershipId: number; status: MemberStatus }) =>
-      apiClient.patch(`/api/staffel/members/${data.membershipId}`, { status: data.status }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staffel'] }),
-  })
-
-  const removeMemberMutation = useMutation({
-    mutationFn: (membershipId: number) => apiClient.delete(`/api/staffel/members/${membershipId}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staffel'] }),
-  })
-
-  const assignFunctionRoleMutation = useMutation({
-    mutationFn: (data: { userId: number; roleId: number }) =>
-      apiClient.post(`/api/staffel/users/${data.userId}/function-roles`, {
-        user_id: data.userId,
-        function_role_id: data.roleId,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staffel'] })
-      setAssignRoleModal(null)
-      setSelectedUserId(null)
-    },
-  })
-
-  const removeFunctionRoleMutation = useMutation({
-    mutationFn: (assignmentId: number) =>
-      apiClient.delete(`/api/staffel/user-function-roles/${assignmentId}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staffel'] }),
-  })
-
-  const updateGroupMutation = useMutation({
-    mutationFn: (data: { groupId: number; description: string }) =>
-      apiClient.patch(`/api/staffel/command-groups/${data.groupId}`, { description: data.description }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staffel'] })
-      setEditGroupModal(null)
-    },
-  })
-
-  const addShipMutation = useMutation({
-    mutationFn: (data: { groupId: number; shipName: string }) =>
-      apiClient.post(`/api/staffel/command-groups/${data.groupId}/ships`, {
-        ship_name: data.shipName,
-        sort_order: 99,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staffel'] })
-      setNewShipName('')
-    },
-  })
-
-  const removeShipMutation = useMutation({
-    mutationFn: (shipId: number) => apiClient.delete(`/api/staffel/ships/${shipId}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staffel'] }),
-  })
-
-  // Einsatzrollen-Zuweisung
-  const assignOperationalRoleMutation = useMutation({
-    mutationFn: (data: { userId: number; roleId: number; isTraining: boolean }) =>
-      apiClient.post(`/api/staffel/users/${data.userId}/operational-roles`, {
-        user_id: data.userId,
-        operational_role_id: data.roleId,
-        is_training: data.isTraining,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staffel'] })
-      setAssignOpRoleModal(null)
-      setSelectedUserId(null)
-      setIsTraining(false)
-    },
-  })
-
-  const removeOperationalRoleMutation = useMutation({
-    mutationFn: (assignmentId: number) =>
-      apiClient.delete(`/api/staffel/user-operational-roles/${assignmentId}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staffel'] }),
-  })
-
-  // Schiff bearbeiten
-  const updateShipMutation = useMutation({
-    mutationFn: (data: { shipId: number; shipName: string }) =>
-      apiClient.patch(`/api/staffel/ships/${data.shipId}`, { ship_name: data.shipName }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staffel'] })
-      setEditingShipId(null)
-      setEditingShipName('')
-    },
-  })
-
-  // Einsatzrolle bearbeiten
-  const updateOperationalRoleMutation = useMutation({
-    mutationFn: (data: { roleId: number; name: string; description: string | null }) =>
-      apiClient.patch(`/api/staffel/operational-roles/${data.roleId}`, {
-        name: data.name,
-        description: data.description,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staffel'] })
-      setEditOpRoleModal(null)
-    },
-  })
-
-  // Self-Service: KG-Anmeldung
+  // Self-Service Mutation
   const setMyKGsMutation = useMutation({
     mutationFn: (command_group_ids: number[]) =>
       apiClient.post('/api/staffel/my-command-groups', { command_group_ids }),
@@ -229,11 +89,31 @@ export default function StaffelstrukturPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Background Music */}
+      <audio ref={audioRef} src={BACKGROUND_MUSIC_PATH} preload="auto" />
+
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Staffelstruktur</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Staffelstruktur</h1>
+          <p className="text-gray-400 mt-1">Organisation der Staffel Viper</p>
+        </div>
         <div className="flex items-center gap-3">
-          {/* Self-Service Button - nur wenn User noch keine KGs hat */}
+          {/* Musik Toggle */}
+          <button
+            onClick={toggleMusic}
+            className="p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
+            title={isMuted ? 'Musik einschalten' : 'Musik ausschalten'}
+          >
+            {isMuted ? (
+              <VolumeX size={20} className="text-gray-400" />
+            ) : (
+              <Volume2 size={20} className="text-krt-orange" />
+            )}
+          </button>
+
+          {/* Self-Service Button */}
           {myKGs?.can_self_assign && (
             <button
               onClick={() => {
@@ -246,630 +126,88 @@ export default function StaffelstrukturPage() {
               Für KGs anmelden
             </button>
           )}
-          {/* Matrix-Link - nur für Manager */}
-          {canManage && (
-            <Link
-              to="/struktur/matrix"
-              className="btn btn-secondary flex items-center gap-2"
-            >
-              <Grid3X3 size={18} />
-              Einsatzrollen-Matrix
-            </Link>
-          )}
         </div>
       </div>
 
       {/* Staffelleitung */}
       {overview.leadership_roles.length > 0 && (
-        <div className="card">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <Shield className="text-krt-orange" size={20} />
+        <div className="bg-gradient-to-r from-krt-orange/10 to-transparent border border-krt-orange/30 rounded-xl p-6">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Crown className="text-krt-orange" size={24} />
             Staffelleitung
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="flex flex-wrap gap-6">
             {overview.leadership_roles.map(role => (
-              <LeadershipCard
-                key={role.id}
-                role={role}
-                canManage={canManage}
-                onAssign={() => setAssignRoleModal({ role, type: 'leadership' })}
-                onRemove={(assignmentId) => {
-                  if (confirm('User wirklich aus dieser Rolle entfernen?')) {
-                    removeFunctionRoleMutation.mutate(assignmentId)
-                  }
-                }}
-              />
+              <div key={role.id} className="flex items-center gap-3">
+                <div className="text-sm text-gray-400">{role.name}:</div>
+                {role.users.length > 0 ? (
+                  role.users.map(u => (
+                    <div key={u.id} className="flex items-center gap-2 bg-gray-800/50 px-3 py-1.5 rounded-lg">
+                      {u.user.avatar && (
+                        <img src={u.user.avatar} alt="" className="w-6 h-6 rounded-full" />
+                      )}
+                      <span className="font-medium">{u.user.display_name || u.user.username}</span>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-gray-500 italic">Nicht besetzt</span>
+                )}
+              </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Kommandogruppen - 3 Spalten mit gleicher Höhe */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {overview.command_groups.map(group => {
-          const Icon = kgIcons[group.name] || Users
-          const membersByStatus = {
-            RECRUIT: group.members.filter(m => m.status === 'RECRUIT'),
-            ACTIVE: group.members.filter(m => m.status === 'ACTIVE'),
-            INACTIVE: group.members.filter(m => m.status === 'INACTIVE'),
-            ABSENT: group.members.filter(m => m.status === 'ABSENT'),
-          }
-
-          return (
-            <div key={group.id} className="flex flex-col">
-              {/* GIF/Bild Platzhalter */}
-              <div className="h-32 rounded-t-lg overflow-hidden border border-gray-700 border-b-0 flex items-center justify-center bg-gray-900/50">
-                {group.name === 'SW' ? (
-                  <img
-                    src="/assets/kg_sw.gif"
-                    alt={group.full_name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-gray-600 text-sm">Bild: {group.full_name}</span>
-                )}
-              </div>
-
-              {/* Card Content */}
-              <div className="card rounded-t-none flex flex-col flex-grow">
-              {/* Header - gleiche Höhe */}
-              <div className="flex items-start justify-between mb-4 min-h-[60px]">
-                <div className="flex items-center gap-3">
-                  <Icon className="text-krt-orange flex-shrink-0" size={28} />
-                  <div>
-                    <h2 className="text-xl font-bold">{group.name}</h2>
-                    <p className="text-sm text-gray-400">{group.full_name}</p>
-                  </div>
-                </div>
-                {canManage && (
-                  <div className="flex gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => {
-                        setEditDescription(group.description || '')
-                        setEditGroupModal(group)
-                      }}
-                      className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
-                      title="Beschreibung bearbeiten"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      onClick={() => setManageShipsModal(group)}
-                      className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
-                      title="Schiffe verwalten"
-                    >
-                      <Anchor size={14} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Beschreibung - feste Mindesthöhe */}
-              <div className="min-h-[80px] mb-4">
-                {group.description && (
-                  <p className="text-gray-300 text-sm border-l-2 border-krt-orange/50 pl-3 line-clamp-4">
-                    {group.description}
-                  </p>
-                )}
-              </div>
-
-              {/* Schiffe - feste Höhe */}
-              <div className="min-h-[60px] mb-4">
-                <div className="flex flex-wrap gap-1.5">
-                  {group.ships.map(ship => (
-                    <span
-                      key={ship.id}
-                      className="px-2 py-0.5 text-xs bg-gray-700/50 border border-gray-600/30 rounded"
-                    >
-                      {ship.ship_name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Einsatzrollen - mit User-Zuweisungen */}
-              <div className="mb-4">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                  Einsatzrollen
-                </h3>
-                <div className="space-y-2">
-                  {group.operational_roles.map(role => (
-                    <OperationalRoleCard
-                      key={role.id}
-                      role={role}
-                      canManage={canManage}
-                      onAssign={() => setAssignOpRoleModal({ role, groupId: group.id })}
-                      onEdit={() => {
-                        setEditOpRoleName(role.name)
-                        setEditOpRoleDescription(role.description || '')
-                        setEditOpRoleModal({ id: role.id, name: role.name, description: role.description })
-                      }}
-                      onRemove={(assignmentId) => {
-                        if (confirm('User wirklich aus dieser Rolle entfernen?')) {
-                          removeOperationalRoleMutation.mutate(assignmentId)
-                        }
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Mitglieder - flex-grow für Rest */}
-              <div className="flex-grow">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    Mitglieder ({group.members.length})
-                  </h3>
-                  {canManage && (
-                    <button
-                      onClick={() => setAddMemberModal({ groupId: group.id, groupName: group.full_name })}
-                      className="p-1 text-gray-400 hover:text-krt-orange hover:bg-gray-700 rounded"
-                      title="Mitglied hinzufügen"
-                    >
-                      <UserPlus size={14} />
-                    </button>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  {(['RECRUIT', 'ACTIVE', 'INACTIVE', 'ABSENT'] as MemberStatus[]).map(status => {
-                    const members = membersByStatus[status]
-                    if (members.length === 0) return null
-                    return (
-                      <div key={status}>
-                        <div className={`text-xs font-medium mb-1 ${statusColors[status]}`}>
-                          {statusLabels[status]} ({members.length})
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {members.map(member => (
-                            <MemberBadge
-                              key={member.id}
-                              member={member}
-                              status={status}
-                              canManage={canManage}
-                              onStatusChange={(newStatus) =>
-                                updateStatusMutation.mutate({ membershipId: member.id, status: newStatus })
-                              }
-                              onRemove={() => removeMemberMutation.mutate(member.id)}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-              </div>
-            </div>
-          )
-        })}
+      {/* Kommandogruppen */}
+      <div className="space-y-6">
+        {overview.command_groups.map(group => (
+          <KommandogruppeCard
+            key={group.id}
+            group={group}
+            canManage={canManage}
+            isExpanded={expandedKG === group.id}
+            onToggleExpand={() => setExpandedKG(expandedKG === group.id ? null : group.id)}
+          />
+        ))}
       </div>
 
       {/* Funktionsrollen */}
       {overview.function_roles.length > 0 && (
         <div className="card">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <Users className="text-krt-orange" size={20} />
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Star className="text-krt-orange" size={24} />
             Funktionsrollen
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {overview.function_roles.map(role => (
-              <FunctionRoleCard
-                key={role.id}
-                role={role}
-                canManage={canManage}
-                onAssign={() => setAssignRoleModal({ role, type: 'function' })}
-                onRemove={(assignmentId) => {
-                  if (confirm('User wirklich aus dieser Rolle entfernen?')) {
-                    removeFunctionRoleMutation.mutate(assignmentId)
-                  }
-                }}
-              />
+              <div key={role.id} className="bg-gray-800/30 rounded-lg p-3">
+                <div className="text-sm font-medium text-krt-orange mb-2">{role.name}</div>
+                {role.users.length > 0 ? (
+                  <div className="space-y-1">
+                    {role.users.map(u => (
+                      <div key={u.id} className="text-sm text-gray-300">
+                        {u.user.display_name || u.user.username}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-500 italic">Nicht besetzt</div>
+                )}
+              </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Modal: Mitglied zu KG hinzufügen */}
-      {addMemberModal && (
-        <Modal onClose={() => setAddMemberModal(null)} title="Mitglied hinzufügen">
-          <p className="text-gray-400 mb-4">
-            Zu <span className="text-krt-orange">{addMemberModal.groupName}</span> hinzufügen
-          </p>
-          {!allUsers ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="w-6 h-6 border-2 border-krt-orange border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">User</label>
-                  <select
-                    value={selectedUserId || ''}
-                    onChange={(e) => setSelectedUserId(parseInt(e.target.value) || null)}
-                    className="input w-full"
-                  >
-                    <option value="">User auswählen...</option>
-                    {sortedUsers.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.display_name || u.username}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Status</label>
-                  <select
-                    value={selectedStatus}
-                    onChange={(e) => setSelectedStatus(e.target.value as MemberStatus)}
-                    className="input w-full"
-                  >
-                    <option value="ACTIVE">Aktiv</option>
-                    <option value="RECRUIT">Rekrut</option>
-                    <option value="INACTIVE">Inaktiv</option>
-                    <option value="ABSENT">Abwesend</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 mt-6">
-                <button onClick={() => setAddMemberModal(null)} className="btn btn-secondary">
-                  Abbrechen
-                </button>
-                <button
-                  onClick={() => {
-                    if (selectedUserId) {
-                      addMemberMutation.mutate({
-                        groupId: addMemberModal.groupId,
-                        userId: selectedUserId,
-                        status: selectedStatus,
-                      })
-                    }
-                  }}
-                  disabled={!selectedUserId || addMemberMutation.isPending}
-                  className="btn btn-primary"
-                >
-                  {addMemberMutation.isPending ? 'Wird hinzugefügt...' : 'Hinzufügen'}
-                </button>
-              </div>
-            </>
-          )}
-        </Modal>
-      )}
-
-      {/* Modal: User zu Rolle zuweisen */}
-      {assignRoleModal && (
-        <Modal
-          onClose={() => { setAssignRoleModal(null); setSelectedUserId(null) }}
-          title={`${assignRoleModal.role.name} zuweisen`}
-        >
-          {!allUsers ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="w-6 h-6 border-2 border-krt-orange border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">User auswählen</label>
-                  <select
-                    value={selectedUserId || ''}
-                    onChange={(e) => setSelectedUserId(parseInt(e.target.value) || null)}
-                    className="input w-full"
-                  >
-                    <option value="">User auswählen...</option>
-                    {sortedUsers
-                      .filter(u => !assignRoleModal.role.users.some(ru => ru.user.id === u.id))
-                      .map(u => (
-                        <option key={u.id} value={u.id}>
-                          {u.display_name || u.username}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 mt-6">
-                <button onClick={() => { setAssignRoleModal(null); setSelectedUserId(null) }} className="btn btn-secondary">
-                  Abbrechen
-                </button>
-                <button
-                  onClick={() => {
-                    if (selectedUserId) {
-                      assignFunctionRoleMutation.mutate({
-                        userId: selectedUserId,
-                        roleId: assignRoleModal.role.id,
-                      })
-                    }
-                  }}
-                  disabled={!selectedUserId || assignFunctionRoleMutation.isPending}
-                  className="btn btn-primary"
-                >
-                  {assignFunctionRoleMutation.isPending ? 'Wird zugewiesen...' : 'Zuweisen'}
-                </button>
-              </div>
-            </>
-          )}
-        </Modal>
-      )}
-
-      {/* Modal: KG Beschreibung bearbeiten */}
-      {editGroupModal && (
-        <Modal onClose={() => setEditGroupModal(null)} title={`${editGroupModal.full_name} bearbeiten`}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Beschreibung</label>
-              <textarea
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                className="input w-full h-32 resize-none"
-                placeholder="Beschreibung der Kommandogruppe..."
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-6">
-            <button onClick={() => setEditGroupModal(null)} className="btn btn-secondary">
-              Abbrechen
-            </button>
-            <button
-              onClick={() => {
-                updateGroupMutation.mutate({
-                  groupId: editGroupModal.id,
-                  description: editDescription,
-                })
-              }}
-              disabled={updateGroupMutation.isPending}
-              className="btn btn-primary"
-            >
-              {updateGroupMutation.isPending ? 'Wird gespeichert...' : 'Speichern'}
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Modal: Schiffe verwalten */}
-      {manageShipsModal && (
-        <Modal onClose={() => { setManageShipsModal(null); setEditingShipId(null) }} title={`Schiffe: ${manageShipsModal.name}`}>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              {manageShipsModal.ships.map(ship => (
-                <div
-                  key={ship.id}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-700/50 border border-gray-600/30 rounded"
-                >
-                  {editingShipId === ship.id ? (
-                    <div className="flex items-center gap-2 flex-1">
-                      <input
-                        type="text"
-                        value={editingShipName}
-                        onChange={(e) => setEditingShipName(e.target.value)}
-                        className="input flex-1 py-1 text-sm"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && editingShipName.trim()) {
-                            updateShipMutation.mutate({ shipId: ship.id, shipName: editingShipName.trim() })
-                          } else if (e.key === 'Escape') {
-                            setEditingShipId(null)
-                          }
-                        }}
-                      />
-                      <button
-                        onClick={() => {
-                          if (editingShipName.trim()) {
-                            updateShipMutation.mutate({ shipId: ship.id, shipName: editingShipName.trim() })
-                          }
-                        }}
-                        disabled={!editingShipName.trim() || updateShipMutation.isPending}
-                        className="text-green-400 hover:text-green-300"
-                      >
-                        ✓
-                      </button>
-                      <button
-                        onClick={() => setEditingShipId(null)}
-                        className="text-gray-400 hover:text-gray-300"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="text-sm flex-1">{ship.ship_name}</span>
-                      <button
-                        onClick={() => {
-                          setEditingShipId(ship.id)
-                          setEditingShipName(ship.ship_name)
-                        }}
-                        className="text-gray-400 hover:text-krt-orange"
-                        title="Bearbeiten"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`"${ship.ship_name}" wirklich entfernen?`)) {
-                            removeShipMutation.mutate(ship.id)
-                          }
-                        }}
-                        className="text-gray-400 hover:text-red-400"
-                        title="Entfernen"
-                      >
-                        <X size={14} />
-                      </button>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newShipName}
-                onChange={(e) => setNewShipName(e.target.value)}
-                className="input flex-1"
-                placeholder="Neues Schiff..."
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newShipName.trim()) {
-                    addShipMutation.mutate({
-                      groupId: manageShipsModal.id,
-                      shipName: newShipName.trim(),
-                    })
-                  }
-                }}
-              />
-              <button
-                onClick={() => {
-                  if (newShipName.trim()) {
-                    addShipMutation.mutate({
-                      groupId: manageShipsModal.id,
-                      shipName: newShipName.trim(),
-                    })
-                  }
-                }}
-                disabled={!newShipName.trim() || addShipMutation.isPending}
-                className="btn btn-primary"
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-          </div>
-          <div className="flex justify-end mt-6">
-            <button onClick={() => { setManageShipsModal(null); setEditingShipId(null) }} className="btn btn-secondary">
-              Schließen
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Modal: User zu Einsatzrolle zuweisen */}
-      {assignOpRoleModal && (
-        <Modal
-          onClose={() => { setAssignOpRoleModal(null); setSelectedUserId(null); setIsTraining(false) }}
-          title={`${assignOpRoleModal.role.name} zuweisen`}
-        >
-          {!allUsers ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="w-6 h-6 border-2 border-krt-orange border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">User auswählen</label>
-                  <select
-                    value={selectedUserId || ''}
-                    onChange={(e) => setSelectedUserId(parseInt(e.target.value) || null)}
-                    className="input w-full"
-                  >
-                    <option value="">User auswählen...</option>
-                    {sortedUsers
-                      .filter(u => !assignOpRoleModal.role.users.some(ru => ru.user.id === u.id))
-                      .map(u => (
-                        <option key={u.id} value={u.id}>
-                          {u.display_name || u.username}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="is_training"
-                    checked={isTraining}
-                    onChange={(e) => setIsTraining(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-krt-orange focus:ring-krt-orange"
-                  />
-                  <label htmlFor="is_training" className="text-sm text-gray-300">
-                    In Ausbildung
-                  </label>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 mt-6">
-                <button onClick={() => { setAssignOpRoleModal(null); setSelectedUserId(null); setIsTraining(false) }} className="btn btn-secondary">
-                  Abbrechen
-                </button>
-                <button
-                  onClick={() => {
-                    if (selectedUserId) {
-                      assignOperationalRoleMutation.mutate({
-                        userId: selectedUserId,
-                        roleId: assignOpRoleModal.role.id,
-                        isTraining: isTraining,
-                      })
-                    }
-                  }}
-                  disabled={!selectedUserId || assignOperationalRoleMutation.isPending}
-                  className="btn btn-primary"
-                >
-                  {assignOperationalRoleMutation.isPending ? 'Wird zugewiesen...' : 'Zuweisen'}
-                </button>
-              </div>
-            </>
-          )}
-        </Modal>
-      )}
-
-      {/* Modal: Einsatzrolle bearbeiten */}
-      {editOpRoleModal && (
-        <Modal
-          onClose={() => setEditOpRoleModal(null)}
-          title="Einsatzrolle bearbeiten"
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Name</label>
-              <input
-                type="text"
-                value={editOpRoleName}
-                onChange={(e) => setEditOpRoleName(e.target.value)}
-                className="input w-full"
-                placeholder="Name der Rolle..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Beschreibung</label>
-              <textarea
-                value={editOpRoleDescription}
-                onChange={(e) => setEditOpRoleDescription(e.target.value)}
-                className="input w-full h-24 resize-none"
-                placeholder="Beschreibung der Rolle..."
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-6">
-            <button onClick={() => setEditOpRoleModal(null)} className="btn btn-secondary">
-              Abbrechen
-            </button>
-            <button
-              onClick={() => {
-                if (editOpRoleName.trim()) {
-                  updateOperationalRoleMutation.mutate({
-                    roleId: editOpRoleModal.id,
-                    name: editOpRoleName.trim(),
-                    description: editOpRoleDescription.trim() || null,
-                  })
-                }
-              }}
-              disabled={!editOpRoleName.trim() || updateOperationalRoleMutation.isPending}
-              className="btn btn-primary"
-            >
-              {updateOperationalRoleMutation.isPending ? 'Wird gespeichert...' : 'Speichern'}
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Modal: Self-Service KG-Anmeldung (einmalig) */}
-      {selfServiceModal && overview && (
-        <Modal
-          onClose={() => setSelfServiceModal(false)}
-          title="Für Kommandogruppen anmelden"
-        >
+      {/* Self-Service Modal */}
+      {selfServiceModal && (
+        <Modal onClose={() => setSelfServiceModal(false)} title="Für Kommandogruppen anmelden">
           <div className="space-y-4">
             <p className="text-sm text-gray-400">
-              Wähle die Kommandogruppen aus, die dich interessieren. Du kannst dich für mehrere KGs anmelden.
+              Wähle die Kommandogruppen aus, die dich interessieren.
             </p>
             <p className="text-xs text-yellow-500 bg-yellow-900/20 px-3 py-2 rounded border border-yellow-700/30">
-              Hinweis: Diese Auswahl kann nur einmal getroffen werden. Für spätere Änderungen wende dich an einen KG-Verwalter.
+              Diese Auswahl kann nur einmal getroffen werden.
             </p>
             <div className="space-y-3">
               {overview.command_groups.map(group => {
@@ -878,7 +216,7 @@ export default function StaffelstrukturPage() {
                 return (
                   <label
                     key={group.id}
-                    className={`flex items-center gap-3 p-3 rounded border cursor-pointer transition-colors ${
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                       isSelected
                         ? 'bg-krt-orange/10 border-krt-orange'
                         : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
@@ -899,9 +237,6 @@ export default function StaffelstrukturPage() {
                     <Icon size={20} className={isSelected ? 'text-krt-orange' : 'text-gray-400'} />
                     <div className="flex-1">
                       <div className="font-medium">{group.full_name}</div>
-                      {group.description && (
-                        <div className="text-xs text-gray-500 line-clamp-1">{group.description}</div>
-                      )}
                     </div>
                   </label>
                 )
@@ -926,268 +261,250 @@ export default function StaffelstrukturPage() {
   )
 }
 
-// ============== Subcomponents ==============
+// ============== Kommandogruppe Card ==============
 
-function Modal({ children, onClose, title }: { children: React.ReactNode; onClose: () => void; title: string }) {
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="card max-w-md w-full mx-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <X size={24} />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function LeadershipCard({
-  role,
+function KommandogruppeCard({
+  group,
   canManage,
-  onAssign,
-  onRemove,
+  isExpanded,
+  onToggleExpand,
 }: {
-  role: FunctionRoleWithUsers
+  group: CommandGroupDetail
   canManage: boolean
-  onAssign: () => void
-  onRemove: (assignmentId: number) => void
+  isExpanded: boolean
+  onToggleExpand: () => void
 }) {
-  return (
-    <div className="p-4 bg-gray-800/50 border border-gray-600/30 rounded-lg min-h-[100px]">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-bold text-krt-orange">{role.name}</h3>
-        {canManage && (
-          <button
-            onClick={onAssign}
-            className="p-1 text-gray-400 hover:text-krt-orange hover:bg-gray-700 rounded"
-            title="User zuweisen"
-          >
-            <UserPlus size={16} />
-          </button>
-        )}
-      </div>
-      {role.users.length > 0 ? (
-        <ul className="space-y-2">
-          {role.users.map(u => (
-            <li key={u.id} className="flex items-center justify-between group">
-              <div className="flex items-center gap-2 text-white">
-                {u.user.avatar && (
-                  <img src={u.user.avatar} alt="" className="w-6 h-6 rounded-full" />
-                )}
-                <span>{u.user.display_name || u.user.username}</span>
-              </div>
-              {canManage && (
-                <button
-                  onClick={() => onRemove(u.id)}
-                  className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Entfernen"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-gray-500 text-sm">Nicht besetzt</p>
-      )}
-    </div>
-  )
-}
+  const Icon = kgIcons[group.name] || Users
 
-function FunctionRoleCard({
-  role,
-  canManage,
-  onAssign,
-  onRemove,
-}: {
-  role: FunctionRoleWithUsers
-  canManage: boolean
-  onAssign: () => void
-  onRemove: (assignmentId: number) => void
-}) {
-  return (
-    <div className="p-3 bg-gray-800/50 border border-gray-600/30 rounded-lg min-h-[80px]">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="font-medium text-sm text-krt-orange truncate">{role.name}</h3>
-        {canManage && (
-          <button
-            onClick={onAssign}
-            className="p-1 text-gray-400 hover:text-krt-orange hover:bg-gray-700 rounded flex-shrink-0"
-            title="User zuweisen"
-          >
-            <Plus size={14} />
-          </button>
-        )}
-      </div>
-      {role.users.length > 0 ? (
-        <ul className="space-y-1">
-          {role.users.map(u => (
-            <li key={u.id} className="flex items-center justify-between group text-xs">
-              <span className="text-gray-300 truncate">
-                {u.user.display_name || u.user.username}
-              </span>
-              {canManage && (
-                <button
-                  onClick={() => onRemove(u.id)}
-                  className="p-0.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                  title="Entfernen"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-xs text-gray-500">-</p>
-      )}
-    </div>
-  )
-}
+  // Mitglieder nach Status gruppieren
+  const activeMembers = group.members.filter(m => m.status === 'ACTIVE')
+  const recruits = group.members.filter(m => m.status === 'RECRUIT')
+  const inactive = group.members.filter(m => m.status === 'INACTIVE' || m.status === 'ABSENT')
 
-function OperationalRoleCard({
-  role,
-  canManage,
-  onAssign,
-  onEdit,
-  onRemove,
-}: {
-  role: OperationalRoleWithUsers
-  canManage: boolean
-  onAssign: () => void
-  onEdit: () => void
-  onRemove: (assignmentId: number) => void
-}) {
   return (
-    <div className="px-2 py-1.5 bg-gray-800/30 border border-gray-700/30 rounded">
-      <div className="flex items-center justify-between">
-        <div className="flex-1 min-w-0">
-          <span className="text-krt-orange text-sm font-medium">{role.name}</span>
-          {role.description && (
-            <span className="text-gray-500 text-xs ml-2" title={role.description}>
-              - {role.description.slice(0, 30)}{role.description.length > 30 ? '...' : ''}
-            </span>
+    <div className="rounded-xl overflow-hidden bg-gradient-to-b from-gray-800/50 to-gray-900/50 border border-gray-700/50">
+      {/* Header mit GIF */}
+      <div className="relative h-40 bg-gradient-to-r from-gray-900 to-gray-800 overflow-hidden">
+        {/* GIF Background - Pfad: frontend/public/assets/kg/cw.gif, sw.gif, p.gif */}
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-50"
+          style={{ backgroundImage: `url(/assets/kg/${group.name.toLowerCase()}.gif)` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/50 to-transparent" />
+
+        {/* KG Info Overlay */}
+        <div className="absolute bottom-0 left-0 right-0 p-5 flex items-end justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-xl bg-krt-orange/20 border border-krt-orange/50 flex items-center justify-center backdrop-blur-sm">
+              <Icon size={32} className="text-krt-orange" />
+            </div>
+            <div>
+              <h3 className="text-3xl font-bold tracking-wide">{group.name}</h3>
+              <p className="text-sm text-gray-300">{group.full_name}</p>
+            </div>
+          </div>
+
+          {/* Matrix Button für Manager */}
+          {canManage && (
+            <Link
+              to={`/struktur/matrix?kg=${group.id}`}
+              className="flex items-center gap-2 px-4 py-2.5 bg-krt-orange hover:bg-krt-orange/80 rounded-lg transition-colors shadow-lg"
+            >
+              <Grid3X3 size={18} />
+              <span className="font-medium">Rollen-Matrix</span>
+            </Link>
           )}
         </div>
-        {canManage && (
-          <div className="flex gap-1">
-            <button
-              onClick={onEdit}
-              className="p-1 text-gray-400 hover:text-krt-orange hover:bg-gray-700 rounded flex-shrink-0"
-              title="Rolle bearbeiten"
-            >
-              <Pencil size={12} />
-            </button>
-            <button
-              onClick={onAssign}
-              className="p-1 text-gray-400 hover:text-krt-orange hover:bg-gray-700 rounded flex-shrink-0"
-              title="User zuweisen"
-            >
-              <Plus size={14} />
-            </button>
+      </div>
+
+      {/* Content */}
+      <div className="p-5 space-y-5">
+        {/* Beschreibung */}
+        {group.description && (
+          <p className="text-sm text-gray-400 leading-relaxed">{group.description}</p>
+        )}
+
+        {/* Schiffe */}
+        {group.ships.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {group.ships.map(ship => (
+              <span
+                key={ship.id}
+                className="px-3 py-1.5 bg-gray-800/70 rounded-lg text-sm text-gray-300 border border-gray-700/50"
+              >
+                {ship.ship_name}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-gray-800/40 rounded-xl p-4 text-center border border-gray-700/30">
+            <div className="text-3xl font-bold text-white">{activeMembers.length}</div>
+            <div className="text-xs text-gray-500 mt-1">Aktive Mitglieder</div>
+          </div>
+          <div className="bg-gray-800/40 rounded-xl p-4 text-center border border-gray-700/30">
+            <div className="text-3xl font-bold text-krt-orange">{recruits.length}</div>
+            <div className="text-xs text-gray-500 mt-1">Rekruten</div>
+          </div>
+          <div className="bg-gray-800/40 rounded-xl p-4 text-center border border-gray-700/30">
+            <div className="text-3xl font-bold text-white">{group.operational_roles.length}</div>
+            <div className="text-xs text-gray-500 mt-1">Einsatzrollen</div>
+          </div>
+        </div>
+
+        {/* Expand/Collapse Button */}
+        <button
+          onClick={onToggleExpand}
+          className="w-full flex items-center justify-center gap-2 py-3 text-sm text-gray-400 hover:text-white transition-colors border-t border-gray-700/50 -mx-5 px-5 mt-5"
+          style={{ width: 'calc(100% + 2.5rem)' }}
+        >
+          {isExpanded ? (
+            <>
+              <ChevronUp size={18} />
+              Details ausblenden
+            </>
+          ) : (
+            <>
+              <ChevronDown size={18} />
+              Mitglieder & Einsatzrollen anzeigen
+            </>
+          )}
+        </button>
+
+        {/* Expanded Content */}
+        {isExpanded && (
+          <div className="space-y-6 pt-2">
+            {/* Mitglieder */}
+            <div>
+              <h4 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                <Users size={16} className="text-krt-orange" />
+                Mitglieder ({group.members.length})
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {activeMembers.map(m => (
+                  <MemberBadge key={m.id} member={m} />
+                ))}
+                {recruits.map(m => (
+                  <MemberBadge key={m.id} member={m} isRecruit />
+                ))}
+              </div>
+              {inactive.length > 0 && (
+                <div className="mt-3 text-xs text-gray-500">
+                  + {inactive.length} inaktiv/abwesend
+                </div>
+              )}
+            </div>
+
+            {/* Einsatzrollen Übersicht */}
+            <div>
+              <h4 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                <Shield size={16} className="text-krt-orange" />
+                Einsatzrollen
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {group.operational_roles.map(role => {
+                  const assignedCount = role.users.length
+                  const trainingCount = role.users.filter(u => u.is_training).length
+                  return (
+                    <div
+                      key={role.id}
+                      className="bg-gray-800/40 rounded-lg p-4 border border-gray-700/30"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="font-medium text-white">{role.name}</div>
+                        <div className="flex items-center gap-1 bg-gray-700/50 px-2 py-0.5 rounded text-sm">
+                          <span className="font-bold text-krt-orange">{assignedCount}</span>
+                          {trainingCount > 0 && (
+                            <span className="text-yellow-500">({trainingCount}A)</span>
+                          )}
+                        </div>
+                      </div>
+                      {role.description && (
+                        <div className="text-xs text-gray-500">{role.description}</div>
+                      )}
+                      {/* Zugewiesene User kompakt */}
+                      {role.users.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {role.users.slice(0, 5).map(u => (
+                            <span
+                              key={u.id}
+                              className={`text-xs px-1.5 py-0.5 rounded ${
+                                u.is_training
+                                  ? 'bg-yellow-900/30 text-yellow-400'
+                                  : 'bg-gray-700/50 text-gray-400'
+                              }`}
+                            >
+                              {u.user.display_name || u.user.username}
+                            </span>
+                          ))}
+                          {role.users.length > 5 && (
+                            <span className="text-xs text-gray-500">+{role.users.length - 5}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>
-      {role.users.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-1.5">
-          {role.users.map(u => (
-            <span
-              key={u.id}
-              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs group ${
-                u.is_training ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-700/30' : 'bg-gray-700/50 text-gray-300'
-              }`}
-              title={u.is_training ? 'In Ausbildung' : ''}
-            >
-              {u.user.avatar && (
-                <img src={u.user.avatar} alt="" className="w-3 h-3 rounded-full" />
-              )}
-              {u.user.display_name || u.user.username}
-              {u.is_training && <span className="text-yellow-500 text-[10px]">(A)</span>}
-              {canManage && (
-                <button
-                  onClick={() => onRemove(u.id)}
-                  className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5"
-                  title="Entfernen"
-                >
-                  <X size={10} />
-                </button>
-              )}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
+
+// ============== Member Badge ==============
 
 function MemberBadge({
   member,
-  status,
-  canManage,
-  onStatusChange,
-  onRemove,
+  isRecruit = false
 }: {
-  member: UserCommandGroup
-  status: MemberStatus
-  canManage: boolean
-  onStatusChange: (status: MemberStatus) => void
-  onRemove: () => void
+  member: { user: User; status: MemberStatus }
+  isRecruit?: boolean
 }) {
-  const [showMenu, setShowMenu] = useState(false)
-
   return (
-    <div className="relative">
-      <button
-        onClick={() => canManage && setShowMenu(!showMenu)}
-        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${statusColors[status]} ${
-          canManage ? 'hover:bg-gray-700 cursor-pointer' : ''
-        } bg-gray-800/50 border border-gray-600/30`}
-      >
-        {member.user.avatar && (
-          <img src={member.user.avatar} alt="" className="w-3 h-3 rounded-full" />
-        )}
-        {member.user.display_name || member.user.username}
-      </button>
-
-      {showMenu && canManage && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-          <div className="absolute top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded shadow-lg z-50 min-w-[140px]">
-            <div className="p-2 border-b border-gray-700 text-xs text-gray-400">Status ändern</div>
-            {(['ACTIVE', 'RECRUIT', 'INACTIVE', 'ABSENT'] as MemberStatus[]).map(s => (
-              <button
-                key={s}
-                onClick={() => {
-                  onStatusChange(s)
-                  setShowMenu(false)
-                }}
-                className={`block w-full text-left px-3 py-1 text-sm hover:bg-gray-700 ${
-                  s === status ? 'text-krt-orange' : statusColors[s]
-                }`}
-              >
-                {statusLabels[s]}
-              </button>
-            ))}
-            <div className="border-t border-gray-700">
-              <button
-                onClick={() => {
-                  if (confirm('User wirklich aus dieser Gruppe entfernen?')) {
-                    onRemove()
-                  }
-                  setShowMenu(false)
-                }}
-                className="block w-full text-left px-3 py-1 text-sm text-red-400 hover:bg-gray-700"
-              >
-                Entfernen
-              </button>
-            </div>
-          </div>
-        </>
+    <div
+      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors ${
+        isRecruit
+          ? 'bg-krt-orange/15 border border-krt-orange/40 text-krt-orange'
+          : 'bg-gray-800/60 text-gray-300 hover:bg-gray-700/60'
+      }`}
+    >
+      {member.user.avatar && (
+        <img src={member.user.avatar} alt="" className="w-5 h-5 rounded-full" />
       )}
+      <span>{member.user.display_name || member.user.username}</span>
+    </div>
+  )
+}
+
+// ============== Modal ==============
+
+function Modal({
+  children,
+  onClose,
+  title
+}: {
+  children: React.ReactNode
+  onClose: () => void
+  title: string
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-md w-full shadow-2xl">
+        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+          <h2 className="text-xl font-bold">{title}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <X size={24} />
+          </button>
+        </div>
+        <div className="p-4">
+          {children}
+        </div>
+      </div>
     </div>
   )
 }
