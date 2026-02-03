@@ -49,7 +49,7 @@ export default function StaffelstrukturPage() {
   // Audio Setup - startet automatisch
   useEffect(() => {
     if (audioRef.current) {
-      audioRef.current.volume = 0.15
+      audioRef.current.volume = 0.3
       audioRef.current.loop = true
       // Autoplay versuchen (Browser kann blockieren)
       audioRef.current.play().catch(() => {
@@ -185,13 +185,22 @@ export default function StaffelstrukturPage() {
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {overview.function_roles.map(role => (
-              <div key={role.id} className="bg-gray-800/30 rounded-lg p-3">
-                <div className="text-sm font-medium text-krt-orange mb-2">{role.name}</div>
+              <div key={role.id} className="bg-gray-800/30 rounded-lg p-4">
+                <div className="text-sm font-medium text-krt-orange mb-3">{role.name}</div>
                 {role.users.length > 0 ? (
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {role.users.map(u => (
-                      <div key={u.id} className="text-sm text-gray-300">
-                        {u.user.display_name || u.user.username}
+                      <div key={u.id} className="flex items-center gap-2">
+                        {u.user.avatar ? (
+                          <img src={u.user.avatar} alt="" className="w-6 h-6 rounded-full" />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs text-gray-400">
+                            {(u.user.display_name || u.user.username).charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <span className="text-sm text-gray-300">
+                          {u.user.display_name || u.user.username}
+                        </span>
                       </div>
                     ))}
                   </div>
