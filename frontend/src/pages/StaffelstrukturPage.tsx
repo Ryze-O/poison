@@ -25,6 +25,7 @@ const BACKGROUND_MUSIC_PATH = '/assets/music/ambient.wav'
 export default function StaffelstrukturPage() {
   const queryClient = useQueryClient()
   const audioRef = useRef<HTMLAudioElement>(null)
+  const volumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isMuted, setIsMuted] = useState(false)
   const [volume, setVolume] = useState(0.3)
   const [showVolumeSlider, setShowVolumeSlider] = useState(false)
@@ -118,8 +119,18 @@ export default function StaffelstrukturPage() {
           {/* Musik Toggle mit Volume Slider */}
           <div
             className="relative"
-            onMouseEnter={() => setShowVolumeSlider(true)}
-            onMouseLeave={() => setShowVolumeSlider(false)}
+            onMouseEnter={() => {
+              if (volumeTimeoutRef.current) {
+                clearTimeout(volumeTimeoutRef.current)
+                volumeTimeoutRef.current = null
+              }
+              setShowVolumeSlider(true)
+            }}
+            onMouseLeave={() => {
+              volumeTimeoutRef.current = setTimeout(() => {
+                setShowVolumeSlider(false)
+              }, 300)
+            }}
           >
             <button
               onClick={toggleMusic}
@@ -133,20 +144,22 @@ export default function StaffelstrukturPage() {
               )}
             </button>
 
-            {/* Volume Slider Popup */}
+            {/* Volume Slider Popup - pt-2 schließt die Lücke zum Button */}
             {showVolumeSlider && !isMuted && (
-              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 p-3 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50">
-                <div className="flex flex-col items-center gap-2">
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={volume}
-                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                    className="w-24 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-krt-orange"
-                  />
-                  <span className="text-xs text-gray-400">{Math.round(volume * 100)}%</span>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2">
+                <div className="p-3 bg-gray-800 border border-gray-700 rounded-lg shadow-xl">
+                  <div className="flex flex-col items-center gap-2">
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={volume}
+                      onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                      className="w-24 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-krt-orange"
+                    />
+                    <span className="text-xs text-gray-400">{Math.round(volume * 100)}%</span>
+                  </div>
                 </div>
               </div>
             )}

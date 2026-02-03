@@ -163,10 +163,11 @@ FUNCTION_ROLES = {
 }
 
 # KG-Verwalter (Kommandogruppen-Leiter und Stellvertreter)
+# Diese werden als is_kg_verwalter Flag gesetzt UND als Einsatzrolle zugewiesen
 KG_VERWALTER = {
-    "CW": {"leader": "SILVA-7", "deputy": "Dwing86"},
-    "SW": {"leader": "DerMando69", "deputy": None},
-    "P": {"leader": "moRytox", "deputy": "Morphin93"},
+    "CW": {"KG-Leiter": "SILVA-7", "Stellv. KG-Leiter": "Dwing86"},
+    "SW": {"KG-Leiter": "DerMando69", "Stellv. KG-Leiter": None},
+    "P": {"KG-Leiter": "moRytox", "Stellv. KG-Leiter": "Morphin93"},
 }
 
 
@@ -407,13 +408,19 @@ def import_function_roles(db: Session) -> dict:
 
 
 def set_kg_verwalter(db: Session) -> dict:
-    """Setzt is_kg_verwalter Flag für KG-Leiter und Stellvertreter."""
-    print("\n=== KG-Verwalter setzen ===")
-    stats = {"set": 0, "not_found": []}
+    """Setzt is_kg_verwalter Flag und weist KG-Leiter Einsatzrollen zu."""
+    print("\n=== KG-Verwalter und KG-Leiter setzen ===")
+    stats = {"set": 0, "roles_assigned": 0, "not_found": []}
 
     for kg_name, leaders in KG_VERWALTER.items():
-        for role, username in leaders.items():
+        group = db.query(CommandGroup).filter(CommandGroup.name == kg_name).first()
+        if not group:
+            print(f"  WARNUNG: KG '{kg_name}' nicht gefunden!")
+            continue
+
+        for role_name, username in leaders.items():
             if not username:
+                print(f"  {kg_name} {role_name}: Nicht besetzt")
                 continue
 
             user = find_user_by_name(db, username)
@@ -422,12 +429,35 @@ def set_kg_verwalter(db: Session) -> dict:
                 stats["not_found"].append(username)
                 continue
 
+            # is_kg_verwalter Flag setzen
             if not user.is_kg_verwalter:
                 user.is_kg_verwalter = True
-                print(f"  SET: {username} ist jetzt KG-Verwalter ({kg_name} {role})")
+                print(f"  SET: {username} ist jetzt KG-Verwalter")
                 stats["set"] += 1
-            else:
-                print(f"  EXISTS: {username} war bereits KG-Verwalter")
+
+            # KG-Leiter Einsatzrolle zuweisen (falls vorhanden)
+            role = db.query(OperationalRole).filter(
+                OperationalRole.command_group_id == group.id,
+                OperationalRole.name == role_name
+            ).first()
+
+            if role:
+                existing = db.query(UserOperationalRole).filter(
+                    UserOperationalRole.user_id == user.id,
+                    UserOperationalRole.operational_role_id == role.id
+                ).first()
+
+                if not existing:
+                    assignment = UserOperationalRole(
+                        user_id=user.id,
+                        operational_role_id=role.id,
+                        is_training=False
+                    )
+                    db.add(assignment)
+                    print(f"  ASSIGNED: {username} → {kg_name} {role_name}")
+                    stats["roles_assigned"] += 1
+                else:
+                    print(f"  EXISTS: {username} → {kg_name} {role_name}")
 
     db.commit()
     return stats

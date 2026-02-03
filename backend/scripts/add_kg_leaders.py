@@ -1,8 +1,11 @@
 """
-Script zum Hinzufügen der KG-Leiter Einsatzrollen.
+Script zum Zuweisen der KG-Leiter zu den Einsatzrollen.
+
+Voraussetzung: Migration j7k664061kk4 muss ausgeführt sein (erstellt die KG-Leiter Rollen).
 
 Verwendung:
     cd backend
+    alembic upgrade head  # Falls noch nicht geschehen
     python -m scripts.add_kg_leaders
 """
 
@@ -20,9 +23,9 @@ from app.models.staffel import (
 
 # KG-Leiter und Stellvertreter (aus Spreadsheet)
 KG_LEADERS = {
-    "CW": {"KG-Leiter": "SILVA-7", "Stellvertreter": "Dwing86"},
-    "SW": {"KG-Leiter": "DerMando69", "Stellvertreter": None},
-    "P": {"KG-Leiter": "moRytox", "Stellvertreter": "Morphin93"},
+    "CW": {"KG-Leiter": "SILVA-7", "Stellv. KG-Leiter": "Dwing86"},
+    "SW": {"KG-Leiter": "DerMando69", "Stellv. KG-Leiter": None},
+    "P": {"KG-Leiter": "moRytox", "Stellv. KG-Leiter": "Morphin93"},
 }
 
 
@@ -81,25 +84,18 @@ def main():
                     print(f"  {role_name}: Nicht besetzt")
                     continue
 
-                # Rolle erstellen oder finden
+                # Rolle finden (sollte durch Migration existieren)
                 role = db.query(OperationalRole).filter(
                     OperationalRole.command_group_id == group.id,
                     OperationalRole.name == role_name
                 ).first()
 
                 if not role:
-                    # Rolle erstellen (sort_order 0 = ganz oben)
-                    role = OperationalRole(
-                        command_group_id=group.id,
-                        name=role_name,
-                        description=f"{role_name} der Kommandogruppe {kg_name}",
-                        sort_order=0 if role_name == "KG-Leiter" else 1
-                    )
-                    db.add(role)
-                    db.flush()  # ID generieren
-                    print(f"  CREATED: Rolle '{role_name}'")
-                else:
-                    print(f"  EXISTS: Rolle '{role_name}'")
+                    print(f"  WARNUNG: Rolle '{role_name}' nicht gefunden!")
+                    print(f"           Führe 'alembic upgrade head' aus.")
+                    continue
+
+                print(f"  {role_name}:")
 
                 # User finden und zuweisen
                 user = find_user_by_name(db, username)
