@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
-import { ArrowLeft, Check, GraduationCap, Save, UserPlus, X, AlertCircle, Clock, UserX } from 'lucide-react'
+import { ArrowLeft, Check, GraduationCap, Save, UserPlus, X, AlertCircle } from 'lucide-react'
 import { useAuthStore } from '../hooks/useAuth'
 import type {
   AssignmentMatrixResponse,
