@@ -25,7 +25,7 @@ const BACKGROUND_MUSIC_PATH = '/assets/music/ambient.wav'
 export default function StaffelstrukturPage() {
   const queryClient = useQueryClient()
   const audioRef = useRef<HTMLAudioElement>(null)
-  const [isMuted, setIsMuted] = useState(true)
+  const [isMuted, setIsMuted] = useState(false)
   const [expandedKG, setExpandedKG] = useState<number | null>(null)
 
   // Self-Service Modal
@@ -46,11 +46,16 @@ export default function StaffelstrukturPage() {
     queryFn: () => apiClient.get('/api/staffel/my-command-groups').then(r => r.data),
   })
 
-  // Audio Setup
+  // Audio Setup - startet automatisch
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = 0.15
       audioRef.current.loop = true
+      // Autoplay versuchen (Browser kann blockieren)
+      audioRef.current.play().catch(() => {
+        // Falls Browser blockiert, setze auf muted
+        setIsMuted(true)
+      })
     }
   }, [])
 
