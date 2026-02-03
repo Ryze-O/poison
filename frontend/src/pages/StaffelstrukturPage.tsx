@@ -369,7 +369,7 @@ function KommandogruppeCard({
   )
 
   return (
-    <div className="rounded-xl overflow-hidden bg-gradient-to-b from-gray-800/50 to-gray-900/50 border border-gray-700/50 h-full flex flex-col">
+    <div className="rounded-xl overflow-hidden bg-gradient-to-b from-gray-800/50 to-gray-900/50 border border-gray-700/50 flex flex-col">
       {/* Header mit GIF - kompakter für 3-Spalten */}
       <div className="relative h-32 bg-gradient-to-r from-gray-900 to-gray-800 overflow-hidden flex-shrink-0">
         {/* GIF Background - Pfad: frontend/public/assets/kg/cw.gif, sw.gif, p.gif */}
