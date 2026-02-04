@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
 import {
@@ -13,22 +13,15 @@ import {
   Copy,
   Check,
   Lock,
-  Unlock,
   CheckCircle,
-  XCircle,
   UserPlus,
   UserMinus,
   Radio,
-  Clock,
   AlertCircle,
 } from 'lucide-react'
 import type {
   MissionDetail,
   MissionStatus,
-  MissionUnit,
-  MissionPosition,
-  MissionRegistration,
-  MissionAssignment,
   Briefing,
   User,
 } from '../api/types'
@@ -55,7 +48,6 @@ type TabType = 'overview' | 'units' | 'participants' | 'briefing'
 
 export default function MissionDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [copied, setCopied] = useState(false)
@@ -122,22 +114,6 @@ export default function MissionDetailPage() {
 
   const completeMutation = useMutation({
     mutationFn: () => apiClient.post(`/api/missions/${id}/complete`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['mission', id] })
-    },
-  })
-
-  const assignMutation = useMutation({
-    mutationFn: (data: { position_id: number; user_id?: number; placeholder_name?: string }) =>
-      apiClient.post(`/api/missions/${id}/assignments`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['mission', id] })
-    },
-  })
-
-  const deleteAssignmentMutation = useMutation({
-    mutationFn: (assignmentId: number) =>
-      apiClient.delete(`/api/missions/${id}/assignments/${assignmentId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mission', id] })
     },

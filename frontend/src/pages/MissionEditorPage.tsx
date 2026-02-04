@@ -8,10 +8,7 @@ import {
   Check,
   Plus,
   Trash2,
-  Info,
-  Rocket,
   Save,
-  Copy,
   ChevronDown,
   ChevronUp,
   Radio,
@@ -29,24 +26,7 @@ import type {
   MissionPositionCreate,
   MissionPhaseCreate,
   Location,
-  User,
 } from '../api/types'
-
-// Standard-Funkfrequenzen
-const STANDARD_FREQUENCIES = {
-  el_1: { key: 'el', label: 'Einsatzleitung 1', frequency: '102.11' },
-  el_2: { key: 'el', label: 'Einsatzleitung 2', frequency: '102.12' },
-  gks_1: { key: 'intern', label: 'GKS Intern 1', frequency: '102.31' },
-  gks_2: { key: 'intern', label: 'GKS Intern 2', frequency: '102.32' },
-  jaeger_1: { key: 'intern', label: 'Jäger 1', frequency: '102.51' },
-  jaeger_2: { key: 'intern', label: 'Jäger 2', frequency: '102.52' },
-  squad_1: { key: 'intern', label: 'Squad 1', frequency: '102.61' },
-  squad_2: { key: 'intern', label: 'Squad 2', frequency: '102.62' },
-  beast: { key: 'intern', label: 'BEAST', frequency: '102.70' },
-  targets_1: { key: 'targets', label: 'Targets 1', frequency: '102.91' },
-  targets_2: { key: 'targets', label: 'Targets 2', frequency: '102.92' },
-  notfall: { key: 'notfall', label: 'Notfall', frequency: '102.90' },
-}
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -144,12 +124,6 @@ export default function MissionEditorPage() {
   const { data: locations } = useQuery<Location[]>({
     queryKey: ['locations'],
     queryFn: () => apiClient.get('/api/locations').then((r) => r.data),
-  })
-
-  // Fetch users for assignments
-  const { data: allUsers } = useQuery<User[]>({
-    queryKey: ['users'],
-    queryFn: () => apiClient.get('/api/users').then((r) => r.data),
   })
 
   // Populate form with existing mission data
@@ -849,7 +823,7 @@ export default function MissionEditorPage() {
             </div>
           )}
 
-          {units.map((unit, unitIdx) => (
+          {units.map((unit) => (
             <div key={unit._localId} className="bg-krt-dark rounded-lg border border-gray-700">
               {/* Unit Header */}
               <div
@@ -1087,7 +1061,7 @@ export default function MissionEditorPage() {
                       </button>
                     </div>
                     <div className="space-y-2">
-                      {unit.positions.map((pos, posIdx) => (
+                      {unit.positions.map((pos) => (
                         <div
                           key={pos._localId}
                           className="flex items-center gap-2 p-2 bg-krt-darker rounded"

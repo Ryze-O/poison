@@ -12,9 +12,6 @@ import {
   Edit3,
   Eye,
   Rocket,
-  Lock,
-  CheckCircle,
-  XCircle,
   FileText,
 } from 'lucide-react'
 import type { Mission, MissionStatus, MissionTemplate } from '../api/types'
@@ -269,7 +266,7 @@ export default function MissionsPage() {
       ) : missions && missions.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {missions.map((mission) => (
-            <MissionCard key={mission.id} mission={mission} canManage={canCreate} />
+            <MissionCard key={mission.id} mission={mission} canManage={canCreate ?? false} />
           ))}
         </div>
       ) : (
