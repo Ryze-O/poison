@@ -31,16 +31,39 @@ import {
 import { useState, useRef } from 'react'
 import clsx from 'clsx'
 
-// Haupt-Navigation (für alle sichtbar)
-const mainNavItems = [
-  { to: '/', icon: Home, label: 'Dashboard' },
-  { to: '/struktur', icon: Shield, label: 'Viper-Struktur' },
-  { to: '/einsaetze', icon: Crosshair, label: 'Einsätze' },
-  { to: '/attendance', icon: ClipboardList, label: 'Staffelabende' },
-  { to: '/loot', icon: Gift, label: 'Freeplay (Loot)' },
-  { to: '/inventory', icon: Package, label: 'Lager' },
-  { to: '/treasury', icon: Wallet, label: 'Kasse' },
-  { to: '/components', icon: Search, label: 'Item Search' },
+// Dashboard (immer sichtbar, standalone)
+const dashboardItem = { to: '/', icon: Home, label: 'Dashboard' }
+
+// Navigation-Kategorien
+const navCategories = [
+  {
+    id: 'einsaetze',
+    label: 'Einsätze',
+    icon: Crosshair,
+    items: [
+      { to: '/struktur', icon: Shield, label: 'Viper-Struktur' },
+      { to: '/einsaetze', icon: Crosshair, label: 'Einsätze' },
+      { to: '/attendance', icon: ClipboardList, label: 'Staffelabende' },
+      { to: '/loot', icon: Gift, label: 'Freeplay (Loot)' },
+    ],
+  },
+  {
+    id: 'verwaltung',
+    label: 'Verwaltung',
+    icon: Package,
+    items: [
+      { to: '/inventory', icon: Package, label: 'Lager' },
+      { to: '/treasury', icon: Wallet, label: 'Kasse' },
+    ],
+  },
+  {
+    id: 'tools',
+    label: 'Tools',
+    icon: Search,
+    items: [
+      { to: '/components', icon: Search, label: 'Item Search' },
+    ],
+  },
 ]
 
 // Datenbank-Navigation (nur für Offiziere+)
@@ -62,6 +85,11 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarHover, setSidebarHover] = useState(false)
   const [databaseExpanded, setDatabaseExpanded] = useState(false)
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
+    einsaetze: true,
+    verwaltung: true,
+    tools: true,
+  })
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Staffelstruktur-Seite: Sidebar standardmäßig ausblenden
@@ -101,6 +129,13 @@ export default function Layout() {
 
   // Anzahl der Anfragen die der Pioneer bearbeiten muss
   const pioneerPendingCount = (pendingCount?.as_owner_pending ?? 0) + (pendingCount?.as_owner_approved ?? 0)
+
+  const toggleCategory = (categoryId: string) => {
+    setExpandedCategories((prev) => ({
+      ...prev,
+      [categoryId]: !prev[categoryId],
+    }))
+  }
 
   return (
     <div className="min-h-screen flex bg-page text-primary">
@@ -157,30 +192,62 @@ export default function Layout() {
 
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {/* Haupt-Navigation */}
-            {mainNavItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) =>
-                  clsx(
-                    'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200',
-                    isActive
-                      ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange shadow-[0_0_20px_rgba(232,90,36,0.15)]'
-                      : 'text-gray-400 hover:bg-card-hover hover:text-white hover:shadow-sm'
-                  )
-                }
-              >
-                <item.icon size={20} />
-                <span className="flex-1">{item.label}</span>
-                {/* Badge für Lager - nur für Pioneers */}
-                {item.to === '/inventory' && isPioneer && pioneerPendingCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
-                    {pioneerPendingCount}
-                  </span>
+            {/* Dashboard (standalone) */}
+            <NavLink
+              to={dashboardItem.to}
+              onClick={() => setSidebarOpen(false)}
+              className={({ isActive }) =>
+                clsx(
+                  'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200',
+                  isActive
+                    ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange shadow-[0_0_20px_rgba(232,90,36,0.15)]'
+                    : 'text-gray-400 hover:bg-card-hover hover:text-white hover:shadow-sm'
+                )
+              }
+            >
+              <dashboardItem.icon size={20} />
+              <span className="flex-1">{dashboardItem.label}</span>
+            </NavLink>
+
+            {/* Kategorien */}
+            {navCategories.map((category) => (
+              <div key={category.id} className="mt-2">
+                <button
+                  onClick={() => toggleCategory(category.id)}
+                  className="w-full flex items-center justify-between px-4 py-2 rounded-lg text-gray-500 hover:text-gray-300 transition-all duration-200"
+                >
+                  <span className="text-xs font-semibold uppercase tracking-wider">{category.label}</span>
+                  {expandedCategories[category.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+                {expandedCategories[category.id] && (
+                  <div className="space-y-1">
+                    {category.items.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        onClick={() => setSidebarOpen(false)}
+                        className={({ isActive }) =>
+                          clsx(
+                            'flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200',
+                            isActive
+                              ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange shadow-[0_0_20px_rgba(232,90,36,0.15)]'
+                              : 'text-gray-400 hover:bg-card-hover hover:text-white hover:shadow-sm'
+                          )
+                        }
+                      >
+                        <item.icon size={18} />
+                        <span className="flex-1">{item.label}</span>
+                        {/* Badge für Lager - nur für Pioneers */}
+                        {item.to === '/inventory' && isPioneer && pioneerPendingCount > 0 && (
+                          <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                            {pioneerPendingCount}
+                          </span>
+                        )}
+                      </NavLink>
+                    ))}
+                  </div>
                 )}
-              </NavLink>
+              </div>
             ))}
 
             {/* Datenbank-Kategorie (nur für Offiziere+) */}
