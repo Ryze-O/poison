@@ -1285,22 +1285,26 @@ export default function MissionEditorPage() {
                             placeholder="Position Name"
                             className="flex-1 bg-transparent border-b border-gray-600 focus:border-krt-orange focus:outline-none text-sm text-white"
                           />
-                          <select
+                          <input
+                            type="text"
                             value={pos.position_type || ''}
                             onChange={(e) =>
                               updatePosition(unit._localId, pos._localId, {
                                 position_type: e.target.value || null,
                               })
                             }
-                            className="bg-krt-dark border border-gray-600 rounded px-2 py-1 text-xs text-white"
-                          >
-                            <option value="">Typ</option>
-                            <option value="commander">Kommandant</option>
-                            <option value="pilot">Pilot</option>
-                            <option value="crew">Crew</option>
-                            <option value="lead">Lead</option>
-                            <option value="wing">Wing</option>
-                          </select>
+                            placeholder="Typ"
+                            className="w-24 bg-krt-dark border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                            list={`position-types-${unit._localId}`}
+                          />
+                          <datalist id={`position-types-${unit._localId}`}>
+                            <option value="Kommandant" />
+                            <option value="Pilot" />
+                            <option value="Crew" />
+                            <option value="Lead" />
+                            <option value="Gunner" />
+                            <option value="Medic" />
+                          </datalist>
                           <label className="flex items-center gap-1 text-xs text-gray-400">
                             <input
                               type="checkbox"
