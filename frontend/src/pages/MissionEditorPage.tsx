@@ -60,6 +60,27 @@ interface LocalMissionData {
 
 const generateLocalId = () => Math.random().toString(36).substring(2, 11)
 
+// Helper function to compute unit display name from unit_type and ship_name
+const getUnitDisplayName = (unit: { unit_type: string | null; ship_name: string | null }, index: number): string => {
+  if (unit.unit_type && unit.ship_name) {
+    return `${unit.unit_type} ${unit.ship_name}`
+  } else if (unit.unit_type) {
+    return unit.unit_type
+  } else if (unit.ship_name) {
+    return unit.ship_name
+  }
+  return `Einheit ${index + 1}`
+}
+
+// Position templates per unit type
+const UNIT_POSITION_TEMPLATES: Record<string, string[]> = {
+  'GKS': ['Kommandant', 'Pilot', 'Gunner 1', 'Gunner 2', 'Spezialrolle'],
+  'Jäger': ['Lead', 'Dogfighter 1', 'Dogfighter 2', 'Dogfighter 3'],
+  'Squad': ['Lead', 'Member 1', 'Member 2', 'Member 3'],
+  'BEAST': ['Lead', 'Pilot', 'Gunner'],
+  'DEALS': ['Lead', 'Member 1', 'Member 2'],
+}
+
 function InfoTooltip({ text }: { text: string }) {
   const [show, setShow] = useState(false)
   return (
@@ -355,8 +376,8 @@ export default function MissionEditorPage() {
         radio_frequencies: unit.radio_frequencies,
         sort_order: unit.sort_order,
         positions: unit.positions.map((p) => ({
-          name: p.name,
           // Filter out '__custom__' marker - convert to null
+          name: p.name === '__custom__' ? null : p.name,
           position_type: p.position_type === '__custom__' ? null : p.position_type,
           is_required: p.is_required,
           min_count: p.min_count,
@@ -443,7 +464,46 @@ export default function MissionEditorPage() {
   }
 
   const updateUnit = (localId: string, updates: Partial<LocalUnit>) => {
-    setUnits(units.map((u) => (u._localId === localId ? { ...u, ...updates } : u)))
+    setUnits(units.map((u) => {
+      if (u._localId !== localId) return u
+
+      const updatedUnit = { ...u, ...updates }
+
+      // If unit_type changed, auto-load position templates
+      if (updates.unit_type !== undefined && updates.unit_type !== u.unit_type) {
+        const template = UNIT_POSITION_TEMPLATES[updates.unit_type || '']
+        if (template) {
+          // Only auto-load if unit has just 1 default position or is empty
+          const shouldAutoLoad = u.positions.length <= 1
+          if (shouldAutoLoad) {
+            updatedUnit.positions = template.map((posName, idx) => ({
+              _localId: generateLocalId(),
+              name: posName,
+              position_type: posName, // Keep in sync
+              is_required: idx === 0, // First position is required
+              min_count: 1,
+              max_count: 1,
+              required_role_id: null,
+              notes: null,
+              sort_order: idx,
+            }))
+          }
+        }
+      }
+
+      // Auto-update name based on unit_type and ship_name
+      const newUnitType = updates.unit_type !== undefined ? updates.unit_type : u.unit_type
+      const newShipName = updates.ship_name !== undefined ? updates.ship_name : u.ship_name
+      if (newUnitType && newShipName) {
+        updatedUnit.name = `${newUnitType} ${newShipName}`
+      } else if (newUnitType) {
+        updatedUnit.name = newUnitType
+      } else if (newShipName) {
+        updatedUnit.name = newShipName
+      }
+
+      return updatedUnit
+    }))
   }
 
   const addPosition = (unitLocalId: string) => {
@@ -456,7 +516,7 @@ export default function MissionEditorPage() {
               ...u.positions,
               {
                 _localId: generateLocalId(),
-                name: `Position ${u.positions.length + 1}`,
+                name: null, // Will be selected from dropdown
                 position_type: null,
                 is_required: false,
                 min_count: 1,
@@ -1030,20 +1090,9 @@ export default function MissionEditorPage() {
               >
                 <Grip size={16} className="text-gray-500" />
                 <div className="flex-1">
-                  <input
-                    type="text"
-                    value={unit.name}
-                    onChange={(e) => {
-                      e.stopPropagation()
-                      updateUnit(unit._localId, { name: e.target.value })
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="bg-transparent border-b border-transparent hover:border-gray-600 focus:border-krt-orange focus:outline-none font-semibold text-white"
-                    placeholder="Einheit Name"
-                  />
-                  {unit.ship_name && (
-                    <span className="ml-2 text-sm text-gray-400">({unit.ship_name})</span>
-                  )}
+                  <span className="font-semibold text-white">
+                    {getUnitDisplayName(unit, units.indexOf(unit))}
+                  </span>
                 </div>
                 <span className="text-sm text-gray-400">{unit.positions.length} Positionen</span>
                 <button
@@ -1279,119 +1328,110 @@ export default function MissionEditorPage() {
                       </button>
                     </div>
                     <div className="space-y-2">
-                      {unit.positions.map((pos) => (
-                        <div
-                          key={pos._localId}
-                          className="flex items-center gap-2 p-2 bg-krt-darker rounded"
-                        >
-                          <input
-                            type="text"
-                            value={pos.name}
-                            onChange={(e) =>
-                              updatePosition(unit._localId, pos._localId, { name: e.target.value })
-                            }
-                            placeholder="Position Name"
-                            className="flex-1 bg-transparent border-b border-gray-600 focus:border-krt-orange focus:outline-none text-sm text-white"
-                          />
-{/* Position Type: Select dropdown with all operational roles + custom entry */}
-                          {(() => {
-                            // Build list of all position type options
-                            const allOptions = [
-                              ...(operationalRoles?.map(r => r.name) || []),
-                              'Kommandant', 'Pilot', 'Crew', 'Lead', 'Gunner', 'Medic'
-                            ]
-                            // Remove duplicates
-                            const uniqueOptions = [...new Set(allOptions)]
-                            // Check if current value is a custom value (not in options)
-                            // Also check for '__custom__' marker which indicates user wants to enter custom value
-                            const trimmedValue = (pos.position_type || '').trim()
-                            const isCustomMode = pos.position_type === '__custom__' ||
-                              (trimmedValue !== '' && !uniqueOptions.includes(trimmedValue))
+                      {unit.positions.map((pos) => {
+                        // Build list of all position options from operational roles + common types
+                        const allOptions = [
+                          ...(operationalRoles?.map(r => r.name) || []),
+                          'Kommandant', 'Pilot', 'Crew', 'Lead', 'Gunner', 'Medic', 'Dogfighter', 'Aufklärer', 'Interdictor'
+                        ]
+                        const uniqueOptions = [...new Set(allOptions)]
+                        const isCustomMode = pos.name === '__custom__' ||
+                          (pos.name && pos.name.trim() !== '' && !uniqueOptions.includes(pos.name))
 
-                            return isCustomMode ? (
-                              // Show text input for custom value
-                              <div className="flex items-center gap-1">
+                        return (
+                          <div
+                            key={pos._localId}
+                            className="flex items-center gap-2 p-2 bg-krt-darker rounded"
+                          >
+                            {/* Single position field: dropdown or custom input */}
+                            {isCustomMode ? (
+                              // Custom text input mode
+                              <div className="flex items-center gap-1 flex-1">
                                 <input
                                   type="text"
-                                  value={pos.position_type === '__custom__' ? '' : (pos.position_type || '')}
-                                  onChange={(e) =>
+                                  value={pos.name === '__custom__' ? '' : (pos.name || '')}
+                                  onChange={(e) => {
+                                    const value = e.target.value || null
                                     updatePosition(unit._localId, pos._localId, {
-                                      position_type: e.target.value || null,
+                                      name: value,
+                                      position_type: value, // Keep in sync
                                     })
-                                  }
-                                  placeholder="Eigener Typ"
-                                  className="w-24 bg-krt-dark border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                                  }}
+                                  placeholder="Position eingeben..."
+                                  className="flex-1 bg-krt-dark border border-gray-600 rounded px-2 py-1 text-sm text-white"
                                   autoFocus
                                 />
                                 <button
                                   type="button"
-                                  onClick={() => updatePosition(unit._localId, pos._localId, { position_type: null })}
-                                  className="text-gray-400 hover:text-white text-xs"
+                                  onClick={() => updatePosition(unit._localId, pos._localId, { name: null, position_type: null })}
+                                  className="text-gray-400 hover:text-white text-xs px-1"
                                   title="Zurück zur Auswahl"
                                 >
                                   ✕
                                 </button>
                               </div>
                             ) : (
-                              // Show select dropdown
+                              // Dropdown mode
                               <select
-                                value={pos.position_type || ''}
+                                value={pos.name || ''}
                                 onChange={(e) => {
                                   if (e.target.value === '__custom__') {
-                                    // Switch to custom input mode
-                                    updatePosition(unit._localId, pos._localId, { position_type: '__custom__' })
+                                    updatePosition(unit._localId, pos._localId, { name: '__custom__', position_type: '__custom__' })
                                   } else {
+                                    const value = e.target.value || null
                                     updatePosition(unit._localId, pos._localId, {
-                                      position_type: e.target.value || null,
+                                      name: value,
+                                      position_type: value, // Keep in sync
                                     })
                                   }
                                 }}
-                                className="w-28 bg-krt-dark border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                                className="flex-1 bg-krt-dark border border-gray-600 rounded px-2 py-1 text-sm text-white"
                               >
-                                <option value="">Typ wählen</option>
+                                <option value="">Position wählen...</option>
                                 {uniqueOptions.map((opt) => (
                                   <option key={opt} value={opt}>{opt}</option>
                                 ))}
                                 <option value="__custom__">Andere...</option>
                               </select>
-                            )
-                          })()}
-                          <label className="flex items-center gap-1 text-xs text-gray-400">
-                            <input
-                              type="checkbox"
-                              checked={pos.is_required}
-                              onChange={(e) =>
-                                updatePosition(unit._localId, pos._localId, {
-                                  is_required: e.target.checked,
-                                })
-                              }
-                              className="w-3 h-3"
-                            />
-                            Pflicht
-                          </label>
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              min="1"
-                              max="20"
-                              value={pos.max_count}
-                              onChange={(e) =>
-                                updatePosition(unit._localId, pos._localId, {
-                                  max_count: Number(e.target.value),
-                                })
-                              }
-                              className="w-12 bg-krt-dark border border-gray-600 rounded px-1 py-1 text-xs text-center text-white"
-                            />
-                            <span className="text-xs text-gray-500">Max</span>
+                            )}
+
+                            <label className="flex items-center gap-1 text-xs text-gray-400">
+                              <input
+                                type="checkbox"
+                                checked={pos.is_required}
+                                onChange={(e) =>
+                                  updatePosition(unit._localId, pos._localId, {
+                                    is_required: e.target.checked,
+                                  })
+                                }
+                                className="w-3 h-3"
+                              />
+                              Pflicht
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min="1"
+                                max="20"
+                                value={pos.max_count}
+                                onChange={(e) =>
+                                  updatePosition(unit._localId, pos._localId, {
+                                    max_count: Number(e.target.value),
+                                  })
+                                }
+                                className="w-12 bg-krt-dark border border-gray-600 rounded px-1 py-1 text-xs text-center text-white"
+                              />
+                              <span className="text-xs text-gray-500">Max</span>
+                            </div>
+                            <button
+                              onClick={() => removePosition(unit._localId, pos._localId)}
+                              className="p-1 text-gray-400 hover:text-red-400"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
-                          <button
-                            onClick={() => removePosition(unit._localId, pos._localId)}
-                            className="p-1 text-gray-400 hover:text-red-400"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
