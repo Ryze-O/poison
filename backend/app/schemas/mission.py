@@ -223,7 +223,14 @@ class MissionRegistrationResponse(MissionRegistrationBase):
 
 class MissionBase(BaseModel):
     title: str
-    description: Optional[str] = None
+    description: Optional[str] = None  # Legacy-Feld
+
+    # Strukturierte Beschreibungsfelder
+    mission_context: Optional[str] = None      # Kontext/Hintergrund/Lore
+    mission_objective: Optional[str] = None    # Einsatzziel
+    preparation_notes: Optional[str] = None    # Vorbereitung für Teilnehmer
+    special_notes: Optional[str] = None        # Besondere Hinweise/Risiken
+
     scheduled_date: datetime
     duration_minutes: Optional[int] = None
     equipment_level: Optional[str] = None
@@ -238,7 +245,14 @@ class MissionCreate(MissionBase):
 
 class MissionUpdate(BaseModel):
     title: Optional[str] = None
-    description: Optional[str] = None
+    description: Optional[str] = None  # Legacy-Feld
+
+    # Strukturierte Beschreibungsfelder
+    mission_context: Optional[str] = None
+    mission_objective: Optional[str] = None
+    preparation_notes: Optional[str] = None
+    special_notes: Optional[str] = None
+
     scheduled_date: Optional[datetime] = None
     duration_minutes: Optional[int] = None
     start_location_id: Optional[int] = None
@@ -292,6 +306,12 @@ class BriefingResponse(BaseModel):
     title: str
     scheduled_date: datetime
     duration_minutes: Optional[int] = None
+
+    # Strukturierte Beschreibung
+    mission_context: Optional[str] = None      # Kontext/Hintergrund/Lore
+    mission_objective: Optional[str] = None    # Einsatzziel
+    preparation_notes: Optional[str] = None    # Vorbereitung für Teilnehmer
+    special_notes: Optional[str] = None        # Besondere Hinweise/Risiken
 
     # Pre-Briefing
     start_location: Optional[str] = None

@@ -636,7 +636,12 @@ export interface MissionRegistration {
 export interface Mission {
   id: number
   title: string
-  description: string | null
+  description: string | null  // Legacy-Feld
+  // Strukturierte Beschreibungsfelder
+  mission_context: string | null
+  mission_objective: string | null
+  preparation_notes: string | null
+  special_notes: string | null
   scheduled_date: string
   duration_minutes: number | null
   status: MissionStatus
@@ -662,7 +667,12 @@ export interface MissionDetail extends Mission {
 
 export interface MissionCreate {
   title: string
-  description?: string | null
+  description?: string | null  // Legacy-Feld
+  // Strukturierte Beschreibungsfelder
+  mission_context?: string | null
+  mission_objective?: string | null
+  preparation_notes?: string | null
+  special_notes?: string | null
   scheduled_date: string
   duration_minutes?: number | null
   start_location_id?: number | null
@@ -674,7 +684,12 @@ export interface MissionCreate {
 
 export interface MissionUpdate {
   title?: string
-  description?: string | null
+  description?: string | null  // Legacy-Feld
+  // Strukturierte Beschreibungsfelder
+  mission_context?: string | null
+  mission_objective?: string | null
+  preparation_notes?: string | null
+  special_notes?: string | null
   scheduled_date?: string
   duration_minutes?: number | null
   start_location_id?: number | null
@@ -752,6 +767,12 @@ export interface Briefing {
   title: string
   scheduled_date: string
   duration_minutes: number | null
+  // Strukturierte Beschreibung
+  mission_context: string | null
+  mission_objective: string | null
+  preparation_notes: string | null
+  special_notes: string | null
+  // Pre-Briefing
   start_location: string | null
   equipment_level: string | null
   target_group: string | null

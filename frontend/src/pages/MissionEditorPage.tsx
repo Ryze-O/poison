@@ -42,7 +42,11 @@ interface LocalPhase extends MissionPhaseCreate {
 
 interface LocalMissionData {
   title: string
-  description: string
+  // Strukturierte Beschreibungsfelder
+  mission_context: string
+  mission_objective: string
+  preparation_notes: string
+  special_notes: string
   scheduled_date: string
   scheduled_time: string
   duration_hours: number
@@ -93,7 +97,10 @@ export default function MissionEditorPage() {
   // Local state for the mission data
   const [missionData, setMissionData] = useState<LocalMissionData>({
     title: '',
-    description: '',
+    mission_context: '',
+    mission_objective: '',
+    preparation_notes: '',
+    special_notes: '',
     scheduled_date: new Date().toISOString().split('T')[0],
     scheduled_time: '19:45',
     duration_hours: 2,
@@ -138,7 +145,10 @@ export default function MissionEditorPage() {
       const date = new Date(existingMission.scheduled_date)
       setMissionData({
         title: existingMission.title,
-        description: existingMission.description || '',
+        mission_context: existingMission.mission_context || '',
+        mission_objective: existingMission.mission_objective || '',
+        preparation_notes: existingMission.preparation_notes || '',
+        special_notes: existingMission.special_notes || '',
         scheduled_date: date.toISOString().split('T')[0],
         scheduled_time: date.toTimeString().slice(0, 5),
         duration_hours: Math.floor((existingMission.duration_minutes || 0) / 60),
@@ -278,7 +288,10 @@ export default function MissionEditorPage() {
     mutationFn: async (data: { id: number; updates: Partial<LocalMissionData> }) => {
       const payload = {
         title: data.updates.title,
-        description: data.updates.description || null,
+        mission_context: data.updates.mission_context || null,
+        mission_objective: data.updates.mission_objective || null,
+        preparation_notes: data.updates.preparation_notes || null,
+        special_notes: data.updates.special_notes || null,
         scheduled_date: `${data.updates.scheduled_date}T${data.updates.scheduled_time}:00`,
         duration_minutes:
           (data.updates.duration_hours || 0) * 60 + (data.updates.duration_minutes || 0),
@@ -365,7 +378,10 @@ export default function MissionEditorPage() {
   const handleSave = () => {
     const payload: MissionCreate = {
       title: missionData.title,
-      description: missionData.description || null,
+      mission_context: missionData.mission_context || null,
+      mission_objective: missionData.mission_objective || null,
+      preparation_notes: missionData.preparation_notes || null,
+      special_notes: missionData.special_notes || null,
       scheduled_date: `${missionData.scheduled_date}T${missionData.scheduled_time}:00`,
       duration_minutes: missionData.duration_hours * 60 + missionData.duration_minutes,
       start_location_id: missionData.start_location_id,
@@ -900,18 +916,67 @@ export default function MissionEditorPage() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">
-                Beschreibung
-                <InfoTooltip text="Optionale ausführlichere Beschreibung des Einsatzes" />
-              </label>
-              <textarea
-                value={missionData.description}
-                onChange={(e) => setMissionData({ ...missionData, description: e.target.value })}
-                placeholder="Optionale Beschreibung..."
-                rows={3}
-                className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
-              />
+            {/* Strukturierte Beschreibungsfelder */}
+            <div className="border-t border-gray-700 pt-4 mt-4">
+              <h3 className="text-md font-semibold mb-4 text-gray-300">Beschreibung (strukturiert)</h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">
+                    Kontext / Hintergrund
+                    <InfoTooltip text="Warum findet dieser Einsatz statt? Lore, Situation, Vorgeschichte. Beispiel: 'Die Situation um die Molina Mold spitzt sich zu...'" />
+                  </label>
+                  <textarea
+                    value={missionData.mission_context}
+                    onChange={(e) => setMissionData({ ...missionData, mission_context: e.target.value })}
+                    placeholder="z.B. Die Situation um die Molina Mold spitzt sich zu. Staffel Viper hat am Samstag geholfen, Hilfsgüter sicherzustellen..."
+                    rows={3}
+                    className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">
+                    Einsatzziel
+                    <InfoTooltip text="Was ist das Hauptziel? Was wollen wir erreichen? Beispiel: 'Jagd nach Decari Pods auf Bloom (Pyro). Störer vertreiben.'" />
+                  </label>
+                  <textarea
+                    value={missionData.mission_objective}
+                    onChange={(e) => setMissionData({ ...missionData, mission_objective: e.target.value })}
+                    placeholder="z.B. Jagd nach Decari Pods auf Bloom (Pyro). Jeden Störer vertreiben und notfalls beseitigen."
+                    rows={2}
+                    className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">
+                    Vorbereitung
+                    <InfoTooltip text="Was müssen Teilnehmer vorbereiten oder mitbringen? Beispiel: 'Schiffe nach Orbituary claimen mit Meta-Fit. Jäger mit Ballistic-Fits.'" />
+                  </label>
+                  <textarea
+                    value={missionData.preparation_notes}
+                    onChange={(e) => setMissionData({ ...missionData, preparation_notes: e.target.value })}
+                    placeholder="z.B. Claimt alle Schiffe nach Orbituary mit Meta-Fit. Jäger bitte mit Ballistic- und Anti-GKS-Fits."
+                    rows={2}
+                    className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">
+                    Besondere Hinweise (optional)
+                    <InfoTooltip text="Risiken, Warnungen, Sonderregeln über ROE hinaus. Beispiel: 'Kein Boarding, kein Finishen. Reparaturzeit wird gewährt.'" />
+                  </label>
+                  <textarea
+                    value={missionData.special_notes}
+                    onChange={(e) => setMissionData({ ...missionData, special_notes: e.target.value })}
+                    placeholder="z.B. Kein Boarding, kein Finishen von Schiffen. Infektionsgefahr bei Höhlenoperation!"
+                    rows={2}
+                    className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1388,8 +1453,34 @@ export default function MissionEditorPage() {
               )}
             </div>
 
-            {missionData.description && (
-              <p className="mt-4 text-gray-300 text-sm">{missionData.description}</p>
+            {/* Strukturierte Beschreibung */}
+            {(missionData.mission_context || missionData.mission_objective || missionData.preparation_notes || missionData.special_notes) && (
+              <div className="mt-4 pt-4 border-t border-gray-700 space-y-3 text-sm">
+                {missionData.mission_context && (
+                  <div>
+                    <span className="text-gray-400 font-medium">Hintergrund: </span>
+                    <span className="text-gray-300">{missionData.mission_context}</span>
+                  </div>
+                )}
+                {missionData.mission_objective && (
+                  <div>
+                    <span className="text-gray-400 font-medium">Einsatzziel: </span>
+                    <span className="text-gray-300">{missionData.mission_objective}</span>
+                  </div>
+                )}
+                {missionData.preparation_notes && (
+                  <div>
+                    <span className="text-gray-400 font-medium">Vorbereitung: </span>
+                    <span className="text-gray-300">{missionData.preparation_notes}</span>
+                  </div>
+                )}
+                {missionData.special_notes && (
+                  <div>
+                    <span className="text-krt-orange font-medium">⚠️ Hinweise: </span>
+                    <span className="text-gray-300">{missionData.special_notes}</span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

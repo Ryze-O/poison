@@ -35,7 +35,13 @@ class Mission(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False)
-    description = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)  # Legacy-Feld, wird durch strukturierte Felder ersetzt
+
+    # Strukturierte Beschreibungsfelder
+    mission_context = Column(Text, nullable=True)      # Kontext/Hintergrund/Lore
+    mission_objective = Column(Text, nullable=True)    # Einsatzziel
+    preparation_notes = Column(Text, nullable=True)    # Vorbereitung für Teilnehmer
+    special_notes = Column(Text, nullable=True)        # Besondere Hinweise/Risiken
 
     # Zeitplanung
     scheduled_date = Column(DateTime, nullable=False)

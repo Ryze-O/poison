@@ -1077,6 +1077,12 @@ async def get_briefing(
         title=mission.title,
         scheduled_date=mission.scheduled_date,
         duration_minutes=mission.duration_minutes,
+        # Strukturierte Beschreibungsfelder
+        mission_context=mission.mission_context,
+        mission_objective=mission.mission_objective,
+        preparation_notes=mission.preparation_notes,
+        special_notes=mission.special_notes,
+        # Pre-Briefing
         start_location=mission.start_location.name if mission.start_location else None,
         equipment_level=mission.equipment_level,
         target_group=mission.target_group,

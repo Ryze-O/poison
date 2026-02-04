@@ -578,3 +578,39 @@ button:focus, button:focus-visible {
 *:-moz-focusring {
   outline: none !important;
 }
+
+/* ============================================
+   Native Input Styling (date, time, number)
+   Force dark color scheme for browser controls
+   ============================================ */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="week"],
+input[type="month"],
+input[type="number"] {
+  color-scheme: dark;
+}
+
+.light input[type="date"],
+.light input[type="time"],
+.light input[type="datetime-local"],
+.light input[type="week"],
+.light input[type="month"],
+.light input[type="number"] {
+  color-scheme: light;
+}
+
+/* Chrome/Edge calendar icon styling */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+
+.light input[type="date"]::-webkit-calendar-picker-indicator,
+.light input[type="time"]::-webkit-calendar-picker-indicator,
+.light input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: none;
+}

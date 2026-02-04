@@ -147,6 +147,31 @@ export default function MissionDetailPage() {
     if (briefing.rules_of_engagement) text += `• ROE: ${briefing.rules_of_engagement}\n`
     text += `\n`
 
+    // Strukturierte Beschreibung
+    if (briefing.mission_context) {
+      text += `HINTERGRUND\n`
+      text += `───────────────────────────────────────\n`
+      text += `${briefing.mission_context}\n\n`
+    }
+
+    if (briefing.mission_objective) {
+      text += `EINSATZZIEL\n`
+      text += `───────────────────────────────────────\n`
+      text += `${briefing.mission_objective}\n\n`
+    }
+
+    if (briefing.preparation_notes) {
+      text += `VORBEREITUNG\n`
+      text += `───────────────────────────────────────\n`
+      text += `${briefing.preparation_notes}\n\n`
+    }
+
+    if (briefing.special_notes) {
+      text += `⚠️ BESONDERE HINWEISE\n`
+      text += `───────────────────────────────────────\n`
+      text += `${briefing.special_notes}\n\n`
+    }
+
     if (briefing.phases.length > 0) {
       text += `ABLAUF\n`
       text += `───────────────────────────────────────\n`
@@ -352,13 +377,43 @@ export default function MissionDetailPage() {
                 </div>
               )}
             </div>
-            {mission.description && (
-              <div className="mt-4 pt-4 border-t border-gray-700">
-                <div className="text-sm text-gray-400 mb-2">Beschreibung</div>
-                <div className="whitespace-pre-wrap">{mission.description}</div>
-              </div>
-            )}
           </div>
+
+          {/* Strukturierte Beschreibung */}
+          {(mission.mission_context || mission.mission_objective || mission.preparation_notes || mission.special_notes) && (
+            <div className="bg-krt-dark rounded-lg border border-gray-700 p-6">
+              <h2 className="text-lg font-semibold mb-4">Beschreibung</h2>
+              <div className="space-y-4">
+                {mission.mission_context && (
+                  <div>
+                    <div className="text-sm text-gray-400 mb-1">Hintergrund</div>
+                    <div className="whitespace-pre-wrap">{mission.mission_context}</div>
+                  </div>
+                )}
+                {mission.mission_objective && (
+                  <div>
+                    <div className="text-sm text-gray-400 mb-1">Einsatzziel</div>
+                    <div className="whitespace-pre-wrap font-medium text-krt-orange">{mission.mission_objective}</div>
+                  </div>
+                )}
+                {mission.preparation_notes && (
+                  <div>
+                    <div className="text-sm text-gray-400 mb-1">Vorbereitung</div>
+                    <div className="whitespace-pre-wrap">{mission.preparation_notes}</div>
+                  </div>
+                )}
+                {mission.special_notes && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-3">
+                    <div className="text-sm text-yellow-500 mb-1 flex items-center gap-2">
+                      <AlertCircle size={16} />
+                      Besondere Hinweise
+                    </div>
+                    <div className="whitespace-pre-wrap text-yellow-100">{mission.special_notes}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Phasen */}
           {mission.phases.length > 0 && (
@@ -678,6 +733,43 @@ export default function MissionDetailPage() {
                   {briefing.rules_of_engagement && (
                     <div>• ROE: {briefing.rules_of_engagement}</div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Strukturierte Beschreibung */}
+            {briefing.mission_context && (
+              <div className="mb-6">
+                <div className="text-krt-orange font-bold mb-2">HINTERGRUND</div>
+                <div className="border-t border-gray-600 pt-2 whitespace-pre-wrap">
+                  {briefing.mission_context}
+                </div>
+              </div>
+            )}
+
+            {briefing.mission_objective && (
+              <div className="mb-6">
+                <div className="text-krt-orange font-bold mb-2">EINSATZZIEL</div>
+                <div className="border-t border-gray-600 pt-2 whitespace-pre-wrap">
+                  {briefing.mission_objective}
+                </div>
+              </div>
+            )}
+
+            {briefing.preparation_notes && (
+              <div className="mb-6">
+                <div className="text-krt-orange font-bold mb-2">VORBEREITUNG</div>
+                <div className="border-t border-gray-600 pt-2 whitespace-pre-wrap">
+                  {briefing.preparation_notes}
+                </div>
+              </div>
+            )}
+
+            {briefing.special_notes && (
+              <div className="mb-6">
+                <div className="text-yellow-500 font-bold mb-2">⚠️ BESONDERE HINWEISE</div>
+                <div className="border-t border-yellow-500/30 pt-2 whitespace-pre-wrap text-yellow-100">
+                  {briefing.special_notes}
                 </div>
               </div>
             )}
