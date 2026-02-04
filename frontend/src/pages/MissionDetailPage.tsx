@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
 import {
@@ -18,6 +18,7 @@ import {
   UserMinus,
   Radio,
   AlertCircle,
+  Trash2,
 } from 'lucide-react'
 import type {
   MissionDetail,
@@ -48,12 +49,14 @@ type TabType = 'overview' | 'units' | 'participants' | 'briefing'
 
 export default function MissionDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [copied, setCopied] = useState(false)
   const [registrationNote, setRegistrationNote] = useState('')
   const [selectedUnitId, setSelectedUnitId] = useState<number | null>(null)
   const [selectedPositionId, setSelectedPositionId] = useState<number | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
   const currentUser = useAuthStore.getState().user
@@ -116,6 +119,14 @@ export default function MissionDetailPage() {
     mutationFn: () => apiClient.post(`/api/missions/${id}/complete`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mission', id] })
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiClient.delete(`/api/missions/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['missions'] })
+      navigate('/einsaetze')
     },
   })
 
@@ -307,9 +318,50 @@ export default function MissionDetailPage() {
                 Abschließen
               </button>
             )}
+            {canManage && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-red-600/20 border border-red-600 text-red-400 rounded hover:bg-red-600/40"
+                title="Einsatz löschen"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-krt-dark border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Einsatz löschen?</h3>
+            <p className="text-gray-400 mb-6">
+              Möchtest du den Einsatz <span className="text-white font-medium">"{mission.title}"</span> wirklich
+              löschen? Diese Aktion kann nicht rückgängig gemacht werden.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={() => {
+                  deleteMutation.mutate()
+                  setShowDeleteConfirm(false)
+                }}
+                disabled={deleteMutation.isPending}
+                className="px-4 py-2 bg-red-600 rounded hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                <Trash2 size={16} />
+                {deleteMutation.isPending ? 'Löschen...' : 'Endgültig löschen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-700 mb-6">
