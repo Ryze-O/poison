@@ -27,6 +27,7 @@ import type {
   MissionPositionCreate,
   MissionPhaseCreate,
   Location,
+  OperationalRole,
 } from '../api/types'
 
 type WizardStep = 1 | 2 | 3 | 4
@@ -137,6 +138,12 @@ export default function MissionEditorPage() {
   const { data: locations } = useQuery<Location[]>({
     queryKey: ['locations'],
     queryFn: () => apiClient.get('/api/locations').then((r) => r.data),
+  })
+
+  // Fetch operational roles from Viper Structure for position type suggestions
+  const { data: operationalRoles } = useQuery<OperationalRole[]>({
+    queryKey: ['operational-roles'],
+    queryFn: () => apiClient.get('/api/staffel/operational-roles').then((r) => r.data),
   })
 
   // Populate form with existing mission data
@@ -413,7 +420,7 @@ export default function MissionEditorPage() {
         {
           _localId: generateLocalId(),
           name: 'Kommandant',
-          position_type: 'commander',
+          position_type: 'Kommandant',
           is_required: true,
           min_count: 1,
           max_count: 1,
@@ -1298,6 +1305,11 @@ export default function MissionEditorPage() {
                             list={`position-types-${unit._localId}`}
                           />
                           <datalist id={`position-types-${unit._localId}`}>
+                            {/* Operational roles from Viper Structure */}
+                            {operationalRoles?.map((role) => (
+                              <option key={role.id} value={role.name} />
+                            ))}
+                            {/* Additional common position types */}
                             <option value="Kommandant" />
                             <option value="Pilot" />
                             <option value="Crew" />
