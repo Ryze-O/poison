@@ -8,11 +8,14 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Kartell Farben - Orange Akzent
+        // Kartell Farben - Orange Akzent + Dark Backgrounds
         'krt': {
           'orange': '#E85A24',
           'orange-dark': '#C94A1A',
           'orange-light': '#F26522',
+          'dark': '#1a1b24',       // Input/Element background
+          'darker': '#13141a',    // Card background
+          'darkest': '#0f0f12',   // Page background
         },
         // Poison Neon-Grün für Branding
         'poison': {

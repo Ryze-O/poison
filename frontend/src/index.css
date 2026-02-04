@@ -614,3 +614,28 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .light input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   filter: none;
 }
+
+/* ============================================
+   Force dark background on all form inputs
+   Override any browser defaults
+   ============================================ */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="url"],
+input[type="tel"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+textarea,
+select {
+  background-color: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted) !important;
+}
