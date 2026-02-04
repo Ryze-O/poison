@@ -61,7 +61,7 @@ interface LocalMissionData {
 const generateLocalId = () => Math.random().toString(36).substring(2, 11)
 
 // Helper function to compute unit display name from unit_type and ship_name
-const getUnitDisplayName = (unit: { unit_type: string | null; ship_name: string | null }, index: number): string => {
+const getUnitDisplayName = (unit: { unit_type?: string | null; ship_name?: string | null }, index: number): string => {
   if (unit.unit_type && unit.ship_name) {
     return `${unit.unit_type} ${unit.ship_name}`
   } else if (unit.unit_type) {
@@ -375,9 +375,9 @@ export default function MissionEditorPage() {
         ship_id: unit.ship_id,
         radio_frequencies: unit.radio_frequencies,
         sort_order: unit.sort_order,
-        positions: unit.positions.map((p) => ({
-          // Filter out '__custom__' marker - convert to null
-          name: p.name === '__custom__' ? null : p.name,
+        positions: unit.positions.map((p, idx) => ({
+          // Filter out '__custom__' marker and empty strings - use fallback name
+          name: (!p.name || p.name === '__custom__') ? `Position ${idx + 1}` : p.name,
           position_type: p.position_type === '__custom__' ? null : p.position_type,
           is_required: p.is_required,
           min_count: p.min_count,
@@ -516,7 +516,7 @@ export default function MissionEditorPage() {
               ...u.positions,
               {
                 _localId: generateLocalId(),
-                name: null, // Will be selected from dropdown
+                name: '', // Will be selected from dropdown
                 position_type: null,
                 is_required: false,
                 min_count: 1,
@@ -1351,10 +1351,10 @@ export default function MissionEditorPage() {
                                   type="text"
                                   value={pos.name === '__custom__' ? '' : (pos.name || '')}
                                   onChange={(e) => {
-                                    const value = e.target.value || null
+                                    const value = e.target.value
                                     updatePosition(unit._localId, pos._localId, {
                                       name: value,
-                                      position_type: value, // Keep in sync
+                                      position_type: value || null, // Keep in sync
                                     })
                                   }}
                                   placeholder="Position eingeben..."
@@ -1363,7 +1363,7 @@ export default function MissionEditorPage() {
                                 />
                                 <button
                                   type="button"
-                                  onClick={() => updatePosition(unit._localId, pos._localId, { name: null, position_type: null })}
+                                  onClick={() => updatePosition(unit._localId, pos._localId, { name: '', position_type: null })}
                                   className="text-gray-400 hover:text-white text-xs px-1"
                                   title="Zurück zur Auswahl"
                                 >
@@ -1378,10 +1378,10 @@ export default function MissionEditorPage() {
                                   if (e.target.value === '__custom__') {
                                     updatePosition(unit._localId, pos._localId, { name: '__custom__', position_type: '__custom__' })
                                   } else {
-                                    const value = e.target.value || null
+                                    const value = e.target.value
                                     updatePosition(unit._localId, pos._localId, {
                                       name: value,
-                                      position_type: value, // Keep in sync
+                                      position_type: value || null, // Keep in sync
                                     })
                                   }
                                 }}
