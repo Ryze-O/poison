@@ -1,0 +1,1406 @@
+import { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { apiClient } from '../api/client'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Plus,
+  Trash2,
+  Info,
+  Rocket,
+  Save,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  Radio,
+  Users,
+  Clock,
+  MapPin,
+  HelpCircle,
+  Grip,
+} from 'lucide-react'
+import type {
+  MissionDetail,
+  MissionTemplate,
+  MissionCreate,
+  MissionUnitCreate,
+  MissionPositionCreate,
+  MissionPhaseCreate,
+  Location,
+  User,
+} from '../api/types'
+
+// Standard-Funkfrequenzen
+const STANDARD_FREQUENCIES = {
+  el_1: { key: 'el', label: 'Einsatzleitung 1', frequency: '102.11' },
+  el_2: { key: 'el', label: 'Einsatzleitung 2', frequency: '102.12' },
+  gks_1: { key: 'intern', label: 'GKS Intern 1', frequency: '102.31' },
+  gks_2: { key: 'intern', label: 'GKS Intern 2', frequency: '102.32' },
+  jaeger_1: { key: 'intern', label: 'Jäger 1', frequency: '102.51' },
+  jaeger_2: { key: 'intern', label: 'Jäger 2', frequency: '102.52' },
+  squad_1: { key: 'intern', label: 'Squad 1', frequency: '102.61' },
+  squad_2: { key: 'intern', label: 'Squad 2', frequency: '102.62' },
+  beast: { key: 'intern', label: 'BEAST', frequency: '102.70' },
+  targets_1: { key: 'targets', label: 'Targets 1', frequency: '102.91' },
+  targets_2: { key: 'targets', label: 'Targets 2', frequency: '102.92' },
+  notfall: { key: 'notfall', label: 'Notfall', frequency: '102.90' },
+}
+
+type WizardStep = 1 | 2 | 3 | 4
+
+interface LocalUnit extends MissionUnitCreate {
+  _localId: string
+  positions: (MissionPositionCreate & { _localId: string })[]
+}
+
+interface LocalPhase extends MissionPhaseCreate {
+  _localId: string
+}
+
+interface LocalMissionData {
+  title: string
+  description: string
+  scheduled_date: string
+  scheduled_time: string
+  duration_hours: number
+  duration_minutes: number
+  start_location_id: number | null
+  equipment_level: string
+  target_group: string
+  rules_of_engagement: string
+}
+
+const generateLocalId = () => Math.random().toString(36).substring(2, 11)
+
+function InfoTooltip({ text }: { text: string }) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="relative inline-block ml-1">
+      <button
+        type="button"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onClick={() => setShow(!show)}
+        className="text-gray-400 hover:text-gray-300"
+      >
+        <HelpCircle size={14} />
+      </button>
+      {show && (
+        <div className="absolute z-50 left-6 top-0 w-64 p-2 bg-gray-800 border border-gray-600 rounded shadow-lg text-xs text-gray-300">
+          {text}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function MissionEditorPage() {
+  const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
+  const templateId = searchParams.get('template')
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const isEditing = !!id
+
+  const [currentStep, setCurrentStep] = useState<WizardStep>(1)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(
+    templateId ? Number(templateId) : null
+  )
+
+  // Local state for the mission data
+  const [missionData, setMissionData] = useState<LocalMissionData>({
+    title: '',
+    description: '',
+    scheduled_date: new Date().toISOString().split('T')[0],
+    scheduled_time: '20:00',
+    duration_hours: 3,
+    duration_minutes: 0,
+    start_location_id: null,
+    equipment_level: '',
+    target_group: '',
+    rules_of_engagement: '',
+  })
+
+  const [units, setUnits] = useState<LocalUnit[]>([])
+  const [phases, setPhases] = useState<LocalPhase[]>([])
+  const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set())
+
+  // Fetch existing mission if editing
+  const { data: existingMission, isLoading: missionLoading } = useQuery<MissionDetail>({
+    queryKey: ['mission', id],
+    queryFn: () => apiClient.get(`/api/missions/${id}`).then((r) => r.data),
+    enabled: isEditing,
+  })
+
+  // Fetch templates
+  const { data: templates } = useQuery<MissionTemplate[]>({
+    queryKey: ['mission-templates'],
+    queryFn: () => apiClient.get('/api/missions/templates').then((r) => r.data),
+  })
+
+  // Fetch locations
+  const { data: locations } = useQuery<Location[]>({
+    queryKey: ['locations'],
+    queryFn: () => apiClient.get('/api/locations').then((r) => r.data),
+  })
+
+  // Fetch users for assignments
+  const { data: allUsers } = useQuery<User[]>({
+    queryKey: ['users'],
+    queryFn: () => apiClient.get('/api/users').then((r) => r.data),
+  })
+
+  // Populate form with existing mission data
+  useEffect(() => {
+    if (existingMission) {
+      const date = new Date(existingMission.scheduled_date)
+      setMissionData({
+        title: existingMission.title,
+        description: existingMission.description || '',
+        scheduled_date: date.toISOString().split('T')[0],
+        scheduled_time: date.toTimeString().slice(0, 5),
+        duration_hours: Math.floor((existingMission.duration_minutes || 0) / 60),
+        duration_minutes: (existingMission.duration_minutes || 0) % 60,
+        start_location_id: existingMission.start_location_id,
+        equipment_level: existingMission.equipment_level || '',
+        target_group: existingMission.target_group || '',
+        rules_of_engagement: existingMission.rules_of_engagement || '',
+      })
+
+      // Convert existing units to local format
+      setUnits(
+        existingMission.units.map((unit) => ({
+          _localId: `existing-${unit.id}`,
+          name: unit.name,
+          unit_type: unit.unit_type,
+          description: unit.description,
+          ship_name: unit.ship_name,
+          ship_id: unit.ship_id,
+          radio_frequencies: unit.radio_frequencies,
+          sort_order: unit.sort_order,
+          positions: unit.positions.map((pos) => ({
+            _localId: `existing-${pos.id}`,
+            name: pos.name,
+            position_type: pos.position_type,
+            is_required: pos.is_required,
+            min_count: pos.min_count,
+            max_count: pos.max_count,
+            required_role_id: pos.required_role_id,
+            notes: pos.notes,
+            sort_order: pos.sort_order,
+          })),
+        }))
+      )
+
+      // Convert existing phases
+      setPhases(
+        existingMission.phases.map((phase) => ({
+          _localId: `existing-${phase.id}`,
+          phase_number: phase.phase_number,
+          title: phase.title,
+          description: phase.description,
+          start_time: phase.start_time,
+          sort_order: phase.sort_order,
+        }))
+      )
+
+      // Expand all units by default when editing
+      setExpandedUnits(new Set(existingMission.units.map((u) => `existing-${u.id}`)))
+    }
+  }, [existingMission])
+
+  // Apply template when selected
+  useEffect(() => {
+    if (selectedTemplateId && templates && !isEditing) {
+      const template = templates.find((t) => t.id === selectedTemplateId)
+      if (template?.template_data) {
+        const data = template.template_data as {
+          units?: Array<{
+            name: string
+            unit_type?: string
+            ship_name?: string
+            radio_frequencies?: Record<string, string>
+            positions?: Array<{
+              name: string
+              position_type?: string
+              is_required?: boolean
+              min_count?: number
+              max_count?: number
+            }>
+          }>
+          phases?: Array<{
+            phase_number: number
+            title: string
+            description?: string
+          }>
+        }
+
+        // Apply template units
+        if (data.units) {
+          const newUnits: LocalUnit[] = data.units.map((u, idx) => ({
+            _localId: generateLocalId(),
+            name: u.name,
+            unit_type: u.unit_type || null,
+            ship_name: u.ship_name || null,
+            ship_id: null,
+            radio_frequencies: u.radio_frequencies || null,
+            sort_order: idx,
+            positions:
+              u.positions?.map((p, pidx) => ({
+                _localId: generateLocalId(),
+                name: p.name,
+                position_type: p.position_type || null,
+                is_required: p.is_required ?? true,
+                min_count: p.min_count ?? 1,
+                max_count: p.max_count ?? 1,
+                required_role_id: null,
+                notes: null,
+                sort_order: pidx,
+              })) || [],
+          }))
+          setUnits(newUnits)
+          setExpandedUnits(new Set(newUnits.map((u) => u._localId)))
+        }
+
+        // Apply template phases
+        if (data.phases) {
+          setPhases(
+            data.phases.map((p, idx) => ({
+              _localId: generateLocalId(),
+              phase_number: p.phase_number,
+              title: p.title,
+              description: p.description || null,
+              start_time: null,
+              sort_order: idx,
+            }))
+          )
+        }
+      }
+    }
+  }, [selectedTemplateId, templates, isEditing])
+
+  // Mutations
+  const createMutation = useMutation({
+    mutationFn: async (data: MissionCreate) => {
+      const response = await apiClient.post('/api/missions', data)
+      return response.data
+    },
+    onSuccess: (newMission) => {
+      queryClient.invalidateQueries({ queryKey: ['missions'] })
+      // After creating, save units and phases
+      saveUnitsAndPhases(newMission.id)
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: { id: number; updates: Partial<LocalMissionData> }) => {
+      const payload = {
+        title: data.updates.title,
+        description: data.updates.description || null,
+        scheduled_date: `${data.updates.scheduled_date}T${data.updates.scheduled_time}:00`,
+        duration_minutes:
+          (data.updates.duration_hours || 0) * 60 + (data.updates.duration_minutes || 0),
+        start_location_id: data.updates.start_location_id,
+        equipment_level: data.updates.equipment_level || null,
+        target_group: data.updates.target_group || null,
+        rules_of_engagement: data.updates.rules_of_engagement || null,
+      }
+      const response = await apiClient.patch(`/api/missions/${data.id}`, payload)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mission', id] })
+      saveUnitsAndPhases(Number(id))
+    },
+  })
+
+  const saveUnitsAndPhases = async (missionId: number) => {
+    // Delete existing units and recreate (simpler than diffing)
+    if (isEditing && existingMission) {
+      // Delete old units
+      for (const unit of existingMission.units) {
+        await apiClient.delete(`/api/missions/${missionId}/units/${unit.id}`)
+      }
+      // Delete old phases
+      for (const phase of existingMission.phases) {
+        await apiClient.delete(`/api/missions/${missionId}/phases/${phase.id}`)
+      }
+    }
+
+    // Create new units with positions
+    for (const unit of units) {
+      await apiClient.post(`/api/missions/${missionId}/units`, {
+        name: unit.name,
+        unit_type: unit.unit_type,
+        description: unit.description,
+        ship_name: unit.ship_name,
+        ship_id: unit.ship_id,
+        radio_frequencies: unit.radio_frequencies,
+        sort_order: unit.sort_order,
+        positions: unit.positions.map((p) => ({
+          name: p.name,
+          position_type: p.position_type,
+          is_required: p.is_required,
+          min_count: p.min_count,
+          max_count: p.max_count,
+          required_role_id: p.required_role_id,
+          notes: p.notes,
+          sort_order: p.sort_order,
+        })),
+      })
+    }
+
+    // Create phases
+    for (const phase of phases) {
+      await apiClient.post(`/api/missions/${missionId}/phases`, {
+        phase_number: phase.phase_number,
+        title: phase.title,
+        description: phase.description,
+        start_time: phase.start_time,
+        sort_order: phase.sort_order,
+      })
+    }
+
+    // Navigate to detail page
+    navigate(`/einsaetze/${missionId}`)
+  }
+
+  const handleSave = () => {
+    const payload: MissionCreate = {
+      title: missionData.title,
+      description: missionData.description || null,
+      scheduled_date: `${missionData.scheduled_date}T${missionData.scheduled_time}:00`,
+      duration_minutes: missionData.duration_hours * 60 + missionData.duration_minutes,
+      start_location_id: missionData.start_location_id,
+      equipment_level: missionData.equipment_level || null,
+      target_group: missionData.target_group || null,
+      rules_of_engagement: missionData.rules_of_engagement || null,
+      template_id: selectedTemplateId,
+    }
+
+    if (isEditing) {
+      updateMutation.mutate({ id: Number(id), updates: missionData })
+    } else {
+      createMutation.mutate(payload)
+    }
+  }
+
+  // Unit management
+  const addUnit = () => {
+    const newUnit: LocalUnit = {
+      _localId: generateLocalId(),
+      name: `Einheit ${units.length + 1}`,
+      unit_type: null,
+      description: null,
+      ship_name: null,
+      ship_id: null,
+      radio_frequencies: null,
+      sort_order: units.length,
+      positions: [
+        {
+          _localId: generateLocalId(),
+          name: 'Kommandant',
+          position_type: 'commander',
+          is_required: true,
+          min_count: 1,
+          max_count: 1,
+          required_role_id: null,
+          notes: null,
+          sort_order: 0,
+        },
+      ],
+    }
+    setUnits([...units, newUnit])
+    setExpandedUnits(new Set([...expandedUnits, newUnit._localId]))
+  }
+
+  const removeUnit = (localId: string) => {
+    setUnits(units.filter((u) => u._localId !== localId))
+    const newExpanded = new Set(expandedUnits)
+    newExpanded.delete(localId)
+    setExpandedUnits(newExpanded)
+  }
+
+  const updateUnit = (localId: string, updates: Partial<LocalUnit>) => {
+    setUnits(units.map((u) => (u._localId === localId ? { ...u, ...updates } : u)))
+  }
+
+  const addPosition = (unitLocalId: string) => {
+    setUnits(
+      units.map((u) => {
+        if (u._localId === unitLocalId) {
+          return {
+            ...u,
+            positions: [
+              ...u.positions,
+              {
+                _localId: generateLocalId(),
+                name: `Position ${u.positions.length + 1}`,
+                position_type: null,
+                is_required: false,
+                min_count: 1,
+                max_count: 1,
+                required_role_id: null,
+                notes: null,
+                sort_order: u.positions.length,
+              },
+            ],
+          }
+        }
+        return u
+      })
+    )
+  }
+
+  const removePosition = (unitLocalId: string, posLocalId: string) => {
+    setUnits(
+      units.map((u) => {
+        if (u._localId === unitLocalId) {
+          return {
+            ...u,
+            positions: u.positions.filter((p) => p._localId !== posLocalId),
+          }
+        }
+        return u
+      })
+    )
+  }
+
+  const updatePosition = (
+    unitLocalId: string,
+    posLocalId: string,
+    updates: Partial<MissionPositionCreate & { _localId: string }>
+  ) => {
+    setUnits(
+      units.map((u) => {
+        if (u._localId === unitLocalId) {
+          return {
+            ...u,
+            positions: u.positions.map((p) =>
+              p._localId === posLocalId ? { ...p, ...updates } : p
+            ),
+          }
+        }
+        return u
+      })
+    )
+  }
+
+  // Phase management
+  const addPhase = () => {
+    setPhases([
+      ...phases,
+      {
+        _localId: generateLocalId(),
+        phase_number: phases.length + 1,
+        title: `Phase ${phases.length + 1}`,
+        description: null,
+        start_time: null,
+        sort_order: phases.length,
+      },
+    ])
+  }
+
+  const removePhase = (localId: string) => {
+    setPhases(phases.filter((p) => p._localId !== localId))
+  }
+
+  const updatePhase = (localId: string, updates: Partial<LocalPhase>) => {
+    setPhases(phases.map((p) => (p._localId === localId ? { ...p, ...updates } : p)))
+  }
+
+  // Frequency helpers
+  const setFrequency = (unitLocalId: string, key: string, value: string) => {
+    setUnits(
+      units.map((u) => {
+        if (u._localId === unitLocalId) {
+          const newFreqs = { ...(u.radio_frequencies || {}), [key]: value }
+          return { ...u, radio_frequencies: newFreqs }
+        }
+        return u
+      })
+    )
+  }
+
+  const toggleUnitExpanded = (localId: string) => {
+    const newExpanded = new Set(expandedUnits)
+    if (newExpanded.has(localId)) {
+      newExpanded.delete(localId)
+    } else {
+      newExpanded.add(localId)
+    }
+    setExpandedUnits(newExpanded)
+  }
+
+  // Validation
+  const canProceedStep1 = missionData.title.trim().length > 0 && missionData.scheduled_date
+  const canProceedStep2 = units.length > 0 && units.every((u) => u.name.trim().length > 0)
+  const canProceedStep3 = true // Phases are optional
+
+  const isSaving = createMutation.isPending || updateMutation.isPending
+
+  if (isEditing && missionLoading) {
+    return <div className="text-center py-8 text-gray-400">Lade Einsatz...</div>
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      {/* Header */}
+      <div className="mb-6">
+        <Link
+          to="/einsaetze"
+          className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-4"
+        >
+          <ArrowLeft size={20} />
+          Zurück zur Übersicht
+        </Link>
+        <h1 className="text-2xl font-bold">
+          {isEditing ? 'Einsatz bearbeiten' : 'Neuer Einsatz'}
+        </h1>
+      </div>
+
+      {/* Step Indicator */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          {[1, 2, 3, 4].map((step) => (
+            <div key={step} className="flex-1 flex items-center">
+              <button
+                onClick={() => {
+                  if (step === 1) setCurrentStep(1)
+                  else if (step === 2 && canProceedStep1) setCurrentStep(2)
+                  else if (step === 3 && canProceedStep1 && canProceedStep2) setCurrentStep(3)
+                  else if (step === 4 && canProceedStep1 && canProceedStep2 && canProceedStep3)
+                    setCurrentStep(4)
+                }}
+                className={`flex items-center gap-2 ${
+                  currentStep === step
+                    ? 'text-krt-orange'
+                    : currentStep > step
+                      ? 'text-green-500'
+                      : 'text-gray-500'
+                }`}
+              >
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
+                    currentStep === step
+                      ? 'border-krt-orange bg-krt-orange/20'
+                      : currentStep > step
+                        ? 'border-green-500 bg-green-500/20'
+                        : 'border-gray-600'
+                  }`}
+                >
+                  {currentStep > step ? <Check size={16} /> : step}
+                </div>
+                <span className="hidden md:inline text-sm">
+                  {step === 1 && 'Start'}
+                  {step === 2 && 'Einheiten'}
+                  {step === 3 && 'Ablauf'}
+                  {step === 4 && 'Prüfen'}
+                </span>
+              </button>
+              {step < 4 && <div className="flex-1 h-px bg-gray-700 mx-2" />}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Step 1: Grundlagen */}
+      {currentStep === 1 && (
+        <div className="space-y-6">
+          {/* Template Selection (only for new missions) */}
+          {!isEditing && (
+            <div className="bg-krt-dark rounded-lg border border-gray-700 p-6">
+              <h2 className="text-lg font-semibold mb-4">
+                Template wählen (optional)
+                <InfoTooltip text="Templates enthalten vordefinierte Einheiten und Phasen, die du nach der Auswahl anpassen kannst." />
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedTemplateId(null)}
+                  className={`px-4 py-2 rounded border ${
+                    selectedTemplateId === null
+                      ? 'border-krt-orange bg-krt-orange/20 text-krt-orange'
+                      : 'border-gray-600 hover:border-gray-500'
+                  }`}
+                >
+                  Leer starten
+                </button>
+                {templates?.map((template) => (
+                  <button
+                    key={template.id}
+                    onClick={() => setSelectedTemplateId(template.id)}
+                    className={`px-4 py-2 rounded border ${
+                      selectedTemplateId === template.id
+                        ? 'border-krt-orange bg-krt-orange/20 text-krt-orange'
+                        : 'border-gray-600 hover:border-gray-500'
+                    }`}
+                  >
+                    {template.name}
+                  </button>
+                ))}
+              </div>
+              {selectedTemplateId && templates && (
+                <p className="mt-2 text-sm text-gray-400">
+                  {templates.find((t) => t.id === selectedTemplateId)?.description}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Basic Data */}
+          <div className="bg-krt-dark rounded-lg border border-gray-700 p-6 space-y-4">
+            <h2 className="text-lg font-semibold mb-4">Grunddaten</h2>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Titel *
+                <InfoTooltip text="Kurzer, prägnanter Name für den Einsatz. Beispiel: 'Loot Run Pyro', 'PvP Training Stanton'" />
+              </label>
+              <input
+                type="text"
+                value={missionData.title}
+                onChange={(e) => setMissionData({ ...missionData, title: e.target.value })}
+                placeholder="z.B. Hunt for Decari Pods"
+                className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">
+                  Datum *
+                  <InfoTooltip text="An welchem Tag findet der Einsatz statt?" />
+                </label>
+                <input
+                  type="date"
+                  value={missionData.scheduled_date}
+                  onChange={(e) =>
+                    setMissionData({ ...missionData, scheduled_date: e.target.value })
+                  }
+                  className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">
+                  Uhrzeit *
+                  <InfoTooltip text="Wann soll der Einsatz beginnen?" />
+                </label>
+                <input
+                  type="time"
+                  value={missionData.scheduled_time}
+                  onChange={(e) =>
+                    setMissionData({ ...missionData, scheduled_time: e.target.value })
+                  }
+                  className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">
+                  Dauer (Stunden)
+                  <InfoTooltip text="Wie lange wird der Einsatz ungefähr dauern?" />
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="24"
+                  value={missionData.duration_hours}
+                  onChange={(e) =>
+                    setMissionData({ ...missionData, duration_hours: Number(e.target.value) })
+                  }
+                  className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Minuten</label>
+                <select
+                  value={missionData.duration_minutes}
+                  onChange={(e) =>
+                    setMissionData({ ...missionData, duration_minutes: Number(e.target.value) })
+                  }
+                  className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                >
+                  <option value={0}>0</option>
+                  <option value={15}>15</option>
+                  <option value={30}>30</option>
+                  <option value={45}>45</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Treffpunkt
+                <InfoTooltip text="Wo sollen sich alle Teilnehmer vor dem Einsatz sammeln?" />
+              </label>
+              <select
+                value={missionData.start_location_id || ''}
+                onChange={(e) =>
+                  setMissionData({
+                    ...missionData,
+                    start_location_id: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+                className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+              >
+                <option value="">Kein Treffpunkt angegeben</option>
+                {locations?.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}
+                    {loc.system_name && ` (${loc.system_name})`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Ausrüstung
+                <InfoTooltip text="Welche Ausrüstungsstufe wird benötigt? z.B. 'Full Combat Loadout', 'Mining Equipment'" />
+              </label>
+              <input
+                type="text"
+                value={missionData.equipment_level}
+                onChange={(e) => setMissionData({ ...missionData, equipment_level: e.target.value })}
+                placeholder="z.B. Full Combat Loadout"
+                className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Zielgruppe
+                <InfoTooltip text="Für welche Mitglieder ist der Einsatz gedacht? z.B. 'CW + SW', 'Alle Vipers'" />
+              </label>
+              <input
+                type="text"
+                value={missionData.target_group}
+                onChange={(e) => setMissionData({ ...missionData, target_group: e.target.value })}
+                placeholder="z.B. CW + SW"
+                className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Rules of Engagement (ROE)
+                <InfoTooltip text="Welche Einsatzregeln gelten? z.B. 'Weapons Hold', 'Weapons Free'" />
+              </label>
+              <input
+                type="text"
+                value={missionData.rules_of_engagement}
+                onChange={(e) =>
+                  setMissionData({ ...missionData, rules_of_engagement: e.target.value })
+                }
+                placeholder="z.B. Weapons Hold"
+                className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Beschreibung
+                <InfoTooltip text="Optionale ausführlichere Beschreibung des Einsatzes" />
+              </label>
+              <textarea
+                value={missionData.description}
+                onChange={(e) => setMissionData({ ...missionData, description: e.target.value })}
+                placeholder="Optionale Beschreibung..."
+                rows={3}
+                className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: Einheiten */}
+      {currentStep === 2 && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold">
+              Einheiten
+              <InfoTooltip text="Einheiten sind die Gruppen in deinem Einsatz (z.B. GKS Polaris, Jägerwing I). Jede Einheit hat Positionen, die mit Spielern besetzt werden." />
+            </h2>
+            <button
+              onClick={addUnit}
+              className="flex items-center gap-2 px-3 py-2 bg-krt-orange rounded hover:bg-krt-orange/80"
+            >
+              <Plus size={16} />
+              Einheit hinzufügen
+            </button>
+          </div>
+
+          {units.length === 0 && (
+            <div className="bg-krt-dark rounded-lg border border-dashed border-gray-600 p-8 text-center">
+              <Users size={48} className="mx-auto text-gray-500 mb-4" />
+              <p className="text-gray-400 mb-4">Noch keine Einheiten vorhanden</p>
+              <button
+                onClick={addUnit}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-krt-orange rounded hover:bg-krt-orange/80"
+              >
+                <Plus size={16} />
+                Erste Einheit erstellen
+              </button>
+            </div>
+          )}
+
+          {units.map((unit, unitIdx) => (
+            <div key={unit._localId} className="bg-krt-dark rounded-lg border border-gray-700">
+              {/* Unit Header */}
+              <div
+                className="flex items-center gap-4 p-4 cursor-pointer"
+                onClick={() => toggleUnitExpanded(unit._localId)}
+              >
+                <Grip size={16} className="text-gray-500" />
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={unit.name}
+                    onChange={(e) => {
+                      e.stopPropagation()
+                      updateUnit(unit._localId, { name: e.target.value })
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="bg-transparent border-b border-transparent hover:border-gray-600 focus:border-krt-orange focus:outline-none font-semibold"
+                    placeholder="Einheit Name"
+                  />
+                  {unit.ship_name && (
+                    <span className="ml-2 text-sm text-gray-400">({unit.ship_name})</span>
+                  )}
+                </div>
+                <span className="text-sm text-gray-400">{unit.positions.length} Positionen</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeUnit(unit._localId)
+                  }}
+                  className="p-1 text-gray-400 hover:text-red-400"
+                >
+                  <Trash2 size={16} />
+                </button>
+                {expandedUnits.has(unit._localId) ? (
+                  <ChevronUp size={20} />
+                ) : (
+                  <ChevronDown size={20} />
+                )}
+              </div>
+
+              {/* Unit Details (expanded) */}
+              {expandedUnits.has(unit._localId) && (
+                <div className="border-t border-gray-700 p-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">
+                        Einheitstyp
+                        <InfoTooltip text="Art der Einheit: gks (Großkampfschiff), wing (Jägerwing), squad (Bodentruppe), beast (Logistik), deals (DEALS Squad)" />
+                      </label>
+                      <select
+                        value={unit.unit_type || ''}
+                        onChange={(e) =>
+                          updateUnit(unit._localId, { unit_type: e.target.value || null })
+                        }
+                        className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                      >
+                        <option value="">Kein Typ</option>
+                        <option value="gks">GKS (Großkampfschiff)</option>
+                        <option value="wing">Wing (Jäger)</option>
+                        <option value="squad">Squad (Boden)</option>
+                        <option value="beast">BEAST (Logistik)</option>
+                        <option value="deals">DEALS</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">
+                        Schiff
+                        <InfoTooltip text="Welches Schiff nutzt diese Einheit? z.B. 'Polaris', 'Idris', 'Hercules C2'" />
+                      </label>
+                      <input
+                        type="text"
+                        value={unit.ship_name || ''}
+                        onChange={(e) =>
+                          updateUnit(unit._localId, { ship_name: e.target.value || null })
+                        }
+                        placeholder="z.B. Polaris"
+                        className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Radio Frequencies */}
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">
+                      <Radio size={14} className="inline mr-1" />
+                      Funkfrequenzen
+                      <InfoTooltip text="Welche Funkfrequenzen nutzt diese Einheit? Klicke auf die Vorschläge oder gib eigene Frequenzen ein." />
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Einsatzleitung (EL)
+                        </label>
+                        <input
+                          type="text"
+                          value={unit.radio_frequencies?.el || ''}
+                          onChange={(e) => setFrequency(unit._localId, 'el', e.target.value)}
+                          placeholder="102.11"
+                          className="w-full bg-krt-darker border border-gray-600 rounded px-2 py-1 text-sm"
+                        />
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          <button
+                            type="button"
+                            onClick={() => setFrequency(unit._localId, 'el', '102.11')}
+                            className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
+                          >
+                            102.11
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFrequency(unit._localId, 'el', '102.12')}
+                            className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
+                          >
+                            102.12
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Intern</label>
+                        <input
+                          type="text"
+                          value={unit.radio_frequencies?.intern || ''}
+                          onChange={(e) => setFrequency(unit._localId, 'intern', e.target.value)}
+                          placeholder="102.31"
+                          className="w-full bg-krt-darker border border-gray-600 rounded px-2 py-1 text-sm"
+                        />
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {unit.unit_type === 'gks' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setFrequency(unit._localId, 'intern', '102.31')}
+                                className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
+                              >
+                                102.31
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFrequency(unit._localId, 'intern', '102.32')}
+                                className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
+                              >
+                                102.32
+                              </button>
+                            </>
+                          )}
+                          {unit.unit_type === 'wing' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setFrequency(unit._localId, 'intern', '102.51')}
+                                className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
+                              >
+                                102.51
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFrequency(unit._localId, 'intern', '102.52')}
+                                className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
+                              >
+                                102.52
+                              </button>
+                            </>
+                          )}
+                          {(unit.unit_type === 'squad' || unit.unit_type === 'deals') && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setFrequency(unit._localId, 'intern', '102.61')}
+                                className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
+                              >
+                                102.61
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFrequency(unit._localId, 'intern', '102.62')}
+                                className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
+                              >
+                                102.62
+                              </button>
+                            </>
+                          )}
+                          {unit.unit_type === 'beast' && (
+                            <button
+                              type="button"
+                              onClick={() => setFrequency(unit._localId, 'intern', '102.70')}
+                              className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
+                            >
+                              102.70
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Targets</label>
+                        <input
+                          type="text"
+                          value={unit.radio_frequencies?.targets || ''}
+                          onChange={(e) => setFrequency(unit._localId, 'targets', e.target.value)}
+                          placeholder="102.91"
+                          className="w-full bg-krt-darker border border-gray-600 rounded px-2 py-1 text-sm"
+                        />
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          <button
+                            type="button"
+                            onClick={() => setFrequency(unit._localId, 'targets', '102.91')}
+                            className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
+                          >
+                            102.91
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFrequency(unit._localId, 'targets', '102.92')}
+                            className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
+                          >
+                            102.92
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Positions */}
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-sm text-gray-400">
+                        Positionen
+                        <InfoTooltip text="Welche Rollen gibt es in dieser Einheit? z.B. Kommandant, Pilot, Crew, Wing" />
+                      </label>
+                      <button
+                        onClick={() => addPosition(unit._localId)}
+                        className="flex items-center gap-1 text-sm text-krt-orange hover:text-krt-orange/80"
+                      >
+                        <Plus size={14} />
+                        Position
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {unit.positions.map((pos, posIdx) => (
+                        <div
+                          key={pos._localId}
+                          className="flex items-center gap-2 p-2 bg-krt-darker rounded"
+                        >
+                          <input
+                            type="text"
+                            value={pos.name}
+                            onChange={(e) =>
+                              updatePosition(unit._localId, pos._localId, { name: e.target.value })
+                            }
+                            placeholder="Position Name"
+                            className="flex-1 bg-transparent border-b border-gray-600 focus:border-krt-orange focus:outline-none text-sm"
+                          />
+                          <select
+                            value={pos.position_type || ''}
+                            onChange={(e) =>
+                              updatePosition(unit._localId, pos._localId, {
+                                position_type: e.target.value || null,
+                              })
+                            }
+                            className="bg-krt-dark border border-gray-600 rounded px-2 py-1 text-xs"
+                          >
+                            <option value="">Typ</option>
+                            <option value="commander">Kommandant</option>
+                            <option value="pilot">Pilot</option>
+                            <option value="crew">Crew</option>
+                            <option value="lead">Lead</option>
+                            <option value="wing">Wing</option>
+                          </select>
+                          <label className="flex items-center gap-1 text-xs text-gray-400">
+                            <input
+                              type="checkbox"
+                              checked={pos.is_required}
+                              onChange={(e) =>
+                                updatePosition(unit._localId, pos._localId, {
+                                  is_required: e.target.checked,
+                                })
+                              }
+                              className="w-3 h-3"
+                            />
+                            Pflicht
+                          </label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="1"
+                              max="20"
+                              value={pos.max_count}
+                              onChange={(e) =>
+                                updatePosition(unit._localId, pos._localId, {
+                                  max_count: Number(e.target.value),
+                                })
+                              }
+                              className="w-12 bg-krt-dark border border-gray-600 rounded px-1 py-1 text-xs text-center"
+                            />
+                            <span className="text-xs text-gray-500">Max</span>
+                          </div>
+                          <button
+                            onClick={() => removePosition(unit._localId, pos._localId)}
+                            className="p-1 text-gray-400 hover:text-red-400"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Step 3: Ablauf/Phasen */}
+      {currentStep === 3 && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold">
+              Ablauf / Phasen
+              <InfoTooltip text="Definiere die einzelnen Phasen des Einsatzes. z.B. 'Phase 1: Sammeln', 'Phase 2: Transit', 'Phase 3: Einsatz'" />
+            </h2>
+            <button
+              onClick={addPhase}
+              className="flex items-center gap-2 px-3 py-2 bg-krt-orange rounded hover:bg-krt-orange/80"
+            >
+              <Plus size={16} />
+              Phase hinzufügen
+            </button>
+          </div>
+
+          {phases.length === 0 && (
+            <div className="bg-krt-dark rounded-lg border border-dashed border-gray-600 p-8 text-center">
+              <Clock size={48} className="mx-auto text-gray-500 mb-4" />
+              <p className="text-gray-400 mb-4">
+                Noch keine Phasen definiert (optional)
+              </p>
+              <p className="text-sm text-gray-500 mb-4">
+                Phasen helfen, den Einsatz zu strukturieren und den Ablauf zu planen.
+              </p>
+              <button
+                onClick={addPhase}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-krt-orange rounded hover:bg-krt-orange/80"
+              >
+                <Plus size={16} />
+                Erste Phase erstellen
+              </button>
+            </div>
+          )}
+
+          {phases.map((phase, idx) => (
+            <div
+              key={phase._localId}
+              className="bg-krt-dark rounded-lg border border-gray-700 p-4 space-y-3"
+            >
+              <div className="flex items-start gap-4">
+                <div className="w-8 h-8 rounded-full bg-krt-orange/20 border border-krt-orange flex items-center justify-center text-krt-orange font-bold">
+                  {idx + 1}
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div className="flex gap-4">
+                    <input
+                      type="text"
+                      value={phase.title}
+                      onChange={(e) => updatePhase(phase._localId, { title: e.target.value })}
+                      placeholder="Phase Titel"
+                      className="flex-1 bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                    />
+                    <input
+                      type="text"
+                      value={phase.start_time || ''}
+                      onChange={(e) =>
+                        updatePhase(phase._localId, { start_time: e.target.value || null })
+                      }
+                      placeholder="Uhrzeit (z.B. 20:00)"
+                      className="w-32 bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                    />
+                  </div>
+                  <textarea
+                    value={phase.description || ''}
+                    onChange={(e) =>
+                      updatePhase(phase._localId, { description: e.target.value || null })
+                    }
+                    placeholder="Beschreibung der Phase..."
+                    rows={2}
+                    className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                  />
+                </div>
+                <button
+                  onClick={() => removePhase(phase._localId)}
+                  className="p-2 text-gray-400 hover:text-red-400"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Step 4: Prüfen & Speichern */}
+      {currentStep === 4 && (
+        <div className="space-y-6">
+          <h2 className="text-lg font-semibold">Zusammenfassung</h2>
+
+          {/* Mission Summary */}
+          <div className="bg-krt-dark rounded-lg border border-gray-700 p-6">
+            <h3 className="font-semibold text-krt-orange mb-4">{missionData.title || 'Kein Titel'}</h3>
+
+            <div className="grid gap-4 md:grid-cols-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Clock size={16} className="text-gray-400" />
+                <span>
+                  {missionData.scheduled_date} um {missionData.scheduled_time} Uhr
+                </span>
+              </div>
+              {(missionData.duration_hours > 0 || missionData.duration_minutes > 0) && (
+                <div className="flex items-center gap-2">
+                  <Clock size={16} className="text-gray-400" />
+                  <span>
+                    Dauer: {missionData.duration_hours > 0 && `${missionData.duration_hours}h `}
+                    {missionData.duration_minutes > 0 && `${missionData.duration_minutes}min`}
+                  </span>
+                </div>
+              )}
+              {missionData.start_location_id && (
+                <div className="flex items-center gap-2">
+                  <MapPin size={16} className="text-gray-400" />
+                  <span>
+                    {locations?.find((l) => l.id === missionData.start_location_id)?.name}
+                  </span>
+                </div>
+              )}
+              {missionData.target_group && (
+                <div className="flex items-center gap-2">
+                  <Users size={16} className="text-gray-400" />
+                  <span>{missionData.target_group}</span>
+                </div>
+              )}
+            </div>
+
+            {missionData.description && (
+              <p className="mt-4 text-gray-300 text-sm">{missionData.description}</p>
+            )}
+          </div>
+
+          {/* Units Summary */}
+          <div className="bg-krt-dark rounded-lg border border-gray-700 p-6">
+            <h3 className="font-semibold mb-4">
+              {units.length} Einheit{units.length !== 1 && 'en'}
+            </h3>
+            <div className="space-y-2">
+              {units.map((unit) => (
+                <div key={unit._localId} className="flex items-center gap-2 text-sm">
+                  <span className="font-medium">{unit.name}</span>
+                  {unit.ship_name && <span className="text-gray-400">({unit.ship_name})</span>}
+                  <span className="text-gray-500">- {unit.positions.length} Positionen</span>
+                </div>
+              ))}
+              {units.length === 0 && (
+                <p className="text-gray-400 text-sm">Keine Einheiten definiert</p>
+              )}
+            </div>
+          </div>
+
+          {/* Phases Summary */}
+          {phases.length > 0 && (
+            <div className="bg-krt-dark rounded-lg border border-gray-700 p-6">
+              <h3 className="font-semibold mb-4">{phases.length} Phasen</h3>
+              <div className="space-y-2">
+                {phases.map((phase, idx) => (
+                  <div key={phase._localId} className="flex items-center gap-2 text-sm">
+                    <span className="w-6 h-6 rounded-full bg-krt-orange/20 text-krt-orange flex items-center justify-center text-xs">
+                      {idx + 1}
+                    </span>
+                    <span>{phase.title}</span>
+                    {phase.start_time && (
+                      <span className="text-gray-400">({phase.start_time})</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Save Actions */}
+          <div className="bg-krt-dark rounded-lg border border-gray-700 p-6">
+            <h3 className="font-semibold mb-4">Speichern</h3>
+            <p className="text-sm text-gray-400 mb-4">
+              Der Einsatz wird als <strong>Entwurf</strong> gespeichert. Du kannst ihn später
+              veröffentlichen, damit sich Mitglieder anmelden können.
+            </p>
+            <div className="flex gap-4">
+              <button
+                onClick={handleSave}
+                disabled={isSaving || !canProceedStep1}
+                className="flex items-center gap-2 px-6 py-3 bg-krt-orange rounded hover:bg-krt-orange/80 disabled:opacity-50"
+              >
+                {isSaving ? (
+                  <>Speichern...</>
+                ) : (
+                  <>
+                    <Save size={20} />
+                    {isEditing ? 'Änderungen speichern' : 'Einsatz erstellen'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation */}
+      <div className="flex justify-between mt-8 pt-4 border-t border-gray-700">
+        <button
+          onClick={() => setCurrentStep((currentStep - 1) as WizardStep)}
+          disabled={currentStep === 1}
+          className="flex items-center gap-2 px-4 py-2 bg-krt-dark border border-gray-600 rounded hover:bg-gray-700 disabled:opacity-50"
+        >
+          <ArrowLeft size={16} />
+          Zurück
+        </button>
+
+        {currentStep < 4 ? (
+          <button
+            onClick={() => setCurrentStep((currentStep + 1) as WizardStep)}
+            disabled={
+              (currentStep === 1 && !canProceedStep1) ||
+              (currentStep === 2 && !canProceedStep2) ||
+              (currentStep === 3 && !canProceedStep3)
+            }
+            className="flex items-center gap-2 px-4 py-2 bg-krt-orange rounded hover:bg-krt-orange/80 disabled:opacity-50"
+          >
+            Weiter
+            <ArrowRight size={16} />
+          </button>
+        ) : (
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !canProceedStep1}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded hover:bg-green-700 disabled:opacity-50"
+          >
+            {isSaving ? (
+              <>Speichern...</>
+            ) : (
+              <>
+                <Check size={16} />
+                {isEditing ? 'Speichern' : 'Erstellen'}
+              </>
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}

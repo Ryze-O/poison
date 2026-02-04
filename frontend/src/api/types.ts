@@ -546,3 +546,218 @@ export interface AssignmentEntry {
 export interface BulkAssignmentUpdate {
   assignments: AssignmentEntry[]
 }
+
+// ============== Einsatzplaner ==============
+
+export type MissionStatus = 'draft' | 'published' | 'locked' | 'active' | 'completed' | 'cancelled'
+
+export interface UserShip {
+  id: number
+  user_id: number
+  ship_name: string
+  is_fitted: boolean
+  loadout_notes: string | null
+  created_at: string
+}
+
+export interface MissionTemplate {
+  id: number
+  name: string
+  description: string | null
+  template_data: Record<string, unknown>
+  is_system: boolean
+  created_by_id: number | null
+  created_at: string
+}
+
+export interface MissionAssignment {
+  id: number
+  position_id: number
+  user_id: number | null
+  placeholder_name: string | null
+  user: User | null
+  is_backup: boolean
+  is_training: boolean
+  notes: string | null
+  assigned_at: string
+  assigned_by_id: number
+}
+
+export interface MissionPosition {
+  id: number
+  unit_id: number
+  name: string
+  position_type: string | null
+  is_required: boolean
+  min_count: number
+  max_count: number
+  required_role_id: number | null
+  notes: string | null
+  sort_order: number
+  assignments: MissionAssignment[]
+}
+
+export interface MissionUnit {
+  id: number
+  mission_id: number
+  name: string
+  unit_type: string | null
+  description: string | null
+  ship_name: string | null
+  ship_id: number | null
+  radio_frequencies: Record<string, string> | null
+  sort_order: number
+  positions: MissionPosition[]
+}
+
+export interface MissionPhase {
+  id: number
+  mission_id: number
+  phase_number: number
+  title: string
+  description: string | null
+  start_time: string | null
+  sort_order: number
+}
+
+export interface MissionRegistration {
+  id: number
+  mission_id: number
+  user_id: number
+  user: User | null
+  preferred_unit_id: number | null
+  preferred_position_id: number | null
+  availability_note: string | null
+  status: string
+  registered_at: string
+  has_ships: boolean
+}
+
+export interface Mission {
+  id: number
+  title: string
+  description: string | null
+  scheduled_date: string
+  duration_minutes: number | null
+  status: MissionStatus
+  start_location_id: number | null
+  start_location_name: string | null
+  equipment_level: string | null
+  target_group: string | null
+  rules_of_engagement: string | null
+  created_by_id: number
+  created_by: User | null
+  created_at: string
+  updated_at: string | null
+  registration_count: number
+  assignment_count: number
+  total_positions: number
+}
+
+export interface MissionDetail extends Mission {
+  units: MissionUnit[]
+  phases: MissionPhase[]
+  registrations: MissionRegistration[]
+}
+
+export interface MissionCreate {
+  title: string
+  description?: string | null
+  scheduled_date: string
+  duration_minutes?: number | null
+  start_location_id?: number | null
+  equipment_level?: string | null
+  target_group?: string | null
+  rules_of_engagement?: string | null
+  template_id?: number | null
+}
+
+export interface MissionUpdate {
+  title?: string
+  description?: string | null
+  scheduled_date?: string
+  duration_minutes?: number | null
+  start_location_id?: number | null
+  equipment_level?: string | null
+  target_group?: string | null
+  rules_of_engagement?: string | null
+  status?: MissionStatus
+}
+
+export interface MissionUnitCreate {
+  name: string
+  unit_type?: string | null
+  description?: string | null
+  ship_name?: string | null
+  ship_id?: number | null
+  radio_frequencies?: Record<string, string> | null
+  sort_order?: number
+  positions?: MissionPositionCreate[]
+}
+
+export interface MissionPositionCreate {
+  name: string
+  position_type?: string | null
+  is_required?: boolean
+  min_count?: number
+  max_count?: number
+  required_role_id?: number | null
+  notes?: string | null
+  sort_order?: number
+}
+
+export interface MissionPhaseCreate {
+  phase_number: number
+  title: string
+  description?: string | null
+  start_time?: string | null
+  sort_order?: number
+}
+
+export interface MissionAssignmentCreate {
+  position_id: number
+  user_id?: number | null
+  placeholder_name?: string | null
+  is_backup?: boolean
+  is_training?: boolean
+  notes?: string | null
+}
+
+export interface MissionRegistrationCreate {
+  preferred_unit_id?: number | null
+  preferred_position_id?: number | null
+  availability_note?: string | null
+}
+
+export interface RadioFrequencyPreset {
+  key: string
+  label: string
+  frequency: string
+}
+
+export interface BriefingUnit {
+  name: string
+  ship_name: string | null
+  radio_frequencies: Record<string, string> | null
+  positions: Array<{
+    name: string
+    assigned: string[]
+    is_required: boolean
+    min_count: number
+    max_count: number
+  }>
+}
+
+export interface Briefing {
+  title: string
+  scheduled_date: string
+  duration_minutes: number | null
+  start_location: string | null
+  equipment_level: string | null
+  target_group: string | null
+  rules_of_engagement: string | null
+  phases: MissionPhase[]
+  units: BriefingUnit[]
+  frequency_table: Array<Record<string, string>>
+  placeholders_used: string[]
+}

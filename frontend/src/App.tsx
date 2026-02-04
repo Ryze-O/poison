@@ -18,6 +18,9 @@ import AdminPage from './pages/AdminPage'
 import GuestLoginPage from './pages/GuestLoginPage'
 import StaffelstrukturPage from './pages/StaffelstrukturPage'
 import AssignmentMatrixPage from './pages/AssignmentMatrixPage'
+import MissionsPage from './pages/MissionsPage'
+import MissionDetailPage from './pages/MissionDetailPage'
+import MissionEditorPage from './pages/MissionEditorPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, user } = useAuthStore()
@@ -73,6 +76,10 @@ function App() {
         <Route index element={<DashboardPage />} />
         <Route path="struktur" element={<StaffelstrukturPage />} />
         <Route path="struktur/matrix" element={<AssignmentMatrixPage />} />
+        <Route path="einsaetze" element={<MissionsPage />} />
+        <Route path="einsaetze/neu" element={<MissionEditorPage />} />
+        <Route path="einsaetze/:id" element={<MissionDetailPage />} />
+        <Route path="einsaetze/:id/bearbeiten" element={<MissionEditorPage />} />
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="loot" element={<LootPage />} />
         <Route path="inventory" element={<InventoryPage />} />

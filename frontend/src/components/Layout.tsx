@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ChevronRight,
   Shield,
+  Crosshair,
 } from 'lucide-react'
 import { useState, useRef } from 'react'
 import clsx from 'clsx'
@@ -34,6 +35,7 @@ import clsx from 'clsx'
 const mainNavItems = [
   { to: '/', icon: Home, label: 'Dashboard' },
   { to: '/struktur', icon: Shield, label: 'Viper-Struktur' },
+  { to: '/einsaetze', icon: Crosshair, label: 'Einsätze' },
   { to: '/attendance', icon: ClipboardList, label: 'Staffelabende' },
   { to: '/loot', icon: Gift, label: 'Freeplay (Loot)' },
   { to: '/inventory', icon: Package, label: 'Lager' },
