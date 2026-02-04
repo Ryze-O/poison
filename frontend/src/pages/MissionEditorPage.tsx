@@ -745,8 +745,8 @@ export default function MissionEditorPage() {
 
             <div>
               <label className="block text-sm text-gray-400 mb-1">
-                Treffpunkt
-                <InfoTooltip text="Wo sollen sich alle Teilnehmer vor dem Einsatz sammeln?" />
+                Verortung / Treffpunkt
+                <InfoTooltip text="Wo findet der Einsatz statt? Wo sollen sich alle Teilnehmer sammeln?" />
               </label>
               <div className="flex gap-2">
                 <select
@@ -759,7 +759,7 @@ export default function MissionEditorPage() {
                   }
                   className="flex-1 bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                 >
-                  <option value="">Kein Treffpunkt angegeben</option>
+                  <option value="">Keine Verortung angegeben</option>
                   {locations?.map((loc) => (
                     <option key={loc.id} value={loc.id}>
                       {loc.name}
@@ -1061,22 +1061,42 @@ export default function MissionEditorPage() {
                     <div>
                       <label className="block text-sm text-gray-400 mb-1">
                         Einheitstyp
-                        <InfoTooltip text="Art der Einheit: gks (Großkampfschiff), wing (Jägerwing), squad (Bodentruppe), beast (Logistik), deals (DEALS Squad)" />
+                        <InfoTooltip text="Art der Einheit, z.B. GKS, Jäger, Squad, BEAST, DEALS - oder eigenen Typ eingeben" />
                       </label>
-                      <select
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {['GKS', 'Jäger', 'Squad', 'BEAST', 'DEALS'].map((preset) => {
+                          const isSelected = unit.unit_type === preset
+                          return (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  updateUnit(unit._localId, { unit_type: null })
+                                } else {
+                                  updateUnit(unit._localId, { unit_type: preset })
+                                }
+                              }}
+                              className={`px-2 py-0.5 rounded text-xs border ${
+                                isSelected
+                                  ? 'bg-krt-orange/20 border-krt-orange text-krt-orange'
+                                  : 'bg-gray-700 border-gray-600 hover:bg-gray-600'
+                              }`}
+                            >
+                              {preset}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <input
+                        type="text"
                         value={unit.unit_type || ''}
                         onChange={(e) =>
                           updateUnit(unit._localId, { unit_type: e.target.value || null })
                         }
-                        className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
-                      >
-                        <option value="">Kein Typ</option>
-                        <option value="gks">GKS (Großkampfschiff)</option>
-                        <option value="wing">Wing (Jäger)</option>
-                        <option value="squad">Squad (Boden)</option>
-                        <option value="beast">BEAST (Logistik)</option>
-                        <option value="deals">DEALS</option>
-                      </select>
+                        placeholder="Oder eigenen Typ eingeben..."
+                        className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                      />
                     </div>
                     <div>
                       <label className="block text-sm text-gray-400 mb-1">
