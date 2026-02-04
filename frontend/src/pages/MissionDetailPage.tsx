@@ -420,7 +420,7 @@ export default function MissionDetailPage() {
                       <select
                         value={selectedUnitId || ''}
                         onChange={(e) => setSelectedUnitId(e.target.value ? Number(e.target.value) : null)}
-                        className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                        className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                       >
                         <option value="">Keine Präferenz</option>
                         {mission.units.map((unit) => (
@@ -439,7 +439,7 @@ export default function MissionDetailPage() {
                         onChange={(e) =>
                           setSelectedPositionId(e.target.value ? Number(e.target.value) : null)
                         }
-                        className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                        className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                         disabled={!selectedUnitId}
                       >
                         <option value="">Keine Präferenz</option>
@@ -463,7 +463,7 @@ export default function MissionDetailPage() {
                       value={registrationNote}
                       onChange={(e) => setRegistrationNote(e.target.value)}
                       placeholder="z.B. 'Kann ab 20:15'"
-                      className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                      className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                     />
                   </div>
                   <button
@@ -607,7 +607,7 @@ export default function MissionDetailPage() {
                 Wähle eine Position und weise einen User oder Platzhalter zu.
               </p>
               <div className="grid gap-4 md:grid-cols-3">
-                <select className="bg-krt-darker border border-gray-600 rounded px-3 py-2">
+                <select className="bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white">
                   <option value="">Position wählen...</option>
                   {mission.units.flatMap((unit) =>
                     unit.positions.map((pos) => (
@@ -617,7 +617,7 @@ export default function MissionDetailPage() {
                     ))
                   )}
                 </select>
-                <select className="bg-krt-darker border border-gray-600 rounded px-3 py-2">
+                <select className="bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white">
                   <option value="">User wählen...</option>
                   {allUsers
                     .filter((u) => ['member', 'officer', 'treasurer', 'admin'].includes(u.role))

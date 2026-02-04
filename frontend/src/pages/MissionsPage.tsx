@@ -237,7 +237,7 @@ export default function MissionsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as MissionStatus | 'all')}
-            className="bg-krt-dark border border-gray-600 rounded px-3 py-1.5 text-sm"
+            className="bg-krt-dark border border-gray-600 rounded px-3 py-1.5 text-sm text-white"
           >
             <option value="all">Alle</option>
             <option value="draft">Entwurf</option>

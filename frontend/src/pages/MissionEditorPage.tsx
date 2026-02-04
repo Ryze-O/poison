@@ -17,6 +17,7 @@ import {
   MapPin,
   HelpCircle,
   Grip,
+  X,
 } from 'lucide-react'
 import type {
   MissionDetail,
@@ -94,9 +95,9 @@ export default function MissionEditorPage() {
     title: '',
     description: '',
     scheduled_date: new Date().toISOString().split('T')[0],
-    scheduled_time: '20:00',
-    duration_hours: 3,
-    duration_minutes: 0,
+    scheduled_time: '19:45',
+    duration_hours: 2,
+    duration_minutes: 30,
     start_location_id: null,
     equipment_level: '',
     target_group: '',
@@ -106,6 +107,11 @@ export default function MissionEditorPage() {
   const [units, setUnits] = useState<LocalUnit[]>([])
   const [phases, setPhases] = useState<LocalPhase[]>([])
   const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set())
+
+  // New location form state
+  const [showNewLocationForm, setShowNewLocationForm] = useState(false)
+  const [newLocationName, setNewLocationName] = useState('')
+  const [newLocationSystem, setNewLocationSystem] = useState('')
 
   // Fetch existing mission if editing
   const { data: existingMission, isLoading: missionLoading } = useQuery<MissionDetail>({
@@ -287,6 +293,21 @@ export default function MissionEditorPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mission', id] })
       saveUnitsAndPhases(Number(id))
+    },
+  })
+
+  // Create new location
+  const createLocationMutation = useMutation({
+    mutationFn: (data: { name: string; system_name?: string }) =>
+      apiClient.post('/api/locations', data),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['locations'] })
+      // Automatically select the new location
+      setMissionData({ ...missionData, start_location_id: response.data.id })
+      // Reset form
+      setShowNewLocationForm(false)
+      setNewLocationName('')
+      setNewLocationSystem('')
     },
   })
 
@@ -637,7 +658,7 @@ export default function MissionEditorPage() {
                 value={missionData.title}
                 onChange={(e) => setMissionData({ ...missionData, title: e.target.value })}
                 placeholder="z.B. Hunt for Decari Pods"
-                className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
               />
             </div>
 
@@ -653,7 +674,7 @@ export default function MissionEditorPage() {
                   onChange={(e) =>
                     setMissionData({ ...missionData, scheduled_date: e.target.value })
                   }
-                  className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                  className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                 />
               </div>
               <div>
@@ -667,7 +688,7 @@ export default function MissionEditorPage() {
                   onChange={(e) =>
                     setMissionData({ ...missionData, scheduled_time: e.target.value })
                   }
-                  className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                  className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                 />
               </div>
             </div>
@@ -686,7 +707,7 @@ export default function MissionEditorPage() {
                   onChange={(e) =>
                     setMissionData({ ...missionData, duration_hours: Number(e.target.value) })
                   }
-                  className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                  className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                 />
               </div>
               <div>
@@ -696,7 +717,7 @@ export default function MissionEditorPage() {
                   onChange={(e) =>
                     setMissionData({ ...missionData, duration_minutes: Number(e.target.value) })
                   }
-                  className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                  className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                 >
                   <option value={0}>0</option>
                   <option value={15}>15</option>
@@ -711,67 +732,171 @@ export default function MissionEditorPage() {
                 Treffpunkt
                 <InfoTooltip text="Wo sollen sich alle Teilnehmer vor dem Einsatz sammeln?" />
               </label>
-              <select
-                value={missionData.start_location_id || ''}
-                onChange={(e) =>
-                  setMissionData({
-                    ...missionData,
-                    start_location_id: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-                className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
-              >
-                <option value="">Kein Treffpunkt angegeben</option>
-                {locations?.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name}
-                    {loc.system_name && ` (${loc.system_name})`}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={missionData.start_location_id || ''}
+                  onChange={(e) =>
+                    setMissionData({
+                      ...missionData,
+                      start_location_id: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                  className="flex-1 bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
+                >
+                  <option value="">Kein Treffpunkt angegeben</option>
+                  {locations?.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}
+                      {loc.system_name && ` (${loc.system_name})`}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowNewLocationForm(true)}
+                  className="px-3 py-2 bg-gray-700 border border-gray-600 rounded hover:bg-gray-600 text-sm whitespace-nowrap"
+                >
+                  <Plus size={16} className="inline mr-1" />
+                  Neuer Ort
+                </button>
+              </div>
             </div>
 
             <div>
               <label className="block text-sm text-gray-400 mb-1">
                 Ausrüstung
-                <InfoTooltip text="Welche Ausrüstungsstufe wird benötigt? z.B. 'Full Combat Loadout', 'Mining Equipment'" />
+                <InfoTooltip text="Welche Ausrüstungsstufe wird benötigt? Klicke auf die Vorschläge oder kombiniere mehrere." />
               </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {['Viper Base Gear', 'Viper Heavy Gear'].map((preset) => {
+                  const isSelected = missionData.equipment_level.includes(preset)
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          // Remove preset
+                          const newValue = missionData.equipment_level
+                            .split(', ')
+                            .filter((p) => p !== preset)
+                            .join(', ')
+                          setMissionData({ ...missionData, equipment_level: newValue })
+                        } else {
+                          // Add preset
+                          const newValue = missionData.equipment_level
+                            ? `${missionData.equipment_level}, ${preset}`
+                            : preset
+                          setMissionData({ ...missionData, equipment_level: newValue })
+                        }
+                      }}
+                      className={`px-3 py-1 rounded text-sm border ${
+                        isSelected
+                          ? 'bg-krt-orange/20 border-krt-orange text-krt-orange'
+                          : 'bg-gray-700 border-gray-600 hover:bg-gray-600'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  )
+                })}
+              </div>
               <input
                 type="text"
                 value={missionData.equipment_level}
                 onChange={(e) => setMissionData({ ...missionData, equipment_level: e.target.value })}
-                placeholder="z.B. Full Combat Loadout"
-                className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                placeholder="Oder eigene Ausrüstung eingeben..."
+                className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
               />
             </div>
 
             <div>
               <label className="block text-sm text-gray-400 mb-1">
                 Zielgruppe
-                <InfoTooltip text="Für welche Mitglieder ist der Einsatz gedacht? z.B. 'CW + SW', 'Alle Vipers'" />
+                <InfoTooltip text="Stufe 1: Anfänger willkommen | Stufe 2: Einsatzerfahrung empfohlen | Stufe 3: Einsatzerfahrung zwingend erforderlich" />
               </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {[
+                  { value: 'Stufe 1: Anfänger willkommen', short: 'Stufe 1' },
+                  { value: 'Stufe 2: Einsatzerfahrung empfohlen', short: 'Stufe 2' },
+                  { value: 'Stufe 3: Einsatzerfahrung zwingend erforderlich', short: 'Stufe 3' },
+                ].map((level) => {
+                  const isSelected = missionData.target_group === level.value
+                  return (
+                    <button
+                      key={level.value}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          setMissionData({ ...missionData, target_group: '' })
+                        } else {
+                          setMissionData({ ...missionData, target_group: level.value })
+                        }
+                      }}
+                      className={`px-3 py-1 rounded text-sm border ${
+                        isSelected
+                          ? 'bg-krt-orange/20 border-krt-orange text-krt-orange'
+                          : 'bg-gray-700 border-gray-600 hover:bg-gray-600'
+                      }`}
+                      title={level.value}
+                    >
+                      {level.short}
+                    </button>
+                  )
+                })}
+              </div>
               <input
                 type="text"
                 value={missionData.target_group}
                 onChange={(e) => setMissionData({ ...missionData, target_group: e.target.value })}
-                placeholder="z.B. CW + SW"
-                className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                placeholder="Oder eigene Zielgruppe eingeben..."
+                className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
               />
             </div>
 
             <div>
               <label className="block text-sm text-gray-400 mb-1">
                 Rules of Engagement (ROE)
-                <InfoTooltip text="Welche Einsatzregeln gelten? z.B. 'Weapons Hold', 'Weapons Free'" />
+                <InfoTooltip text="Weapons Hold: Nur schießen auf Befehl | Weapons Tight: Reaktiv handeln, dem Handeln des Gegners angepasst | Weapons Free: Ich schieße auf alles" />
               </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {[
+                  { value: 'Weapons Hold', tooltip: 'Nur schießen auf Befehl' },
+                  { value: 'Weapons Tight', tooltip: 'Reaktiv handeln, dem Handeln des Gegners angepasst' },
+                  { value: 'Weapons Free', tooltip: 'Ich schieße auf alles' },
+                ].map((roe) => {
+                  const isSelected = missionData.rules_of_engagement === roe.value
+                  return (
+                    <button
+                      key={roe.value}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          setMissionData({ ...missionData, rules_of_engagement: '' })
+                        } else {
+                          setMissionData({ ...missionData, rules_of_engagement: roe.value })
+                        }
+                      }}
+                      className={`px-3 py-1 rounded text-sm border ${
+                        isSelected
+                          ? 'bg-krt-orange/20 border-krt-orange text-krt-orange'
+                          : 'bg-gray-700 border-gray-600 hover:bg-gray-600'
+                      }`}
+                      title={roe.tooltip}
+                    >
+                      {roe.value}
+                    </button>
+                  )
+                })}
+              </div>
               <input
                 type="text"
                 value={missionData.rules_of_engagement}
                 onChange={(e) =>
                   setMissionData({ ...missionData, rules_of_engagement: e.target.value })
                 }
-                placeholder="z.B. Weapons Hold"
-                className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                placeholder="Oder eigene ROE eingeben..."
+                className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
               />
             </div>
 
@@ -785,7 +910,7 @@ export default function MissionEditorPage() {
                 onChange={(e) => setMissionData({ ...missionData, description: e.target.value })}
                 placeholder="Optionale Beschreibung..."
                 rows={3}
-                className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
               />
             </div>
           </div>
@@ -840,7 +965,7 @@ export default function MissionEditorPage() {
                       updateUnit(unit._localId, { name: e.target.value })
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    className="bg-transparent border-b border-transparent hover:border-gray-600 focus:border-krt-orange focus:outline-none font-semibold"
+                    className="bg-transparent border-b border-transparent hover:border-gray-600 focus:border-krt-orange focus:outline-none font-semibold text-white"
                     placeholder="Einheit Name"
                   />
                   {unit.ship_name && (
@@ -878,7 +1003,7 @@ export default function MissionEditorPage() {
                         onChange={(e) =>
                           updateUnit(unit._localId, { unit_type: e.target.value || null })
                         }
-                        className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                        className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                       >
                         <option value="">Kein Typ</option>
                         <option value="gks">GKS (Großkampfschiff)</option>
@@ -900,7 +1025,7 @@ export default function MissionEditorPage() {
                           updateUnit(unit._localId, { ship_name: e.target.value || null })
                         }
                         placeholder="z.B. Polaris"
-                        className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                        className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                       />
                     </div>
                   </div>
@@ -922,7 +1047,7 @@ export default function MissionEditorPage() {
                           value={unit.radio_frequencies?.el || ''}
                           onChange={(e) => setFrequency(unit._localId, 'el', e.target.value)}
                           placeholder="102.11"
-                          className="w-full bg-krt-darker border border-gray-600 rounded px-2 py-1 text-sm"
+                          className="w-full bg-krt-dark border border-gray-600 rounded px-2 py-1 text-sm text-white"
                         />
                         <div className="flex flex-wrap gap-1 mt-1">
                           <button
@@ -948,7 +1073,7 @@ export default function MissionEditorPage() {
                           value={unit.radio_frequencies?.intern || ''}
                           onChange={(e) => setFrequency(unit._localId, 'intern', e.target.value)}
                           placeholder="102.31"
-                          className="w-full bg-krt-darker border border-gray-600 rounded px-2 py-1 text-sm"
+                          className="w-full bg-krt-dark border border-gray-600 rounded px-2 py-1 text-sm text-white"
                         />
                         <div className="flex flex-wrap gap-1 mt-1">
                           {unit.unit_type === 'gks' && (
@@ -1023,7 +1148,7 @@ export default function MissionEditorPage() {
                           value={unit.radio_frequencies?.targets || ''}
                           onChange={(e) => setFrequency(unit._localId, 'targets', e.target.value)}
                           placeholder="102.91"
-                          className="w-full bg-krt-darker border border-gray-600 rounded px-2 py-1 text-sm"
+                          className="w-full bg-krt-dark border border-gray-600 rounded px-2 py-1 text-sm text-white"
                         />
                         <div className="flex flex-wrap gap-1 mt-1">
                           <button
@@ -1073,7 +1198,7 @@ export default function MissionEditorPage() {
                               updatePosition(unit._localId, pos._localId, { name: e.target.value })
                             }
                             placeholder="Position Name"
-                            className="flex-1 bg-transparent border-b border-gray-600 focus:border-krt-orange focus:outline-none text-sm"
+                            className="flex-1 bg-transparent border-b border-gray-600 focus:border-krt-orange focus:outline-none text-sm text-white"
                           />
                           <select
                             value={pos.position_type || ''}
@@ -1082,7 +1207,7 @@ export default function MissionEditorPage() {
                                 position_type: e.target.value || null,
                               })
                             }
-                            className="bg-krt-dark border border-gray-600 rounded px-2 py-1 text-xs"
+                            className="bg-krt-dark border border-gray-600 rounded px-2 py-1 text-xs text-white"
                           >
                             <option value="">Typ</option>
                             <option value="commander">Kommandant</option>
@@ -1115,7 +1240,7 @@ export default function MissionEditorPage() {
                                   max_count: Number(e.target.value),
                                 })
                               }
-                              className="w-12 bg-krt-dark border border-gray-600 rounded px-1 py-1 text-xs text-center"
+                              className="w-12 bg-krt-dark border border-gray-600 rounded px-1 py-1 text-xs text-center text-white"
                             />
                             <span className="text-xs text-gray-500">Max</span>
                           </div>
@@ -1188,7 +1313,7 @@ export default function MissionEditorPage() {
                       value={phase.title}
                       onChange={(e) => updatePhase(phase._localId, { title: e.target.value })}
                       placeholder="Phase Titel"
-                      className="flex-1 bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                      className="flex-1 bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                     />
                     <input
                       type="text"
@@ -1197,7 +1322,7 @@ export default function MissionEditorPage() {
                         updatePhase(phase._localId, { start_time: e.target.value || null })
                       }
                       placeholder="Uhrzeit (z.B. 20:00)"
-                      className="w-32 bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                      className="w-32 bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                     />
                   </div>
                   <textarea
@@ -1207,7 +1332,7 @@ export default function MissionEditorPage() {
                     }
                     placeholder="Beschreibung der Phase..."
                     rows={2}
-                    className="w-full bg-krt-darker border border-gray-600 rounded px-3 py-2"
+                    className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                   />
                 </div>
                 <button
@@ -1375,6 +1500,85 @@ export default function MissionEditorPage() {
           </button>
         )}
       </div>
+
+      {/* New Location Modal */}
+      {showNewLocationForm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-krt-dark rounded-lg border border-gray-700 max-w-lg w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <MapPin size={24} className="text-krt-orange" />
+                Neuen Treffpunkt erstellen
+              </h2>
+              <button
+                onClick={() => {
+                  setShowNewLocationForm(false)
+                  setNewLocationName('')
+                  setNewLocationSystem('')
+                }}
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Name *</label>
+                <input
+                  type="text"
+                  value={newLocationName}
+                  onChange={(e) => setNewLocationName(e.target.value)}
+                  placeholder="z.B. Orbituary, GrimHEX, Port Olisar..."
+                  className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">System</label>
+                <select
+                  value={newLocationSystem}
+                  onChange={(e) => setNewLocationSystem(e.target.value)}
+                  className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
+                >
+                  <option value="">-- System wählen --</option>
+                  <option value="Stanton">Stanton</option>
+                  <option value="Pyro">Pyro</option>
+                  <option value="Nyx">Nyx</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowNewLocationForm(false)
+                  setNewLocationName('')
+                  setNewLocationSystem('')
+                }}
+                className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={() => {
+                  if (newLocationName.trim()) {
+                    createLocationMutation.mutate({
+                      name: newLocationName.trim(),
+                      system_name: newLocationSystem || undefined,
+                    })
+                  }
+                }}
+                disabled={!newLocationName.trim() || createLocationMutation.isPending}
+                className="px-4 py-2 bg-krt-orange rounded hover:bg-krt-orange/80 disabled:opacity-50"
+              >
+                {createLocationMutation.isPending ? 'Erstellen...' : 'Ort erstellen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
