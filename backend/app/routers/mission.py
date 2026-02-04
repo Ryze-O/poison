@@ -43,16 +43,19 @@ router = APIRouter()
 # ============== Helper Functions ==============
 
 def is_mission_manager(user: User, mission: Mission) -> bool:
-    """Prüft ob User der Ersteller oder Admin ist."""
-    return user.role == UserRole.ADMIN or mission.created_by_id == user.id
+    """Prüft ob User Offizier+, Admin oder Ersteller ist."""
+    return (
+        user.role in [UserRole.ADMIN, UserRole.OFFICER, UserRole.TREASURER]
+        or mission.created_by_id == user.id
+    )
 
 
 def check_mission_manager(user: User, mission: Mission):
-    """Wirft 403 wenn User nicht Ersteller oder Admin ist."""
+    """Wirft 403 wenn User kein Offizier+ oder Ersteller ist."""
     if not is_mission_manager(user, mission):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Nur der Ersteller oder ein Admin kann diese Aktion durchführen"
+            detail="Nur Offiziere oder der Ersteller können diese Aktion durchführen"
         )
 
 

@@ -58,6 +58,11 @@ export default function MissionDetailPage() {
   const [selectedPositionId, setSelectedPositionId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  // Quick Assignment state
+  const [assignPositionId, setAssignPositionId] = useState<number | null>(null)
+  const [assignUserId, setAssignUserId] = useState<number | null>(null)
+  const [assignPlaceholder, setAssignPlaceholder] = useState('')
+
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
   const currentUser = useAuthStore.getState().user
 
@@ -127,6 +132,18 @@ export default function MissionDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['missions'] })
       navigate('/einsaetze')
+    },
+  })
+
+  const assignMutation = useMutation({
+    mutationFn: (data: { position_id: number; user_id?: number | null; placeholder_name?: string | null }) =>
+      apiClient.post(`/api/missions/${id}/assignments`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mission', id] })
+      // Reset form
+      setAssignPositionId(null)
+      setAssignUserId(null)
+      setAssignPlaceholder('')
     },
   })
 
@@ -713,8 +730,12 @@ export default function MissionDetailPage() {
               <p className="text-sm text-gray-400 mb-4">
                 Wähle eine Position und weise einen User oder Platzhalter zu.
               </p>
-              <div className="grid gap-4 md:grid-cols-3">
-                <select className="bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white">
+              <div className="grid gap-4 md:grid-cols-4">
+                <select
+                  value={assignPositionId || ''}
+                  onChange={(e) => setAssignPositionId(e.target.value ? Number(e.target.value) : null)}
+                  className="bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
+                >
                   <option value="">Position wählen...</option>
                   {mission.units.flatMap((unit) =>
                     unit.positions.map((pos) => (
@@ -724,7 +745,14 @@ export default function MissionDetailPage() {
                     ))
                   )}
                 </select>
-                <select className="bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white">
+                <select
+                  value={assignUserId || ''}
+                  onChange={(e) => {
+                    setAssignUserId(e.target.value ? Number(e.target.value) : null)
+                    if (e.target.value) setAssignPlaceholder('')
+                  }}
+                  className="bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
+                >
                   <option value="">User wählen...</option>
                   {allUsers
                     .filter((u) => ['member', 'officer', 'treasurer', 'admin'].includes(u.role))
@@ -734,10 +762,37 @@ export default function MissionDetailPage() {
                       </option>
                     ))}
                 </select>
-                <button className="px-4 py-2 bg-krt-orange rounded hover:bg-krt-orange/80">
-                  Zuweisen
+                <input
+                  type="text"
+                  value={assignPlaceholder}
+                  onChange={(e) => {
+                    setAssignPlaceholder(e.target.value)
+                    if (e.target.value) setAssignUserId(null)
+                  }}
+                  placeholder="Oder Platzhalter (XXXXX)"
+                  className="bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
+                />
+                <button
+                  onClick={() => {
+                    if (!assignPositionId) return
+                    if (!assignUserId && !assignPlaceholder) return
+                    assignMutation.mutate({
+                      position_id: assignPositionId,
+                      user_id: assignUserId || null,
+                      placeholder_name: assignPlaceholder || null,
+                    })
+                  }}
+                  disabled={!assignPositionId || (!assignUserId && !assignPlaceholder) || assignMutation.isPending}
+                  className="px-4 py-2 bg-krt-orange rounded hover:bg-krt-orange/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {assignMutation.isPending ? 'Zuweisen...' : 'Zuweisen'}
                 </button>
               </div>
+              {assignMutation.isError && (
+                <p className="text-red-400 text-sm mt-2">
+                  Fehler beim Zuweisen. Möglicherweise ist die Position bereits besetzt.
+                </p>
+              )}
             </div>
           )}
         </div>
