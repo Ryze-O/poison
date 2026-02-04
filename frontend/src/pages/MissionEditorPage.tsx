@@ -356,7 +356,8 @@ export default function MissionEditorPage() {
         sort_order: unit.sort_order,
         positions: unit.positions.map((p) => ({
           name: p.name,
-          position_type: p.position_type,
+          // Filter out '__custom__' marker - convert to null
+          position_type: p.position_type === '__custom__' ? null : p.position_type,
           is_required: p.is_required,
           min_count: p.min_count,
           max_count: p.max_count,
@@ -1292,31 +1293,69 @@ export default function MissionEditorPage() {
                             placeholder="Position Name"
                             className="flex-1 bg-transparent border-b border-gray-600 focus:border-krt-orange focus:outline-none text-sm text-white"
                           />
-                          <input
-                            type="text"
-                            value={pos.position_type || ''}
-                            onChange={(e) =>
-                              updatePosition(unit._localId, pos._localId, {
-                                position_type: e.target.value || null,
-                              })
-                            }
-                            placeholder="Typ"
-                            className="w-24 bg-krt-dark border border-gray-600 rounded px-2 py-1 text-xs text-white"
-                            list={`position-types-${unit._localId}`}
-                          />
-                          <datalist id={`position-types-${unit._localId}`}>
-                            {/* Operational roles from Viper Structure */}
-                            {operationalRoles?.map((role) => (
-                              <option key={role.id} value={role.name} />
-                            ))}
-                            {/* Additional common position types */}
-                            <option value="Kommandant" />
-                            <option value="Pilot" />
-                            <option value="Crew" />
-                            <option value="Lead" />
-                            <option value="Gunner" />
-                            <option value="Medic" />
-                          </datalist>
+{/* Position Type: Select dropdown with all operational roles + custom entry */}
+                          {(() => {
+                            // Build list of all position type options
+                            const allOptions = [
+                              ...(operationalRoles?.map(r => r.name) || []),
+                              'Kommandant', 'Pilot', 'Crew', 'Lead', 'Gunner', 'Medic'
+                            ]
+                            // Remove duplicates
+                            const uniqueOptions = [...new Set(allOptions)]
+                            // Check if current value is a custom value (not in options)
+                            // Also check for '__custom__' marker which indicates user wants to enter custom value
+                            const trimmedValue = (pos.position_type || '').trim()
+                            const isCustomMode = pos.position_type === '__custom__' ||
+                              (trimmedValue !== '' && !uniqueOptions.includes(trimmedValue))
+
+                            return isCustomMode ? (
+                              // Show text input for custom value
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  value={pos.position_type === '__custom__' ? '' : (pos.position_type || '')}
+                                  onChange={(e) =>
+                                    updatePosition(unit._localId, pos._localId, {
+                                      position_type: e.target.value || null,
+                                    })
+                                  }
+                                  placeholder="Eigener Typ"
+                                  className="w-24 bg-krt-dark border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => updatePosition(unit._localId, pos._localId, { position_type: null })}
+                                  className="text-gray-400 hover:text-white text-xs"
+                                  title="Zurück zur Auswahl"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ) : (
+                              // Show select dropdown
+                              <select
+                                value={pos.position_type || ''}
+                                onChange={(e) => {
+                                  if (e.target.value === '__custom__') {
+                                    // Switch to custom input mode
+                                    updatePosition(unit._localId, pos._localId, { position_type: '__custom__' })
+                                  } else {
+                                    updatePosition(unit._localId, pos._localId, {
+                                      position_type: e.target.value || null,
+                                    })
+                                  }
+                                }}
+                                className="w-28 bg-krt-dark border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                              >
+                                <option value="">Typ wählen</option>
+                                {uniqueOptions.map((opt) => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                                <option value="__custom__">Andere...</option>
+                              </select>
+                            )
+                          })()}
                           <label className="flex items-center gap-1 text-xs text-gray-400">
                             <input
                               type="checkbox"
