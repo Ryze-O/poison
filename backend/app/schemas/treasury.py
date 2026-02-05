@@ -36,6 +36,9 @@ class TransactionUpdate(BaseModel):
     transaction_type: Optional[TransactionType] = None
     description: Optional[str] = None
     category: Optional[str] = None
+    # Kassenwart-Konten
+    officer_account_id: Optional[int] = None
+    received_by_account_id: Optional[int] = None
     # Erweiterte Felder
     sc_version: Optional[str] = None
     item_reference: Optional[str] = None

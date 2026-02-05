@@ -34,6 +34,7 @@ export default function TreasuryPage() {
     category: '',
     officer_account_id: '' as string,
     received_by_account_id: '' as string,
+    beneficiary: '',
   })
 
   // Filter und Pagination
@@ -151,6 +152,7 @@ export default function TreasuryPage() {
       category?: string
       officer_account_id?: number
       received_by_account_id?: number
+      beneficiary?: string
     }) => apiClient.post('/api/treasury/transactions', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['treasury'] })
@@ -171,10 +173,14 @@ export default function TreasuryPage() {
         transaction_type?: TransactionType
         description?: string
         category?: string
+        beneficiary?: string
+        officer_account_id?: number | null
+        received_by_account_id?: number | null
       }
     }) => apiClient.patch(`/api/treasury/transactions/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['treasury'] })
+      queryClient.invalidateQueries({ queryKey: ['officer-accounts'] })
       setEditingTransaction(null)
       resetForm()
     },
@@ -301,6 +307,7 @@ export default function TreasuryPage() {
       category: '',
       officer_account_id: '',
       received_by_account_id: '',
+      beneficiary: '',
     })
   }
 
@@ -313,6 +320,7 @@ export default function TreasuryPage() {
       category: tx.category || '',
       officer_account_id: tx.officer_account_id?.toString() || '',
       received_by_account_id: tx.received_by_account_id?.toString() || '',
+      beneficiary: tx.beneficiary || '',
     })
   }
 
@@ -325,6 +333,7 @@ export default function TreasuryPage() {
       category: formData.category || undefined,
       officer_account_id: formData.officer_account_id ? parseInt(formData.officer_account_id) : undefined,
       received_by_account_id: formData.received_by_account_id ? parseInt(formData.received_by_account_id) : undefined,
+      beneficiary: formData.beneficiary || undefined,
     })
   }
 
@@ -339,6 +348,9 @@ export default function TreasuryPage() {
         transaction_type: formData.type,
         description: formData.description,
         category: formData.category || undefined,
+        beneficiary: formData.beneficiary || undefined,
+        officer_account_id: formData.officer_account_id ? parseInt(formData.officer_account_id) : null,
+        received_by_account_id: formData.received_by_account_id ? parseInt(formData.received_by_account_id) : null,
       },
     })
   }
@@ -903,16 +915,30 @@ export default function TreasuryPage() {
               </div>
             )}
 
-            <div>
-              <label className="label">Beschreibung / Event</label>
-              <input
-                type="text"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="z.B. Großzügige Spende von Silva-7"
-                className="input"
-                required
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="label">
+                  {formData.type === 'income' ? 'Einzahler / Spender' : 'Empfänger'}
+                </label>
+                <input
+                  type="text"
+                  value={formData.beneficiary}
+                  onChange={(e) => setFormData({ ...formData, beneficiary: e.target.value })}
+                  placeholder={formData.type === 'income' ? 'z.B. Mastersinflare' : 'z.B. Silva-7'}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label">Beschreibung / Event</label>
+                <input
+                  type="text"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="z.B. Großzügige Spende"
+                  className="input"
+                  required
+                />
+              </div>
             </div>
 
             <div className="flex gap-3">
@@ -991,7 +1017,8 @@ export default function TreasuryPage() {
                   <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Datum</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Event / Beschreibung</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Kategorie</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Wer</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Kassenwart</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-300">Beteiligter</th>
                   <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">Transaktion</th>
                   <th className="text-right py-3 px-4 text-sm font-semibold text-gray-300">Stand</th>
                   <th className="text-center py-3 px-4 text-sm font-semibold text-gray-300 w-20">Aktion</th>
@@ -1037,6 +1064,15 @@ export default function TreasuryPage() {
                         )}
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-300">
+                        {(() => {
+                          // Bei Einnahmen: received_by_account_id, bei Ausgaben: officer_account_id
+                          const accountId = tx.amount > 0 ? tx.received_by_account_id : tx.officer_account_id
+                          if (!accountId || !officerAccounts) return '-'
+                          const account = officerAccounts.accounts.find(a => a.id === accountId)
+                          return account ? (account.user.display_name || account.user.username) : '-'
+                        })()}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-300">
                         {tx.beneficiary && tx.beneficiary !== '-' ? tx.beneficiary : '-'}
                       </td>
                       <td className={`py-3 px-4 text-sm text-right font-mono font-medium whitespace-nowrap ${
@@ -1072,7 +1108,7 @@ export default function TreasuryPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-gray-400">
+                    <td colSpan={8} className="py-8 text-center text-gray-400">
                       {transactions?.length === 0
                         ? 'Noch keine Transaktionen vorhanden.'
                         : 'Keine Transaktionen entsprechen dem Filter.'
@@ -1191,6 +1227,57 @@ export default function TreasuryPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="input"
                   required
+                />
+              </div>
+
+              {/* Kassenwart-Auswahl bei Ausgaben */}
+              {formData.type === 'expense' && officerAccounts && officerAccounts.accounts.length > 0 && (
+                <div>
+                  <label className="label">Von Kassenwart-Konto</label>
+                  <select
+                    value={formData.officer_account_id}
+                    onChange={(e) => setFormData({ ...formData, officer_account_id: e.target.value })}
+                    className="input"
+                  >
+                    <option value="">-- Kein Konto --</option>
+                    {officerAccounts.accounts.map(account => (
+                      <option key={account.id} value={account.id}>
+                        {account.user.display_name || account.user.username}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Kassenwart-Auswahl bei Einnahmen */}
+              {formData.type === 'income' && officerAccounts && officerAccounts.accounts.length > 0 && (
+                <div>
+                  <label className="label">Auf Kassenwart-Konto</label>
+                  <select
+                    value={formData.received_by_account_id}
+                    onChange={(e) => setFormData({ ...formData, received_by_account_id: e.target.value })}
+                    className="input"
+                  >
+                    <option value="">-- Wer hat es erhalten? --</option>
+                    {officerAccounts.accounts.map(account => (
+                      <option key={account.id} value={account.id}>
+                        {account.user.display_name || account.user.username}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="label">
+                  {formData.type === 'income' ? 'Einzahler / Spender' : 'Empfänger'}
+                </label>
+                <input
+                  type="text"
+                  value={formData.beneficiary}
+                  onChange={(e) => setFormData({ ...formData, beneficiary: e.target.value })}
+                  placeholder={formData.type === 'income' ? 'z.B. Mastersinflare' : 'z.B. Silva-7'}
+                  className="input"
                 />
               </div>
 
