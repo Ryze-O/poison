@@ -814,21 +814,23 @@ async def update_position(
     if not pos:
         raise HTTPException(status_code=404, detail="Position nicht gefunden")
 
-    if pos_data.name is not None:
+    # Benutze model_fields_set um zu prüfen, welche Felder explizit gesendet wurden
+    # (auch wenn sie None sind, z.B. um required_role_id zu löschen)
+    if "name" in pos_data.model_fields_set:
         pos.name = pos_data.name
-    if pos_data.position_type is not None:
+    if "position_type" in pos_data.model_fields_set:
         pos.position_type = pos_data.position_type
-    if pos_data.is_required is not None:
+    if "is_required" in pos_data.model_fields_set:
         pos.is_required = pos_data.is_required
-    if pos_data.min_count is not None:
+    if "min_count" in pos_data.model_fields_set:
         pos.min_count = pos_data.min_count
-    if pos_data.max_count is not None:
+    if "max_count" in pos_data.model_fields_set:
         pos.max_count = pos_data.max_count
-    if pos_data.required_role_id is not None:
+    if "required_role_id" in pos_data.model_fields_set:
         pos.required_role_id = pos_data.required_role_id
-    if pos_data.notes is not None:
+    if "notes" in pos_data.model_fields_set:
         pos.notes = pos_data.notes
-    if pos_data.sort_order is not None:
+    if "sort_order" in pos_data.model_fields_set:
         pos.sort_order = pos_data.sort_order
 
     db.commit()
@@ -1055,15 +1057,17 @@ async def update_assignment(
     if not assign:
         raise HTTPException(status_code=404, detail="Zuweisung nicht gefunden")
 
-    if assign_data.user_id is not None:
+    # Benutze model_fields_set um zu prüfen, welche Felder explizit gesendet wurden
+    # (auch wenn sie None sind, z.B. um user_id zu löschen und placeholder zu setzen)
+    if "user_id" in assign_data.model_fields_set:
         assign.user_id = assign_data.user_id
-    if assign_data.placeholder_name is not None:
+    if "placeholder_name" in assign_data.model_fields_set:
         assign.placeholder_name = assign_data.placeholder_name
-    if assign_data.is_backup is not None:
+    if "is_backup" in assign_data.model_fields_set:
         assign.is_backup = assign_data.is_backup
-    if assign_data.is_training is not None:
+    if "is_training" in assign_data.model_fields_set:
         assign.is_training = assign_data.is_training
-    if assign_data.notes is not None:
+    if "notes" in assign_data.model_fields_set:
         assign.notes = assign_data.notes
 
     db.commit()
