@@ -32,6 +32,8 @@ class TreasuryTransaction(Base):
 
     # Bei Ausgaben: von welchem Kassenwart-Konto wurde abgebucht
     officer_account_id = Column(Integer, ForeignKey("officer_accounts.id"), nullable=True)
+    # Bei Einnahmen: auf welches Kassenwart-Konto geht das Geld
+    received_by_account_id = Column(Integer, ForeignKey("officer_accounts.id"), nullable=True)
 
     # Erweiterte Felder aus dem Bank-Spreadsheet
     sc_version = Column(String(20), nullable=True)  # z.B. "4.0", "4.0.1", "4.1"
@@ -45,4 +47,5 @@ class TreasuryTransaction(Base):
 
     # Relationships
     created_by = relationship("User")
-    officer_account = relationship("OfficerAccount")
+    officer_account = relationship("OfficerAccount", foreign_keys=[officer_account_id])
+    received_by_account = relationship("OfficerAccount", foreign_keys=[received_by_account_id])

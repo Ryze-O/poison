@@ -32,6 +32,7 @@ export default function TreasuryPage() {
     description: '',
     category: '',
     officer_account_id: '' as string,
+    received_by_account_id: '' as string,
   })
 
   // Filter und Pagination
@@ -147,12 +148,16 @@ export default function TreasuryPage() {
       description: string
       category?: string
       officer_account_id?: number
+      received_by_account_id?: number
     }) => apiClient.post('/api/treasury/transactions', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['treasury'] })
       queryClient.invalidateQueries({ queryKey: ['officer-accounts'] })
       setShowForm(false)
       resetForm()
+    },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      alert(`Fehler beim Speichern: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -293,6 +298,7 @@ export default function TreasuryPage() {
       description: '',
       category: '',
       officer_account_id: '',
+      received_by_account_id: '',
     })
   }
 
@@ -303,7 +309,8 @@ export default function TreasuryPage() {
       type: tx.transaction_type,
       description: tx.description,
       category: tx.category || '',
-      officer_account_id: '',
+      officer_account_id: tx.officer_account_id?.toString() || '',
+      received_by_account_id: tx.received_by_account_id?.toString() || '',
     })
   }
 
@@ -315,6 +322,7 @@ export default function TreasuryPage() {
       description: formData.description,
       category: formData.category || undefined,
       officer_account_id: formData.officer_account_id ? parseInt(formData.officer_account_id) : undefined,
+      received_by_account_id: formData.received_by_account_id ? parseInt(formData.received_by_account_id) : undefined,
     })
   }
 
@@ -887,6 +895,28 @@ export default function TreasuryPage() {
                 </select>
                 <p className="text-sm text-gray-400 mt-1">
                   Optional: Wähle ein Kassenwart-Konto, von dem der Betrag abgezogen werden soll.
+                </p>
+              </div>
+            )}
+
+            {/* Kassenwart-Auswahl bei Einnahmen */}
+            {formData.type === 'income' && officerAccounts && officerAccounts.accounts.length > 0 && (
+              <div>
+                <label className="label">Auf Kassenwart-Konto gutschreiben</label>
+                <select
+                  value={formData.received_by_account_id}
+                  onChange={(e) => setFormData({ ...formData, received_by_account_id: e.target.value })}
+                  className="input"
+                >
+                  <option value="">-- Wer hat das Geld eingenommen? --</option>
+                  {officerAccounts.accounts.map(account => (
+                    <option key={account.id} value={account.id}>
+                      {account.user.display_name || account.user.username} ({formatAmount(account.balance)} aUEC)
+                    </option>
+                  ))}
+                </select>
+                <p className="text-sm text-gray-400 mt-1">
+                  Welcher Kassenwart hat das Geld erhalten?
                 </p>
               </div>
             )}

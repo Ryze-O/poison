@@ -94,6 +94,18 @@ async def create_transaction(
                     detail=f"Nicht genug Guthaben auf dem Kassenwart-Konto. Verfügbar: {officer_account.balance} aUEC"
                 )
 
+    # Bei Einnahmen: Kassenwart-Konto prüfen und Guthaben erhöhen
+    received_by_account = None
+    if transaction.transaction_type == TransactionType.INCOME and transaction.received_by_account_id:
+        received_by_account = db.query(OfficerAccount).filter(
+            OfficerAccount.id == transaction.received_by_account_id
+        ).first()
+        if not received_by_account:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Kassenwart-Konto (Empfänger) nicht gefunden"
+            )
+
     # Transaktion erstellen
     db_transaction = TreasuryTransaction(
         amount=actual_amount,
@@ -101,12 +113,26 @@ async def create_transaction(
         description=transaction.description,
         category=transaction.category,
         officer_account_id=transaction.officer_account_id,
+        received_by_account_id=transaction.received_by_account_id,
         created_by_id=current_user.id
     )
     db.add(db_transaction)
 
     # Kassenstand aktualisieren
     treasury.current_balance += actual_amount
+
+    # Bei Einnahme mit Kassenwart-Konto: Guthaben erhöhen
+    if received_by_account:
+        received_by_account.balance += transaction.amount
+
+        # OfficerTransaction zur Dokumentation erstellen
+        received_tx = OfficerTransaction(
+            officer_account_id=received_by_account.id,
+            amount=transaction.amount,
+            description=f"Einnahme: {transaction.description}",
+            created_by_id=current_user.id
+        )
+        db.add(received_tx)
 
     # Bei Ausgabe mit Kassenwart-Konto: Betrag abziehen und Transaktion dokumentieren
     if officer_account:

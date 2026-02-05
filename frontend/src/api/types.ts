@@ -146,6 +146,9 @@ export interface Transaction {
   transaction_type: TransactionType
   description: string
   category: string | null
+  // Kassenwart-Konten
+  officer_account_id: number | null  // Bei Ausgaben: von welchem Konto
+  received_by_account_id: number | null  // Bei Einnahmen: auf welches Konto
   // Erweiterte Felder aus dem Bank-Spreadsheet
   sc_version: string | null
   item_reference: string | null

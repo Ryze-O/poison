@@ -141,6 +141,21 @@
     @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
     position: relative;
     overflow: hidden;
+    /* Mobile: Bessere Touch-Unterstützung */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(232, 90, 36, 0.3);
+    cursor: pointer;
+    user-select: none;
+    /* Mindesthöhe für Touch-Targets (44px empfohlen) */
+    min-height: 44px;
+  }
+
+  /* Mobile: Größere Touch-Targets */
+  @media (max-width: 768px) {
+    .btn {
+      @apply py-3 px-5 text-base;
+      min-height: 48px;
+    }
   }
 
   /* Subtle shine effect on buttons */
@@ -291,6 +306,19 @@
     color: var(--text-primary);
     box-shadow: var(--shadow-inner);
     transition: all 0.2s ease;
+    /* Mobile: Bessere Touch-Unterstützung */
+    touch-action: manipulation;
+    -webkit-appearance: none;
+    font-size: 16px; /* Verhindert Zoom auf iOS */
+  }
+
+  /* Mobile: Größere Inputs */
+  @media (max-width: 768px) {
+    .input {
+      padding: 0.75rem 1rem;
+      font-size: 16px;
+      min-height: 48px;
+    }
   }
 
   .input::placeholder {
