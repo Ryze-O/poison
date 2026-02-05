@@ -200,26 +200,58 @@ export default function LootPage() {
     enabled: showDistributionDialog,
   })
 
-  // Locations nach System gruppieren und alphabetisch sortieren
+  // Locations nach System und Planet gruppieren und alphabetisch sortieren
   const groupedLocations = useMemo(() => {
     const allLocs = distributionLocations || locations || []
-    // Gruppiere nach system_name (null = "Andere")
-    const groups: Record<string, Location[]> = {}
-    const systemOrder = ['Stanton', 'Pyro', 'Nyx'] // Bekannte Systeme zuerst
+    if (allLocs.length === 0) return { groups: {} as Record<string, { id: number; name: string; label: string }[]>, sortedSystems: [] as string[] }
+
+    const systemOrder = ['Stanton', 'Pyro', 'Nyx']
+
+    // Gruppiere nach System → Planet → Locations
+    const bySystemAndPlanet: Record<string, Record<string, Location[]>> = {}
 
     allLocs.forEach(loc => {
-      const system = loc.system_name || 'Andere'
-      if (!groups[system]) groups[system] = []
-      groups[system].push(loc)
+      const system = loc.system_name || '_other'
+      const planet = loc.planet_name || '_none'
+
+      if (!bySystemAndPlanet[system]) bySystemAndPlanet[system] = {}
+      if (!bySystemAndPlanet[system][planet]) bySystemAndPlanet[system][planet] = []
+      bySystemAndPlanet[system][planet].push(loc)
     })
 
-    // Sortiere Locations innerhalb jeder Gruppe alphabetisch
-    Object.keys(groups).forEach(system => {
-      groups[system].sort((a, b) => a.name.localeCompare(b.name, 'de'))
+    // Erstelle flache Liste pro System mit Planet-Labels
+    const groups: Record<string, { id: number; name: string; label: string }[]> = {}
+
+    Object.entries(bySystemAndPlanet).forEach(([system, planets]) => {
+      const displaySystem = system === '_other' ? 'Sonstige' : system
+      if (!groups[displaySystem]) groups[displaySystem] = []
+
+      // Sortiere Planeten: echte Namen zuerst (alphabetisch), dann _none
+      const sortedPlanets = Object.keys(planets).sort((a, b) => {
+        if (a === '_none') return 1
+        if (b === '_none') return -1
+        return a.localeCompare(b, 'de')
+      })
+
+      for (const planet of sortedPlanets) {
+        const planetLocs = planets[planet]
+          .slice()
+          .sort((a, b) => a.name.localeCompare(b.name, 'de'))
+
+        for (const loc of planetLocs) {
+          groups[displaySystem].push({
+            id: loc.id,
+            name: loc.name,
+            label: planet === '_none' ? loc.name : `${planet} › ${loc.name}`,
+          })
+        }
+      }
     })
 
-    // Sortiere Gruppen: bekannte Systeme zuerst, dann alphabetisch
+    // Sortiere Systeme: bekannte zuerst, dann alphabetisch
     const sortedSystems = Object.keys(groups).sort((a, b) => {
+      if (a === 'Sonstige') return 1
+      if (b === 'Sonstige') return -1
       const aIdx = systemOrder.indexOf(a)
       const bIdx = systemOrder.indexOf(b)
       if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx
@@ -680,10 +712,10 @@ export default function LootPage() {
                 >
                   <option value="">-- Kein Lootort --</option>
                   {groupedLocations.sortedSystems.map(system => (
-                    <optgroup key={system} label={system}>
+                    <optgroup key={system} label={`━━ ${system} ━━`}>
                       {groupedLocations.groups[system].map((loc) => (
                         <option key={loc.id} value={loc.id}>
-                          {loc.name}
+                          {loc.label}
                         </option>
                       ))}
                     </optgroup>
@@ -936,10 +968,10 @@ export default function LootPage() {
                             >
                               <option value="">-- Kein Lootort --</option>
                               {groupedLocations.sortedSystems.map(system => (
-                                <optgroup key={system} label={system}>
+                                <optgroup key={system} label={`━━ ${system} ━━`}>
                                   {groupedLocations.groups[system].map((loc) => (
                                     <option key={loc.id} value={loc.id}>
-                                      {loc.name}
+                                      {loc.label}
                                     </option>
                                   ))}
                                 </optgroup>
@@ -1139,10 +1171,10 @@ export default function LootPage() {
                                     >
                                       <option value="">-- Lagerort wählen * --</option>
                                       {groupedLocations.sortedSystems.map(system => (
-                                        <optgroup key={system} label={system}>
+                                        <optgroup key={system} label={`━━ ${system} ━━`}>
                                           {groupedLocations.groups[system].map((loc) => (
                                             <option key={loc.id} value={loc.id}>
-                                              {loc.name}
+                                              {loc.label}
                                             </option>
                                           ))}
                                         </optgroup>
@@ -1284,10 +1316,10 @@ export default function LootPage() {
                   >
                     <option value="">-- Kein Lootort --</option>
                     {groupedLocations.sortedSystems.map(system => (
-                      <optgroup key={system} label={system}>
+                      <optgroup key={system} label={`━━ ${system} ━━`}>
                         {groupedLocations.groups[system].map((loc) => (
                           <option key={loc.id} value={loc.id}>
-                            {loc.name}
+                            {loc.label}
                           </option>
                         ))}
                       </optgroup>
@@ -1631,10 +1663,10 @@ export default function LootPage() {
                               >
                                 <option value="">-- Lagerort wählen * --</option>
                                 {groupedLocations.sortedSystems.map(system => (
-                                  <optgroup key={system} label={system}>
+                                  <optgroup key={system} label={`━━ ${system} ━━`}>
                                     {groupedLocations.groups[system].map((loc) => (
                                       <option key={loc.id} value={loc.id}>
-                                        {loc.name}
+                                        {loc.label}
                                       </option>
                                     ))}
                                   </optgroup>
@@ -1853,10 +1885,10 @@ export default function LootPage() {
               >
                 <option value="">-- Lagerort wählen * --</option>
                 {groupedLocations.sortedSystems.map(system => (
-                  <optgroup key={system} label={system}>
+                  <optgroup key={system} label={`━━ ${system} ━━`}>
                     {groupedLocations.groups[system].map((loc) => (
                       <option key={loc.id} value={loc.id}>
-                        {loc.name}
+                        {loc.label}
                       </option>
                     ))}
                   </optgroup>
