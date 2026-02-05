@@ -481,7 +481,9 @@ export default function MissionEditorPage() {
       return response.data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['mission', id] })
+      // WICHTIG: NICHT invalidateQueries hier aufrufen!
+      // Das würde einen Refetch auslösen, der den units State überschreibt
+      // während saveUnitsAndPhases noch läuft (Race Condition)
       saveUnitsAndPhases(Number(id))
     },
   })
@@ -569,6 +571,10 @@ export default function MissionEditorPage() {
         sort_order: phase.sort_order,
       })
     }
+
+    // Invalidate queries NACH dem Speichern (nicht vorher!)
+    queryClient.invalidateQueries({ queryKey: ['mission', String(missionId)] })
+    queryClient.invalidateQueries({ queryKey: ['missions'] })
 
     // Navigate to detail page
     navigate(`/einsaetze/${missionId}`)
