@@ -1644,6 +1644,13 @@ export default function InventoryPage() {
                               <p className="text-sm text-gray-400 mt-1">
                                 Pioneer: <span className="text-krt-orange font-medium">{request.owner.display_name || request.owner.username}</span>
                               </p>
+                              {/* Öffentlicher Kommentar */}
+                              {request.public_comment && (
+                                <div className="mt-2 p-2 bg-blue-900/20 border border-blue-700/30 rounded text-sm">
+                                  <span className="text-blue-400">Anmerkung vom Pioneer: </span>
+                                  <span className="text-gray-200">{request.public_comment}</span>
+                                </div>
+                              )}
                               {/* Discord Hinweis */}
                               <div className="mt-3 p-2 bg-blue-900/30 border border-blue-700/30 rounded text-sm">
                                 <p className="text-blue-300 flex items-center gap-2">
