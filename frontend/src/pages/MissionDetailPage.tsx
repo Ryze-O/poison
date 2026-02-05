@@ -264,7 +264,7 @@ export default function MissionDetailPage() {
       <div className="mb-6">
         <Link
           to="/einsaetze"
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-4"
+          className="inline-flex items-center gap-2 text-gray-400 hover:text-primary mb-4"
         >
           <ArrowLeft size={20} />
           Zurück zur Übersicht
@@ -388,7 +388,7 @@ export default function MissionDetailPage() {
               className={`py-3 px-4 border-b-2 transition-colors ${
                 activeTab === tab
                   ? 'border-krt-orange text-krt-orange'
-                  : 'border-transparent text-gray-400 hover:text-white'
+                  : 'border-transparent text-gray-400 hover:text-primary'
               }`}
             >
               {tab === 'overview' && 'Übersicht'}

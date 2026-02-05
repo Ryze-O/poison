@@ -471,7 +471,7 @@ function KommandogruppeCard({
         {/* Expand/Collapse Button */}
         <button
           onClick={onToggleExpand}
-          className="w-full flex items-center justify-center gap-2 py-2.5 text-xs text-gray-400 hover:text-white transition-colors border-t border-gray-700/50 -mx-4 px-4 mt-auto"
+          className="w-full flex items-center justify-center gap-2 py-2.5 text-xs text-gray-400 hover:text-primary transition-colors border-t border-gray-700/50 -mx-4 px-4 mt-auto"
           style={{ width: 'calc(100% + 2rem)' }}
         >
           {isExpanded ? (
@@ -607,7 +607,7 @@ function Modal({
       <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-md w-full shadow-2xl">
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <h2 className="text-xl font-bold">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-gray-400 hover:text-primary transition-colors">
             <X size={24} />
           </button>
         </div>

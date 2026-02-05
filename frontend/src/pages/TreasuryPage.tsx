@@ -525,7 +525,7 @@ export default function TreasuryPage() {
           <div className="card max-w-md w-full">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold">Neues Kassenwart-Konto</h2>
-              <button onClick={() => setShowAccountForm(false)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setShowAccountForm(false)} className="text-gray-400 hover:text-primary">
                 <X size={24} />
               </button>
             </div>
@@ -598,7 +598,7 @@ export default function TreasuryPage() {
           <div className="card max-w-md w-full">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold">Transfer zwischen Kassenwarten</h2>
-              <button onClick={() => setShowTransferForm(false)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setShowTransferForm(false)} className="text-gray-400 hover:text-primary">
                 <X size={24} />
               </button>
             </div>
@@ -710,7 +710,7 @@ export default function TreasuryPage() {
                     <h2 className="text-xl font-bold">
                       Konto: {account.user.display_name || account.user.username}
                     </h2>
-                    <button onClick={() => setSelectedAccountId(null)} className="text-gray-400 hover:text-white">
+                    <button onClick={() => setSelectedAccountId(null)} className="text-gray-400 hover:text-primary">
                       <X size={24} />
                     </button>
                   </div>
@@ -1039,7 +1039,7 @@ export default function TreasuryPage() {
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => openEditModal(tx)}
-                            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-primary hover:bg-gray-700 rounded transition-colors"
                             title="Bearbeiten"
                           >
                             <Edit3 size={14} />
@@ -1082,14 +1082,14 @@ export default function TreasuryPage() {
                 <button
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-2 text-gray-400 hover:text-primary hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronLeft size={18} />
                 </button>
                 <button
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-2 text-gray-400 hover:text-primary hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronRight size={18} />
                 </button>
@@ -1118,7 +1118,7 @@ export default function TreasuryPage() {
                   setEditingTransaction(null)
                   resetForm()
                 }}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-primary"
               >
                 <X size={24} />
               </button>

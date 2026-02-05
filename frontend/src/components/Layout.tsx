@@ -161,7 +161,7 @@ export default function Layout() {
       {/* Hover Zone für Staffelstruktur-Seite (links am Rand) */}
       {isStrukturPage && !sidebarHover && (
         <div
-          className="fixed inset-y-0 left-0 w-4 z-50 hidden lg:block"
+          className="fixed inset-y-0 left-0 w-16 z-50 hidden lg:block bg-gradient-to-r from-gray-900/20 to-transparent cursor-pointer"
           onMouseEnter={handleHoverZoneEnter}
         />
       )}
@@ -212,7 +212,7 @@ export default function Layout() {
                   'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200',
                   isActive
                     ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange shadow-[0_0_20px_rgba(232,90,36,0.15)]'
-                    : 'text-gray-400 hover:bg-card-hover hover:text-white hover:shadow-sm'
+                    : 'text-gray-400 hover:bg-card-hover hover:text-primary hover:shadow-sm'
                 )
               }
             >
@@ -242,7 +242,7 @@ export default function Layout() {
                             'flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200',
                             isActive
                               ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange shadow-[0_0_20px_rgba(232,90,36,0.15)]'
-                              : 'text-gray-400 hover:bg-card-hover hover:text-white hover:shadow-sm'
+                              : 'text-gray-400 hover:bg-card-hover hover:text-primary hover:shadow-sm'
                           )
                         }
                       >
@@ -266,7 +266,7 @@ export default function Layout() {
               <>
                 <button
                   onClick={() => setDatabaseExpanded(!databaseExpanded)}
-                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-gray-400 hover:bg-card-hover hover:text-white transition-all duration-200 mt-4"
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-gray-400 hover:bg-card-hover hover:text-primary transition-all duration-200 mt-4"
                 >
                   <div className="flex items-center gap-3">
                     <Database size={20} />
@@ -286,7 +286,7 @@ export default function Layout() {
                             'flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 text-sm',
                             isActive
                               ? 'bg-krt-orange/20 text-krt-orange'
-                              : 'text-gray-400 hover:bg-card-hover hover:text-white'
+                              : 'text-gray-400 hover:bg-card-hover hover:text-primary'
                           )
                         }
                       >
@@ -310,7 +310,7 @@ export default function Layout() {
                     'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 mt-4',
                     isActive
                       ? 'bg-krt-orange/20 text-krt-orange border-l-2 border-krt-orange shadow-[0_0_20px_rgba(232,90,36,0.15)]'
-                      : 'text-gray-400 hover:bg-card-hover hover:text-white hover:shadow-sm'
+                      : 'text-gray-400 hover:bg-card-hover hover:text-primary hover:shadow-sm'
                   )
                 }
               >
@@ -330,7 +330,7 @@ export default function Layout() {
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className="w-full flex items-center gap-3 px-4 py-2 mb-4 rounded-lg text-gray-400 hover:bg-card-hover hover:text-white transition-colors"
+              className="w-full flex items-center gap-3 px-4 py-2 mb-4 rounded-lg text-gray-400 hover:bg-card-hover hover:text-primary transition-colors"
               title={theme === 'dark' ? 'Zu hellem Modus wechseln' : 'Zu dunklem Modus wechseln'}
             >
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
@@ -345,7 +345,7 @@ export default function Layout() {
                   'w-full flex items-center gap-3 px-4 py-2 mb-4 rounded-lg transition-colors',
                   isInPreviewMode
                     ? 'bg-gray-700/50 text-white border border-dashed border-gray-500'
-                    : 'text-gray-400 hover:bg-card-hover hover:text-white'
+                    : 'text-gray-400 hover:bg-card-hover hover:text-primary'
                 )}
                 title={isInPreviewMode ? 'Vorschaumodus beenden' : 'Als Viper ansehen'}
               >

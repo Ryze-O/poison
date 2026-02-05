@@ -658,7 +658,7 @@ export default function LootPage() {
               setScanResult(null)
               setSelectedUsers([])
               setShowManualSelection(false)
-            }} className="text-gray-400 hover:text-white">
+            }} className="text-gray-400 hover:text-primary">
               <X size={24} />
             </button>
           </div>
@@ -879,7 +879,7 @@ export default function LootPage() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setExpandedSession(expandedSession === session.id ? null : session.id)}
-                      className="text-gray-400 hover:text-white"
+                      className="text-gray-400 hover:text-primary"
                     >
                       {expandedSession === session.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                     </button>
@@ -1157,7 +1157,7 @@ export default function LootPage() {
                                     </button>
                                     <button
                                       onClick={() => setDistributingItem(null)}
-                                      className="text-gray-400 hover:text-white"
+                                      className="text-gray-400 hover:text-primary"
                                     >
                                       <X size={16} />
                                     </button>
@@ -1276,7 +1276,7 @@ export default function LootPage() {
                   </span>
                 )}
               </h2>
-              <button onClick={closeEditModal} className="text-gray-400 hover:text-white">
+              <button onClick={closeEditModal} className="text-gray-400 hover:text-primary">
                 <X size={24} />
               </button>
             </div>
@@ -1384,7 +1384,7 @@ export default function LootPage() {
                       setComponentCategoryFilter('')
                       setComponentSubCategoryFilter('')
                       setSelectedComponent(null)
-                    }} className="text-gray-400 hover:text-white">
+                    }} className="text-gray-400 hover:text-primary">
                       <X size={18} />
                     </button>
                   </div>
@@ -1649,7 +1649,7 @@ export default function LootPage() {
                               </button>
                               <button
                                 onClick={() => setDistributingItem(null)}
-                                className="text-gray-400 hover:text-white"
+                                className="text-gray-400 hover:text-primary"
                               >
                                 <X size={18} />
                               </button>
@@ -1764,7 +1764,7 @@ export default function LootPage() {
                   setNewLocationPlanet('')
                   setNewLocationType('')
                 }}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-primary"
               >
                 <X size={24} />
               </button>
@@ -1867,7 +1867,7 @@ export default function LootPage() {
                 <Gift size={24} className="text-krt-orange" />
                 Loot verteilen
               </h2>
-              <button onClick={closeDistributionDialog} className="text-gray-400 hover:text-white">
+              <button onClick={closeDistributionDialog} className="text-gray-400 hover:text-primary">
                 <X size={24} />
               </button>
             </div>

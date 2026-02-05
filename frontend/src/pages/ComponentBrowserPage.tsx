@@ -376,14 +376,14 @@ export default function ComponentBrowserPage() {
                 </div>
                 <button
                   onClick={() => setSelectedComponent(null)}
-                  className="text-gray-400 hover:text-white"
+                  className="text-gray-400 hover:text-primary"
                 >
                   <X size={20} />
                 </button>
               </div>
 
               {/* Basis-Info */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                 {/* Size */}
                 <div className="p-3 bg-gray-800/50 rounded-lg text-center">
                   <p className="text-xs text-gray-500 mb-1">Size</p>
@@ -425,7 +425,7 @@ export default function ComponentBrowserPage() {
                     <Shield size={16} />
                     Shield Stats
                   </h4>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div className="p-2 bg-gray-800/50 rounded">
                       <p className="text-xs text-gray-500">Max Health</p>
                       <p className="font-medium">{formatNumber(componentDetail.shield.max_shield_health)} HP</p>

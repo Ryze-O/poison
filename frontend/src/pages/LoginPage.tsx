@@ -122,7 +122,7 @@ export default function LoginPage() {
             className={`flex-1 py-3 text-sm font-medium transition-colors ${
               activeTab === 'discord'
                 ? 'text-[#5865F2] border-b-2 border-[#5865F2]'
-                : 'text-gray-400 hover:text-white'
+                : 'text-gray-400 hover:text-primary'
             }`}
           >
             Discord
@@ -132,7 +132,7 @@ export default function LoginPage() {
             className={`flex-1 py-3 text-sm font-medium transition-colors ${
               activeTab === 'password'
                 ? 'text-krt-orange border-b-2 border-krt-orange'
-                : 'text-gray-400 hover:text-white'
+                : 'text-gray-400 hover:text-primary'
             }`}
           >
             Passwort
@@ -142,7 +142,7 @@ export default function LoginPage() {
             className={`flex-1 py-3 text-sm font-medium transition-colors ${
               activeTab === 'register'
                 ? 'text-green-500 border-b-2 border-green-500'
-                : 'text-gray-400 hover:text-white'
+                : 'text-gray-400 hover:text-primary'
             }`}
           >
             Registrieren

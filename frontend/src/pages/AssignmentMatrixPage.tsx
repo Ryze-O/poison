@@ -192,7 +192,7 @@ export default function AssignmentMatrixPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link to="/struktur" className="text-gray-400 hover:text-white">
+          <Link to="/struktur" className="text-gray-400 hover:text-primary">
             <ArrowLeft size={24} />
           </Link>
           <h1 className="text-3xl font-bold">Einsatzrollen-Matrix</h1>
@@ -287,6 +287,8 @@ export default function AssignmentMatrixPage() {
         </div>
       ) : matrix ? (
         <div className="card overflow-x-auto">
+          {/* Mobile Scroll-Hinweis */}
+          <p className="text-xs text-gray-500 mb-2 sm:hidden">← Horizontal scrollen für mehr →</p>
           {/* User hinzufügen Button */}
           <div className="flex justify-end mb-4">
             <button
@@ -436,7 +438,7 @@ export default function AssignmentMatrixPage() {
                   setShowAddUserModal(false)
                   setUserSearch('')
                 }}
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-400 hover:text-primary transition-colors"
               >
                 <X size={24} />
               </button>

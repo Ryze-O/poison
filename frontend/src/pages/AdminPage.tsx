@@ -538,7 +538,7 @@ export default function AdminPage() {
                   {lastImport.errors.length} Fehler aufgetreten
                 </span>
                 <details className="mt-2">
-                  <summary className="text-gray-400 text-sm cursor-pointer hover:text-white">
+                  <summary className="text-gray-400 text-sm cursor-pointer hover:text-primary">
                     Details anzeigen
                   </summary>
                   <ul className="mt-2 text-sm text-red-400 space-y-1">
@@ -629,7 +629,7 @@ export default function AdminPage() {
         {dbStats && (
           <div className="bg-gray-800/30 rounded-lg p-4">
             <h3 className="text-sm font-medium text-gray-400 mb-3">Datenbank-Statistiken</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3 text-sm">
               <div className="bg-gray-800/50 rounded p-2 text-center">
                 <p className="text-lg font-bold text-krt-orange">{dbStats.users}</p>
                 <p className="text-gray-500">Benutzer</p>
@@ -804,7 +804,7 @@ export default function AdminPage() {
                   {csvResult.errors.length} Fehler
                 </span>
                 <details className="mt-1">
-                  <summary className="text-gray-400 text-sm cursor-pointer hover:text-white">
+                  <summary className="text-gray-400 text-sm cursor-pointer hover:text-primary">
                     Details anzeigen
                   </summary>
                   <ul className="mt-2 text-sm text-red-400 space-y-1 max-h-40 overflow-y-auto">

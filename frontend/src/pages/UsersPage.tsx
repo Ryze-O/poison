@@ -574,7 +574,7 @@ export default function UsersPage() {
                               setEditingUser(u)
                               setNewRole(u.role)
                             }}
-                            className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg"
+                            className="p-2 text-gray-400 hover:text-primary hover:bg-gray-700 rounded-lg"
                             title="Rolle ändern"
                           >
                             <Shield size={20} />
@@ -672,7 +672,7 @@ export default function UsersPage() {
                   setNewAlias('')
                   setUserAliases([])
                 }}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-primary"
               >
                 <X size={24} />
               </button>
@@ -743,7 +743,7 @@ export default function UsersPage() {
               <h2 className="text-xl font-bold">Benutzer bearbeiten</h2>
               <button
                 onClick={() => setEditUserModal(null)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-primary"
               >
                 <X size={24} />
               </button>

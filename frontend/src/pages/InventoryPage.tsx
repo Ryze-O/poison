@@ -800,7 +800,7 @@ export default function InventoryPage() {
                   setComponentSearch('')
                   setComponentSearchResults(null)
                 }}
-                className="text-xs text-gray-500 hover:text-white"
+                className="text-xs text-gray-500 hover:text-primary"
               >
                 Suche schließen
               </button>
@@ -989,7 +989,7 @@ export default function InventoryPage() {
                     setOrderSearchTerm('')
                     setOrderSearchResults(null)
                   }}
-                  className="text-xs text-gray-500 hover:text-white"
+                  className="text-xs text-gray-500 hover:text-primary"
                 >
                   Suche schließen
                 </button>
@@ -1011,7 +1011,7 @@ export default function InventoryPage() {
                               </span>
                               <button
                                 onClick={() => copyOrderNumber(request.order_number!)}
-                                className="p-1 text-gray-400 hover:text-white rounded"
+                                className="p-1 text-gray-400 hover:text-primary rounded"
                                 title="Bestellnummer kopieren"
                               >
                                 <Copy size={14} />
@@ -1254,7 +1254,7 @@ export default function InventoryPage() {
                                   </span>
                                   <button
                                     onClick={() => copyOrderNumber(request.order_number!)}
-                                    className="p-1 text-gray-400 hover:text-white rounded"
+                                    className="p-1 text-gray-400 hover:text-primary rounded"
                                     title="Bestellnummer kopieren"
                                   >
                                     <Copy size={14} />
@@ -1629,7 +1629,7 @@ export default function InventoryPage() {
                                   </span>
                                   <button
                                     onClick={() => copyOrderNumber(request.order_number!)}
-                                    className="p-1 text-gray-400 hover:text-white rounded"
+                                    className="p-1 text-gray-400 hover:text-primary rounded"
                                     title="Bestellnummer kopieren"
                                   >
                                     <Copy size={14} />
@@ -3073,7 +3073,7 @@ function ComponentSelectModal({
         )}
 
         {/* Menge und Standort */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
           <div>
             <label className="label">Menge</label>
             <input

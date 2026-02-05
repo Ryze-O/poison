@@ -124,7 +124,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Statistik-Karten */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
         <div className="card border-l-4 border-l-krt-orange">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-krt-orange/20 rounded-lg">
@@ -272,7 +272,7 @@ export default function DashboardPage() {
                 })()}
                 {SESSION_TYPE_CONFIG[selectedSession.session_type]?.label || 'Staffelabend'}
               </h2>
-              <button onClick={() => setSelectedSession(null)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setSelectedSession(null)} className="text-gray-400 hover:text-primary">
                 <X size={24} />
               </button>
             </div>

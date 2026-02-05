@@ -587,7 +587,7 @@ export default function MissionEditorPage() {
       <div className="mb-6">
         <Link
           to="/einsaetze"
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-4"
+          className="inline-flex items-center gap-2 text-gray-400 hover:text-primary mb-4"
         >
           <ArrowLeft size={20} />
           Zurück zur Übersicht
@@ -703,7 +703,7 @@ export default function MissionEditorPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-gray-400 mb-1">
                   Datum *
@@ -734,7 +734,7 @@ export default function MissionEditorPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-gray-400 mb-1">
                   Dauer (Stunden)
@@ -1065,7 +1065,7 @@ export default function MissionEditorPage() {
               {/* Category Details (expanded) */}
               {expandedUnits.has(unit._localId) && (
                 <div className="border-t border-gray-700 p-4 space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm text-gray-400 mb-1">
                         Kategorie
@@ -1145,7 +1145,7 @@ export default function MissionEditorPage() {
                       Funkfrequenzen (optional)
                       <InfoTooltip text="Lege Funkfrequenzen für diese Einheit fest. Custom-Frequenzen werden automatisch für zukünftige Einsätze gespeichert." />
                     </label>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {Object.entries(getFrequencyPresets()).map(([key, preset]) => (
                         <div key={key}>
                           <label className="block text-xs text-gray-500 mb-1">{preset.label}</label>
@@ -1462,7 +1462,7 @@ export default function MissionEditorPage() {
                   setNewLocationName('')
                   setNewLocationSystem('')
                 }}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-primary"
               >
                 <X size={24} />
               </button>

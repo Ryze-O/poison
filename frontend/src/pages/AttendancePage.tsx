@@ -519,7 +519,7 @@ export default function AttendancePage() {
                 setSelectedUsers([])
                 setUnmatchedAssignments([])
               }}
-              className="text-gray-400 hover:text-white"
+              className="text-gray-400 hover:text-primary"
             >
               <X size={24} />
             </button>
@@ -769,7 +769,7 @@ export default function AttendancePage() {
                   onClick={() =>
                     setExpandedSession(expandedSession === session.id ? null : session.id)
                   }
-                  className="text-gray-400 hover:text-white"
+                  className="text-gray-400 hover:text-primary"
                 >
                   {expandedSession === session.id ? (
                     <ChevronUp size={20} />
@@ -898,7 +898,7 @@ export default function AttendancePage() {
                   </button>
                 )}
               </h2>
-              <button onClick={closeEditModal} className="text-gray-400 hover:text-white">
+              <button onClick={closeEditModal} className="text-gray-400 hover:text-primary">
                 <X size={24} />
               </button>
             </div>

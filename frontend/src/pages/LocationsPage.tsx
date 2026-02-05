@@ -227,9 +227,9 @@ export default function LocationsPage() {
         )}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Standort-Liste */}
-        <div className="lg:col-span-1 space-y-4">
+        <div className="md:col-span-1 space-y-4">
           {groupedLocations && Object.keys(groupedLocations).length > 0 ? (
             Object.entries(groupedLocations)
               .sort(([a], [b]) => a.localeCompare(b))
@@ -268,7 +268,7 @@ export default function LocationsPage() {
                                   e.stopPropagation()
                                   openEditModal(location)
                                 }}
-                                className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
+                                className="p-1 text-gray-400 hover:text-primary hover:bg-gray-700 rounded"
                               >
                                 <Edit2 size={14} />
                               </button>
@@ -304,7 +304,7 @@ export default function LocationsPage() {
         </div>
 
         {/* Standort-Details */}
-        <div className="lg:col-span-2">
+        <div className="md:col-span-1 lg:col-span-2">
           <div className="card">
             {selectedLocation && locationInventory ? (
               <>
@@ -388,7 +388,7 @@ export default function LocationsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="label">Sternensystem</label>
                   <input
