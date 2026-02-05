@@ -607,6 +607,7 @@ export interface MissionUnit {
   ship_id: number | null
   radio_frequencies: Record<string, string> | null
   sort_order: number
+  crew_count: number
   positions: MissionPosition[]
 }
 
@@ -707,6 +708,7 @@ export interface MissionUnitCreate {
   ship_id?: number | null
   radio_frequencies?: Record<string, string> | null
   sort_order?: number
+  crew_count?: number
   positions?: MissionPositionCreate[]
 }
 

@@ -166,6 +166,7 @@ class MissionUnitBase(BaseModel):
     ship_name: Optional[str] = None
     radio_frequencies: Optional[Dict[str, str]] = None
     sort_order: int = 0
+    crew_count: int = 1  # Besatzungsanzahl für Anmeldekategorien
 
 
 class MissionUnitCreate(MissionUnitBase):
@@ -181,6 +182,7 @@ class MissionUnitUpdate(BaseModel):
     ship_id: Optional[int] = None
     radio_frequencies: Optional[Dict[str, str]] = None
     sort_order: Optional[int] = None
+    crew_count: Optional[int] = None
 
 
 class MissionUnitResponse(MissionUnitBase):

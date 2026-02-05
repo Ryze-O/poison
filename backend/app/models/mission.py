@@ -106,6 +106,9 @@ class MissionUnit(Base):
 
     sort_order = Column(Integer, default=0)
 
+    # Besatzungsanzahl für Anmeldekategorien
+    crew_count = Column(Integer, default=1)
+
     # Relationships
     mission = relationship("Mission", back_populates="units")
     ship = relationship("CommandGroupShip")

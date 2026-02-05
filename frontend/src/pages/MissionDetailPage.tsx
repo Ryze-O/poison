@@ -55,7 +55,6 @@ export default function MissionDetailPage() {
   const [copied, setCopied] = useState(false)
   const [registrationNote, setRegistrationNote] = useState('')
   const [selectedUnitId, setSelectedUnitId] = useState<number | null>(null)
-  const [selectedPositionId, setSelectedPositionId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   // Quick Assignment state
@@ -84,14 +83,13 @@ export default function MissionDetailPage() {
   })
 
   const isOwner = mission?.created_by_id === currentUser?.id
-  const canManage = effectiveRole === 'admin' || isOwner
+  const canManage = effectiveRole === 'admin' || effectiveRole === 'officer' || effectiveRole === 'treasurer' || isOwner
 
   // Mutations
   const registerMutation = useMutation({
     mutationFn: () =>
       apiClient.post(`/api/missions/${id}/register`, {
         preferred_unit_id: selectedUnitId,
-        preferred_position_id: selectedPositionId,
         availability_note: registrationNote || null,
       }),
     onSuccess: () => {
@@ -536,48 +534,51 @@ export default function MissionDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
+                  {/* Kategorie-Auswahl als Radio Buttons */}
+                  {mission.units.length > 0 && (
                     <div>
-                      <label className="block text-sm text-gray-400 mb-1">
-                        Bevorzugte Einheit (optional)
+                      <label className="block text-sm text-gray-400 mb-2">
+                        Wähle deine Kategorie:
                       </label>
-                      <select
-                        value={selectedUnitId || ''}
-                        onChange={(e) => setSelectedUnitId(e.target.value ? Number(e.target.value) : null)}
-                        className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
-                      >
-                        <option value="">Keine Präferenz</option>
-                        {mission.units.map((unit) => (
-                          <option key={unit.id} value={unit.id}>
-                            {unit.name}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="space-y-2">
+                        {mission.units.map((unit) => {
+                          // Zähle Anmeldungen für diese Kategorie
+                          const registeredCount = mission.registrations.filter(
+                            (r) => r.preferred_unit_id === unit.id
+                          ).length
+                          const crewCount = unit.crew_count || 1
+
+                          return (
+                            <label
+                              key={unit.id}
+                              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                                selectedUnitId === unit.id
+                                  ? 'border-krt-orange bg-krt-orange/10'
+                                  : 'border-gray-600 hover:border-gray-500'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="category"
+                                checked={selectedUnitId === unit.id}
+                                onChange={() => setSelectedUnitId(unit.id)}
+                                className="w-4 h-4 text-krt-orange"
+                              />
+                              <div className="flex-1">
+                                <span className="font-medium">{unit.name}</span>
+                                {unit.ship_name && (
+                                  <span className="text-gray-400 ml-2">({unit.ship_name})</span>
+                                )}
+                              </div>
+                              <span className={`text-sm ${registeredCount >= crewCount ? 'text-yellow-400' : 'text-gray-400'}`}>
+                                {registeredCount}/{crewCount} angemeldet
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">
-                        Bevorzugte Position (optional)
-                      </label>
-                      <select
-                        value={selectedPositionId || ''}
-                        onChange={(e) =>
-                          setSelectedPositionId(e.target.value ? Number(e.target.value) : null)
-                        }
-                        className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
-                        disabled={!selectedUnitId}
-                      >
-                        <option value="">Keine Präferenz</option>
-                        {selectedUnitId &&
-                          mission.units
-                            .find((u) => u.id === selectedUnitId)
-                            ?.positions.map((pos) => (
-                              <option key={pos.id} value={pos.id}>
-                                {pos.name}
-                              </option>
-                            ))}
-                      </select>
-                    </div>
-                  </div>
+                  )}
                   <div>
                     <label className="block text-sm text-gray-400 mb-1">
                       Verfügbarkeits-Hinweis (optional)

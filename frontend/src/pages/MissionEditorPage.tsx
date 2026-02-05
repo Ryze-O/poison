@@ -11,7 +11,6 @@ import {
   Save,
   ChevronDown,
   ChevronUp,
-  Radio,
   Users,
   Clock,
   MapPin,
@@ -27,13 +26,20 @@ import type {
   MissionPositionCreate,
   MissionPhaseCreate,
   Location,
-  OperationalRole,
 } from '../api/types'
 
 type WizardStep = 1 | 2 | 3 | 4
 
+// Standard-Funkfrequenzen
+const FREQUENCY_PRESETS = {
+  el: { label: 'Einsatzleitung', options: ['102.11', '102.12'] },
+  intern: { label: 'Intern', options: ['102.31', '102.32', '102.51', '102.52', '102.61', '102.62', '102.70'] },
+  targets: { label: 'Targets', options: ['102.91', '102.92'] },
+}
+
 interface LocalUnit extends MissionUnitCreate {
   _localId: string
+  crew_count: number
   positions: (MissionPositionCreate & { _localId: string })[]
 }
 
@@ -70,15 +76,6 @@ const getUnitDisplayName = (unit: { unit_type?: string | null; ship_name?: strin
     return unit.ship_name
   }
   return `Einheit ${index + 1}`
-}
-
-// Position templates per unit type
-const UNIT_POSITION_TEMPLATES: Record<string, string[]> = {
-  'GKS': ['Kommandant', 'Pilot', 'Gunner 1', 'Gunner 2', 'Spezialrolle'],
-  'Jäger': ['Lead', 'Dogfighter 1', 'Dogfighter 2', 'Dogfighter 3'],
-  'Squad': ['Lead', 'Member 1', 'Member 2', 'Member 3'],
-  'BEAST': ['Lead', 'Pilot', 'Gunner'],
-  'DEALS': ['Lead', 'Member 1', 'Member 2'],
 }
 
 function InfoTooltip({ text }: { text: string }) {
@@ -162,11 +159,6 @@ export default function MissionEditorPage() {
   })
 
   // Fetch operational roles from Viper Structure for position type suggestions
-  const { data: operationalRoles } = useQuery<OperationalRole[]>({
-    queryKey: ['operational-roles'],
-    queryFn: () => apiClient.get('/api/staffel/operational-roles').then((r) => r.data),
-  })
-
   // Populate form with existing mission data
   useEffect(() => {
     if (existingMission) {
@@ -198,6 +190,7 @@ export default function MissionEditorPage() {
           ship_id: unit.ship_id,
           radio_frequencies: unit.radio_frequencies,
           sort_order: unit.sort_order,
+          crew_count: unit.crew_count || 1,
           positions: unit.positions.map((pos) => ({
             _localId: `existing-${pos.id}`,
             name: pos.name,
@@ -265,6 +258,7 @@ export default function MissionEditorPage() {
             ship_id: null,
             radio_frequencies: u.radio_frequencies || null,
             sort_order: idx,
+            crew_count: 1,
             positions:
               u.positions?.map((p, pidx) => ({
                 _localId: generateLocalId(),
@@ -431,26 +425,15 @@ export default function MissionEditorPage() {
   const addUnit = () => {
     const newUnit: LocalUnit = {
       _localId: generateLocalId(),
-      name: `Einheit ${units.length + 1}`,
+      name: `Kategorie ${units.length + 1}`,
       unit_type: null,
       description: null,
       ship_name: null,
       ship_id: null,
       radio_frequencies: null,
       sort_order: units.length,
-      positions: [
-        {
-          _localId: generateLocalId(),
-          name: 'Kommandant',
-          position_type: 'Kommandant',
-          is_required: true,
-          min_count: 1,
-          max_count: 1,
-          required_role_id: null,
-          notes: null,
-          sort_order: 0,
-        },
-      ],
+      crew_count: 1,
+      positions: [], // Positionen werden beim Zuweisen erstellt
     }
     setUnits([...units, newUnit])
     setExpandedUnits(new Set([...expandedUnits, newUnit._localId]))
@@ -469,28 +452,6 @@ export default function MissionEditorPage() {
 
       const updatedUnit = { ...u, ...updates }
 
-      // If unit_type changed, auto-load position templates
-      if (updates.unit_type !== undefined && updates.unit_type !== u.unit_type) {
-        const template = UNIT_POSITION_TEMPLATES[updates.unit_type || '']
-        if (template) {
-          // Only auto-load if unit has just 1 default position or is empty
-          const shouldAutoLoad = u.positions.length <= 1
-          if (shouldAutoLoad) {
-            updatedUnit.positions = template.map((posName, idx) => ({
-              _localId: generateLocalId(),
-              name: posName,
-              position_type: posName, // Keep in sync
-              is_required: idx === 0, // First position is required
-              min_count: 1,
-              max_count: 1,
-              required_role_id: null,
-              notes: null,
-              sort_order: idx,
-            }))
-          }
-        }
-      }
-
       // Auto-update name based on unit_type and ship_name
       const newUnitType = updates.unit_type !== undefined ? updates.unit_type : u.unit_type
       const newShipName = updates.ship_name !== undefined ? updates.ship_name : u.ship_name
@@ -506,65 +467,17 @@ export default function MissionEditorPage() {
     }))
   }
 
-  const addPosition = (unitLocalId: string) => {
-    setUnits(
-      units.map((u) => {
-        if (u._localId === unitLocalId) {
-          return {
-            ...u,
-            positions: [
-              ...u.positions,
-              {
-                _localId: generateLocalId(),
-                name: '', // Will be selected from dropdown
-                position_type: null,
-                is_required: false,
-                min_count: 1,
-                max_count: 1,
-                required_role_id: null,
-                notes: null,
-                sort_order: u.positions.length,
-              },
-            ],
-          }
-        }
-        return u
-      })
-    )
-  }
-
-  const removePosition = (unitLocalId: string, posLocalId: string) => {
-    setUnits(
-      units.map((u) => {
-        if (u._localId === unitLocalId) {
-          return {
-            ...u,
-            positions: u.positions.filter((p) => p._localId !== posLocalId),
-          }
-        }
-        return u
-      })
-    )
-  }
-
-  const updatePosition = (
-    unitLocalId: string,
-    posLocalId: string,
-    updates: Partial<MissionPositionCreate & { _localId: string }>
-  ) => {
-    setUnits(
-      units.map((u) => {
-        if (u._localId === unitLocalId) {
-          return {
-            ...u,
-            positions: u.positions.map((p) =>
-              p._localId === posLocalId ? { ...p, ...updates } : p
-            ),
-          }
-        }
-        return u
-      })
-    )
+  const setFrequency = (localId: string, key: string, value: string) => {
+    setUnits(units.map((u) => {
+      if (u._localId !== localId) return u
+      const currentFreqs = u.radio_frequencies || {}
+      if (value) {
+        return { ...u, radio_frequencies: { ...currentFreqs, [key]: value } }
+      } else {
+        const { [key]: _, ...rest } = currentFreqs
+        return { ...u, radio_frequencies: Object.keys(rest).length > 0 ? rest : null }
+      }
+    }))
   }
 
   // Phase management
@@ -591,18 +504,6 @@ export default function MissionEditorPage() {
   }
 
   // Frequency helpers
-  const setFrequency = (unitLocalId: string, key: string, value: string) => {
-    setUnits(
-      units.map((u) => {
-        if (u._localId === unitLocalId) {
-          const newFreqs = { ...(u.radio_frequencies || {}), [key]: value }
-          return { ...u, radio_frequencies: newFreqs }
-        }
-        return u
-      })
-    )
-  }
-
   const toggleUnitExpanded = (localId: string) => {
     const newExpanded = new Set(expandedUnits)
     if (newExpanded.has(localId)) {
@@ -1050,40 +951,40 @@ export default function MissionEditorPage() {
         </div>
       )}
 
-      {/* Step 2: Einheiten */}
+      {/* Step 2: Anmeldekategorien */}
       {currentStep === 2 && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">
-              Einheiten
-              <InfoTooltip text="Einheiten sind die Gruppen in deinem Einsatz (z.B. GKS Polaris, Jägerwing I). Jede Einheit hat Positionen, die mit Spielern besetzt werden." />
+              Anmeldekategorien
+              <InfoTooltip text="Kategorien sind die Gruppen, auf die sich User anmelden können (z.B. GKS, Jäger, FPS Squad). Die genaue Rollenzuweisung erfolgt später." />
             </h2>
             <button
               onClick={addUnit}
               className="flex items-center gap-2 px-3 py-2 bg-krt-orange rounded hover:bg-krt-orange/80"
             >
               <Plus size={16} />
-              Einheit hinzufügen
+              Kategorie hinzufügen
             </button>
           </div>
 
           {units.length === 0 && (
             <div className="bg-krt-dark rounded-lg border border-dashed border-gray-600 p-8 text-center">
               <Users size={48} className="mx-auto text-gray-500 mb-4" />
-              <p className="text-gray-400 mb-4">Noch keine Einheiten vorhanden</p>
+              <p className="text-gray-400 mb-4">Noch keine Anmeldekategorien vorhanden</p>
               <button
                 onClick={addUnit}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-krt-orange rounded hover:bg-krt-orange/80"
               >
                 <Plus size={16} />
-                Erste Einheit erstellen
+                Erste Kategorie erstellen
               </button>
             </div>
           )}
 
           {units.map((unit) => (
             <div key={unit._localId} className="bg-krt-dark rounded-lg border border-gray-700">
-              {/* Unit Header */}
+              {/* Category Header */}
               <div
                 className="flex items-center gap-4 p-4 cursor-pointer"
                 onClick={() => toggleUnitExpanded(unit._localId)}
@@ -1094,7 +995,7 @@ export default function MissionEditorPage() {
                     {getUnitDisplayName(unit, units.indexOf(unit))}
                   </span>
                 </div>
-                <span className="text-sm text-gray-400">{unit.positions.length} Positionen</span>
+                <span className="text-sm text-gray-400">{unit.crew_count} Plätze</span>
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
@@ -1111,14 +1012,14 @@ export default function MissionEditorPage() {
                 )}
               </div>
 
-              {/* Unit Details (expanded) */}
+              {/* Category Details (expanded) */}
               {expandedUnits.has(unit._localId) && (
                 <div className="border-t border-gray-700 p-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm text-gray-400 mb-1">
-                        Einheitstyp
-                        <InfoTooltip text="Art der Einheit, z.B. GKS, Jäger, Squad, BEAST, DEALS - oder eigenen Typ eingeben" />
+                        Kategorie
+                        <InfoTooltip text="Art der Kategorie, z.B. GKS, Jäger, Squad, BEAST, DEALS - oder eigenen Typ eingeben" />
                       </label>
                       <div className="flex flex-wrap gap-1 mb-2">
                         {['GKS', 'Jäger', 'Squad', 'BEAST', 'DEALS'].map((preset) => {
@@ -1157,8 +1058,24 @@ export default function MissionEditorPage() {
                     </div>
                     <div>
                       <label className="block text-sm text-gray-400 mb-1">
-                        Schiff
-                        <InfoTooltip text="Welches Schiff nutzt diese Einheit? z.B. 'Polaris', 'Idris', 'Hercules C2'" />
+                        Besatzung
+                        <InfoTooltip text="Wie viele Plätze hat diese Kategorie? User können sich darauf anmelden." />
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={unit.crew_count}
+                        onChange={(e) =>
+                          updateUnit(unit._localId, { crew_count: Math.max(1, Number(e.target.value)) })
+                        }
+                        className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">
+                        Schiff (optional)
+                        <InfoTooltip text="Welches Schiff nutzt diese Kategorie? z.B. 'Polaris', 'Idris', 'Hercules C2'" />
                       </label>
                       <input
                         type="text"
@@ -1172,266 +1089,39 @@ export default function MissionEditorPage() {
                     </div>
                   </div>
 
-                  {/* Radio Frequencies */}
-                  <div>
+                  {/* Funkfrequenzen */}
+                  <div className="border-t border-gray-700 pt-4 mt-4">
                     <label className="block text-sm text-gray-400 mb-2">
-                      <Radio size={14} className="inline mr-1" />
-                      Funkfrequenzen
-                      <InfoTooltip text="Welche Funkfrequenzen nutzt diese Einheit? Klicke auf die Vorschläge oder gib eigene Frequenzen ein." />
+                      Funkfrequenzen (optional)
+                      <InfoTooltip text="Lege Funkfrequenzen für diese Einheit fest. Einsatzleitung (EL), Intern und Targets sind gängige Kanäle." />
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">
-                          Einsatzleitung (EL)
-                        </label>
-                        <input
-                          type="text"
-                          value={unit.radio_frequencies?.el || ''}
-                          onChange={(e) => setFrequency(unit._localId, 'el', e.target.value)}
-                          placeholder="102.11"
-                          className="w-full bg-krt-dark border border-gray-600 rounded px-2 py-1 text-sm text-white"
-                        />
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          <button
-                            type="button"
-                            onClick={() => setFrequency(unit._localId, 'el', '102.11')}
-                            className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
-                          >
-                            102.11
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFrequency(unit._localId, 'el', '102.12')}
-                            className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
-                          >
-                            102.12
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Intern</label>
-                        <input
-                          type="text"
-                          value={unit.radio_frequencies?.intern || ''}
-                          onChange={(e) => setFrequency(unit._localId, 'intern', e.target.value)}
-                          placeholder="102.31"
-                          className="w-full bg-krt-dark border border-gray-600 rounded px-2 py-1 text-sm text-white"
-                        />
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {unit.unit_type === 'gks' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setFrequency(unit._localId, 'intern', '102.31')}
-                                className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
-                              >
-                                102.31
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setFrequency(unit._localId, 'intern', '102.32')}
-                                className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
-                              >
-                                102.32
-                              </button>
-                            </>
-                          )}
-                          {unit.unit_type === 'wing' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setFrequency(unit._localId, 'intern', '102.51')}
-                                className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
-                              >
-                                102.51
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setFrequency(unit._localId, 'intern', '102.52')}
-                                className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
-                              >
-                                102.52
-                              </button>
-                            </>
-                          )}
-                          {(unit.unit_type === 'squad' || unit.unit_type === 'deals') && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setFrequency(unit._localId, 'intern', '102.61')}
-                                className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
-                              >
-                                102.61
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setFrequency(unit._localId, 'intern', '102.62')}
-                                className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
-                              >
-                                102.62
-                              </button>
-                            </>
-                          )}
-                          {unit.unit_type === 'beast' && (
-                            <button
-                              type="button"
-                              onClick={() => setFrequency(unit._localId, 'intern', '102.70')}
-                              className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
+                    <div className="grid grid-cols-3 gap-3">
+                      {Object.entries(FREQUENCY_PRESETS).map(([key, preset]) => (
+                        <div key={key}>
+                          <label className="block text-xs text-gray-500 mb-1">{preset.label}</label>
+                          <div className="flex gap-1">
+                            <select
+                              value={unit.radio_frequencies?.[key] || ''}
+                              onChange={(e) => setFrequency(unit._localId, key, e.target.value)}
+                              className="flex-1 bg-krt-dark border border-gray-600 rounded px-2 py-1.5 text-white text-sm"
                             >
-                              102.70
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Targets</label>
-                        <input
-                          type="text"
-                          value={unit.radio_frequencies?.targets || ''}
-                          onChange={(e) => setFrequency(unit._localId, 'targets', e.target.value)}
-                          placeholder="102.91"
-                          className="w-full bg-krt-dark border border-gray-600 rounded px-2 py-1 text-sm text-white"
-                        />
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          <button
-                            type="button"
-                            onClick={() => setFrequency(unit._localId, 'targets', '102.91')}
-                            className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
-                          >
-                            102.91
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFrequency(unit._localId, 'targets', '102.92')}
-                            className="text-xs px-1 bg-gray-700 rounded hover:bg-gray-600"
-                          >
-                            102.92
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Positions */}
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <label className="text-sm text-gray-400">
-                        Positionen
-                        <InfoTooltip text="Welche Rollen gibt es in dieser Einheit? z.B. Kommandant, Pilot, Crew, Wing" />
-                      </label>
-                      <button
-                        onClick={() => addPosition(unit._localId)}
-                        className="flex items-center gap-1 text-sm text-krt-orange hover:text-krt-orange/80"
-                      >
-                        <Plus size={14} />
-                        Position
-                      </button>
-                    </div>
-                    <div className="space-y-2">
-                      {unit.positions.map((pos) => {
-                        // Build list of all position options from operational roles + common types
-                        const allOptions = [
-                          ...(operationalRoles?.map(r => r.name) || []),
-                          'Kommandant', 'Pilot', 'Crew', 'Lead', 'Gunner', 'Medic', 'Dogfighter', 'Aufklärer', 'Interdictor'
-                        ]
-                        const uniqueOptions = [...new Set(allOptions)]
-                        const isCustomMode = pos.name === '__custom__' ||
-                          (pos.name && pos.name.trim() !== '' && !uniqueOptions.includes(pos.name))
-
-                        return (
-                          <div
-                            key={pos._localId}
-                            className="flex items-center gap-2 p-2 bg-krt-darker rounded"
-                          >
-                            {/* Single position field: dropdown or custom input */}
-                            {isCustomMode ? (
-                              // Custom text input mode
-                              <div className="flex items-center gap-1 flex-1">
-                                <input
-                                  type="text"
-                                  value={pos.name === '__custom__' ? '' : (pos.name || '')}
-                                  onChange={(e) => {
-                                    const value = e.target.value
-                                    updatePosition(unit._localId, pos._localId, {
-                                      name: value,
-                                      position_type: value || null, // Keep in sync
-                                    })
-                                  }}
-                                  placeholder="Position eingeben..."
-                                  className="flex-1 bg-krt-dark border border-gray-600 rounded px-2 py-1 text-sm text-white"
-                                  autoFocus
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => updatePosition(unit._localId, pos._localId, { name: '', position_type: null })}
-                                  className="text-gray-400 hover:text-white text-xs px-1"
-                                  title="Zurück zur Auswahl"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            ) : (
-                              // Dropdown mode
-                              <select
-                                value={pos.name || ''}
-                                onChange={(e) => {
-                                  if (e.target.value === '__custom__') {
-                                    updatePosition(unit._localId, pos._localId, { name: '__custom__', position_type: '__custom__' })
-                                  } else {
-                                    const value = e.target.value
-                                    updatePosition(unit._localId, pos._localId, {
-                                      name: value,
-                                      position_type: value || null, // Keep in sync
-                                    })
-                                  }
-                                }}
-                                className="flex-1 bg-krt-dark border border-gray-600 rounded px-2 py-1 text-sm text-white"
-                              >
-                                <option value="">Position wählen...</option>
-                                {uniqueOptions.map((opt) => (
-                                  <option key={opt} value={opt}>{opt}</option>
-                                ))}
-                                <option value="__custom__">Andere...</option>
-                              </select>
-                            )}
-
-                            <label className="flex items-center gap-1 text-xs text-gray-400">
-                              <input
-                                type="checkbox"
-                                checked={pos.is_required}
-                                onChange={(e) =>
-                                  updatePosition(unit._localId, pos._localId, {
-                                    is_required: e.target.checked,
-                                  })
-                                }
-                                className="w-3 h-3"
-                              />
-                              Pflicht
-                            </label>
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                min="1"
-                                max="20"
-                                value={pos.max_count}
-                                onChange={(e) =>
-                                  updatePosition(unit._localId, pos._localId, {
-                                    max_count: Number(e.target.value),
-                                  })
-                                }
-                                className="w-12 bg-krt-dark border border-gray-600 rounded px-1 py-1 text-xs text-center text-white"
-                              />
-                              <span className="text-xs text-gray-500">Max</span>
-                            </div>
-                            <button
-                              onClick={() => removePosition(unit._localId, pos._localId)}
-                              className="p-1 text-gray-400 hover:text-red-400"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                              <option value="">—</option>
+                              {preset.options.map((freq) => (
+                                <option key={freq} value={freq}>
+                                  {freq}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              value={unit.radio_frequencies?.[key] || ''}
+                              onChange={(e) => setFrequency(unit._localId, key, e.target.value)}
+                              placeholder="Custom"
+                              className="w-20 bg-krt-dark border border-gray-600 rounded px-2 py-1.5 text-white text-sm"
+                            />
                           </div>
-                        )
-                      })}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
