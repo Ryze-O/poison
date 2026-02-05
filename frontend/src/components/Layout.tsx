@@ -127,6 +127,17 @@ export default function Layout() {
     refetchInterval: 30000, // Alle 30 Sekunden aktualisieren
   })
 
+  // Pending Merges für Admins laden
+  const { data: pendingMergesCount } = useQuery<{ count: number }>({
+    queryKey: ['pending-merges', 'count'],
+    queryFn: async () => {
+      const response = await apiClient.get('/api/users/pending-merges/count')
+      return response.data
+    },
+    enabled: isAdmin,
+    refetchInterval: 60000, // Alle 60 Sekunden aktualisieren
+  })
+
   // Anzahl der Anfragen die der Pioneer bearbeiten muss
   const pioneerPendingCount = (pendingCount?.as_owner_pending ?? 0) + (pendingCount?.as_owner_approved ?? 0)
 
@@ -305,6 +316,11 @@ export default function Layout() {
               >
                 <item.icon size={20} />
                 {item.label}
+                {item.to === '/admin' && (pendingMergesCount?.count ?? 0) > 0 && (
+                  <span className="ml-auto bg-krt-orange text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {pendingMergesCount?.count}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>

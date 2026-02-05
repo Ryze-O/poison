@@ -8,10 +8,12 @@ export interface User {
   username: string
   display_name: string | null
   avatar: string | null
+  avatar_custom: string | null  // Eigener Avatar für Nicht-Discord-User
   role: UserRole
   is_pioneer: boolean  // Pioneer: verantwortlich für Versorgung
   is_treasurer: boolean  // Kassenwart: verwaltet Teil der Staffelkasse
   is_kg_verwalter: boolean  // KG-Verwalter: kann Staffelstruktur bearbeiten
+  is_pending: boolean  // Wartet auf Admin-Freischaltung
   created_at: string
 }
 

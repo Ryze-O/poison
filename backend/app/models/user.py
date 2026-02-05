@@ -16,14 +16,17 @@ class UserRole(str, enum.Enum):
 
 
 class User(Base):
-    """Benutzer - wird über Discord OAuth angelegt."""
+    """Benutzer - wird über Discord OAuth oder Passwort-Registrierung angelegt."""
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    discord_id = Column(String(20), unique=True, nullable=True, index=True)  # Nullable für CSV-Import
+    discord_id = Column(String(20), unique=True, nullable=True, index=True)  # Nullable für CSV-Import und Passwort-User
     username = Column(String(100), nullable=False)
     display_name = Column(String(100), nullable=True)  # Nickname in der Staffel
     avatar = Column(String(255), nullable=True)  # Discord Avatar URL
+    avatar_custom = Column(String(255), nullable=True)  # Eigener Avatar (Upload) für Nicht-Discord-User
+    password_hash = Column(String(255), nullable=True)  # bcrypt Hash für Passwort-Login
+    is_pending = Column(Boolean, default=False, nullable=False)  # Wartet auf Admin-Freischaltung
     role = Column(Enum(UserRole), default=UserRole.MEMBER, nullable=False)
     is_pioneer = Column(Boolean, default=False, nullable=False)  # Pioneer: verantwortlich für Versorgung
     is_treasurer = Column(Boolean, default=False, nullable=False)  # Kassenwart: verwaltet Teil der Staffelkasse

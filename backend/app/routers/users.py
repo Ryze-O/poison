@@ -331,6 +331,17 @@ async def get_pending_merges(
     return result
 
 
+@router.get("/pending-merges/count")
+async def get_pending_merges_count(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt die Anzahl offener Merge-Vorschläge zurück. Nur Admins."""
+    check_role(current_user, UserRole.ADMIN)
+    count = db.query(PendingMerge).filter(PendingMerge.status == "pending").count()
+    return {"count": count}
+
+
 @router.post("/pending-merges/{merge_id}/approve")
 async def approve_pending_merge(
     merge_id: int,

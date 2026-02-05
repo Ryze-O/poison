@@ -2,8 +2,8 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { RefreshCw, Database, MapPin, Package, AlertCircle, CheckCircle, Upload, FileSpreadsheet, Wallet, Users, Link, Copy, Trash2, ToggleLeft, ToggleRight, Plus, Download, HardDrive } from 'lucide-react'
-import type { GuestToken, UserRole } from '../api/types'
+import { RefreshCw, Database, MapPin, Package, AlertCircle, CheckCircle, Upload, FileSpreadsheet, Wallet, Users, Link, Copy, Trash2, ToggleLeft, ToggleRight, Plus, Download, HardDrive, UserPlus, Check, X } from 'lucide-react'
+import type { GuestToken, UserRole, PendingMerge, User } from '../api/types'
 
 interface SCImportStats {
   components_added: number
@@ -76,6 +76,52 @@ export default function AdminPage() {
     queryKey: ['admin-db-stats'],
     queryFn: () => apiClient.get('/api/admin/stats').then((r) => r.data),
     enabled: isAdmin,
+  })
+
+  // Pending Merges (Discord-User mit existierenden Usern zusammenführen)
+  const { data: pendingMerges } = useQuery<PendingMerge[]>({
+    queryKey: ['pending-merges'],
+    queryFn: () => apiClient.get('/api/users/pending-merges').then((r) => r.data),
+    enabled: isAdmin,
+  })
+
+  const approveMergeMutation = useMutation({
+    mutationFn: (mergeId: number) => apiClient.post(`/api/users/pending-merges/${mergeId}/approve`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-merges'] })
+      queryClient.invalidateQueries({ queryKey: ['pending-merges', 'count'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+  })
+
+  const rejectMergeMutation = useMutation({
+    mutationFn: (mergeId: number) => apiClient.post(`/api/users/pending-merges/${mergeId}/reject`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-merges'] })
+      queryClient.invalidateQueries({ queryKey: ['pending-merges', 'count'] })
+    },
+  })
+
+  // Pending Users (warten auf Freischaltung nach Passwort-Registrierung)
+  const { data: pendingUsers } = useQuery<User[]>({
+    queryKey: ['pending-users'],
+    queryFn: () => apiClient.get('/api/auth/pending-users').then((r) => r.data),
+    enabled: isAdmin,
+  })
+
+  const approveUserMutation = useMutation({
+    mutationFn: (userId: number) => apiClient.post(`/api/auth/approve-user/${userId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-users'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+  })
+
+  const rejectUserMutation = useMutation({
+    mutationFn: (userId: number) => apiClient.post(`/api/auth/reject-user/${userId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-users'] })
+    },
   })
 
   const syncMutation = useMutation({
@@ -244,6 +290,134 @@ export default function AdminPage() {
         <h1 className="text-3xl font-bold mb-2">Admin-Einstellungen</h1>
         <div className="h-px bg-gradient-to-r from-krt-orange via-krt-orange/50 to-transparent max-w-md" />
       </div>
+
+      {/* Pending Merges Section - Nur anzeigen wenn es welche gibt */}
+      {pendingMerges && pendingMerges.length > 0 && (
+        <div className="card mb-8 border-l-4 border-l-yellow-500">
+          <div className="flex items-center gap-3 mb-6">
+            <UserPlus className="text-yellow-500" size={24} />
+            <h2 className="text-xl font-bold">Offene Merge-Vorschläge</h2>
+            <span className="bg-yellow-500 text-black text-sm font-bold px-2 py-0.5 rounded-full">
+              {pendingMerges.length}
+            </span>
+          </div>
+
+          <p className="text-gray-400 mb-4">
+            Diese neuen Discord-User könnten mit existierenden Usern übereinstimmen.
+            Bei Genehmigung werden alle Daten vom existierenden User übernommen.
+          </p>
+
+          <div className="space-y-3">
+            {pendingMerges.map((merge) => (
+              <div key={merge.id} className="bg-gray-800/50 rounded-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-medium text-white">
+                        {merge.discord_user.display_name || merge.discord_user.username}
+                      </span>
+                      <span className="text-gray-400">→</span>
+                      <span className="font-medium text-krt-orange">
+                        {merge.existing_user.display_name || merge.existing_user.username}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      <span className="mr-3">
+                        Grund: {
+                          merge.match_reason === 'username_match' ? 'Gleicher Username' :
+                          merge.match_reason === 'display_name_match' ? 'Gleicher Anzeigename' :
+                          merge.match_reason === 'alias_match' ? 'Alias-Übereinstimmung' :
+                          merge.match_reason
+                        }
+                      </span>
+                      <span>
+                        Discord: @{merge.discord_user.username}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 ml-4">
+                    <button
+                      onClick={() => approveMergeMutation.mutate(merge.id)}
+                      disabled={approveMergeMutation.isPending}
+                      className="btn bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-sm flex items-center gap-1"
+                      title="Zusammenführen"
+                    >
+                      <Check size={16} />
+                      Merge
+                    </button>
+                    <button
+                      onClick={() => rejectMergeMutation.mutate(merge.id)}
+                      disabled={rejectMergeMutation.isPending}
+                      className="btn bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 text-sm flex items-center gap-1"
+                      title="Ablehnen (separat behalten)"
+                    >
+                      <X size={16} />
+                      Ablehnen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pending Users Section - Nur anzeigen wenn es welche gibt */}
+      {pendingUsers && pendingUsers.length > 0 && (
+        <div className="card mb-8 border-l-4 border-l-blue-500">
+          <div className="flex items-center gap-3 mb-6">
+            <Users className="text-blue-500" size={24} />
+            <h2 className="text-xl font-bold">Neue Registrierungen</h2>
+            <span className="bg-blue-500 text-white text-sm font-bold px-2 py-0.5 rounded-full">
+              {pendingUsers.length}
+            </span>
+          </div>
+
+          <p className="text-gray-400 mb-4">
+            Diese User haben sich mit Benutzername/Passwort registriert und warten auf Freischaltung.
+          </p>
+
+          <div className="space-y-3">
+            {pendingUsers.map((user) => (
+              <div key={user.id} className="bg-gray-800/50 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-medium text-white">
+                      {user.display_name || user.username}
+                    </span>
+                    {user.display_name && (
+                      <span className="text-gray-400 ml-2">(@{user.username})</span>
+                    )}
+                    <p className="text-sm text-gray-500 mt-1">
+                      Registriert: {new Date(user.created_at).toLocaleDateString('de-DE')}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => approveUserMutation.mutate(user.id)}
+                      disabled={approveUserMutation.isPending}
+                      className="btn bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-sm flex items-center gap-1"
+                      title="Freischalten"
+                    >
+                      <Check size={16} />
+                      Freischalten
+                    </button>
+                    <button
+                      onClick={() => rejectUserMutation.mutate(user.id)}
+                      disabled={rejectUserMutation.isPending}
+                      className="btn bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 text-sm flex items-center gap-1"
+                      title="Ablehnen (löschen)"
+                    >
+                      <X size={16} />
+                      Ablehnen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* SC Data Import Section */}
       <div className="card mb-8">

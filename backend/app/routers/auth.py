@@ -4,14 +4,18 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from passlib.context import CryptContext
 
 from app.database import get_db
 from app.config import get_settings
 from app.models.user import User, UserRole, GuestToken, PendingMerge
-from app.schemas.user import UserResponse, GuestTokenCreate, GuestTokenResponse, GuestLoginResponse
+from app.schemas.user import UserResponse, GuestTokenCreate, GuestTokenResponse, GuestLoginResponse, PasswordRegister, PasswordLogin, PasswordResetByAdmin
 from app.auth.discord import get_oauth_url, exchange_code, get_discord_user, get_user_guilds, is_member_of_guild
 from app.auth.jwt import create_access_token, get_current_user
 from app.auth.dependencies import check_role
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 router = APIRouter()
 settings = get_settings()
@@ -169,6 +173,171 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def logout(current_user: User = Depends(get_current_user)):
     """Logout - clientseitig wird der Token gelöscht."""
     return {"message": "Erfolgreich ausgeloggt"}
+
+
+# ==================== PASSWORD AUTHENTICATION ENDPOINTS ====================
+
+@router.post("/register", response_model=UserResponse)
+async def register_with_password(data: PasswordRegister, db: Session = Depends(get_db)):
+    """
+    Registriert einen neuen User mit Username/Passwort.
+    User wird mit is_pending=True erstellt und muss von Admin freigeschaltet werden.
+    """
+    # Prüfe ob Username bereits existiert
+    existing_user = db.query(User).filter(User.username.ilike(data.username)).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ein Benutzer mit diesem Namen existiert bereits"
+        )
+
+    # Passwort hashen
+    password_hash = pwd_context.hash(data.password)
+
+    # User erstellen (pending)
+    user = User(
+        username=data.username,
+        display_name=data.display_name or data.username,
+        password_hash=password_hash,
+        role=UserRole.GUEST,  # Startet als Guest
+        is_pending=True,  # Muss freigeschaltet werden
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return user
+
+
+@router.post("/login/password")
+async def login_with_password(data: PasswordLogin, db: Session = Depends(get_db)):
+    """
+    Login mit Username/Passwort.
+    Gibt JWT-Token zurück wenn erfolgreich.
+    """
+    # User suchen
+    user = db.query(User).filter(User.username.ilike(data.username)).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Ungültiger Benutzername oder Passwort"
+        )
+
+    # Prüfe ob User Passwort hat (könnte Discord-only sein)
+    if not user.password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Dieser Account verwendet Discord-Login. Bitte melde dich über Discord an."
+        )
+
+    # Passwort prüfen
+    if not pwd_context.verify(data.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Ungültiger Benutzername oder Passwort"
+        )
+
+    # Prüfe ob User freigeschaltet ist
+    if user.is_pending:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dein Account wartet noch auf Freischaltung durch einen Admin"
+        )
+
+    # Token erstellen
+    access_token = create_access_token(data={"sub": str(user.id)})
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(user)
+    }
+
+
+@router.post("/approve-user/{user_id}", response_model=UserResponse)
+async def approve_pending_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Admin schaltet einen wartenden User frei.
+    Setzt is_pending auf False und Rolle auf MEMBER.
+    """
+    check_role(current_user, UserRole.ADMIN)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+
+    if not user.is_pending:
+        raise HTTPException(status_code=400, detail="Benutzer wartet nicht auf Freischaltung")
+
+    user.is_pending = False
+    user.role = UserRole.MEMBER  # Upgrade von GUEST zu MEMBER
+    db.commit()
+    db.refresh(user)
+
+    return user
+
+
+@router.post("/reject-user/{user_id}")
+async def reject_pending_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Admin lehnt einen wartenden User ab (löscht ihn).
+    """
+    check_role(current_user, UserRole.ADMIN)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+
+    if not user.is_pending:
+        raise HTTPException(status_code=400, detail="Benutzer wartet nicht auf Freischaltung")
+
+    db.delete(user)
+    db.commit()
+
+    return {"message": f"Benutzer '{user.username}' wurde abgelehnt und gelöscht"}
+
+
+@router.post("/reset-password")
+async def admin_reset_password(
+    data: PasswordResetByAdmin,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Admin setzt Passwort für einen User zurück.
+    """
+    check_role(current_user, UserRole.ADMIN)
+
+    user = db.query(User).filter(User.id == data.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+
+    # Neues Passwort hashen
+    user.password_hash = pwd_context.hash(data.new_password)
+    db.commit()
+
+    return {"message": f"Passwort für '{user.username}' wurde zurückgesetzt"}
+
+
+@router.get("/pending-users", response_model=List[UserResponse])
+async def get_pending_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Gibt alle User zurück die auf Freischaltung warten.
+    Nur für Admins.
+    """
+    check_role(current_user, UserRole.ADMIN)
+    return db.query(User).filter(User.is_pending == True).all()
 
 
 # ==================== GÄSTE-TOKEN ENDPOINTS ====================
