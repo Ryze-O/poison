@@ -27,6 +27,7 @@ import type {
   MissionPhaseCreate,
   Location,
 } from '../api/types'
+import GroupedLocationSelect from '../components/GroupedLocationSelect'
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -718,24 +719,18 @@ export default function MissionEditorPage() {
                 <InfoTooltip text="Wo findet der Einsatz statt? Wo sollen sich alle Teilnehmer sammeln?" />
               </label>
               <div className="flex gap-2">
-                <select
-                  value={missionData.start_location_id || ''}
-                  onChange={(e) =>
+                <GroupedLocationSelect
+                  locations={locations || []}
+                  value={missionData.start_location_id}
+                  onChange={(locationId) =>
                     setMissionData({
                       ...missionData,
-                      start_location_id: e.target.value ? Number(e.target.value) : null,
+                      start_location_id: locationId,
                     })
                   }
-                  className="flex-1 bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
-                >
-                  <option value="">Keine Verortung angegeben</option>
-                  {locations?.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name}
-                      {loc.system_name && ` (${loc.system_name})`}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Keine Verortung angegeben"
+                  className="flex-1"
+                />
                 <button
                   type="button"
                   onClick={() => setShowNewLocationForm(true)}
