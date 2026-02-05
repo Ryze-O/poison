@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
 import { Plus, Edit3, Trash2, X, Upload, TrendingUp, TrendingDown, Filter, ChevronLeft, ChevronRight, Users, UserPlus, ArrowRightLeft } from 'lucide-react'
+import CurrencyInput from '../components/CurrencyInput'
 import type { Treasury, Transaction, TransactionType, CSVImportResponse, OfficerAccountsSummary, User } from '../api/types'
 
 const ITEMS_PER_PAGE = 50
@@ -54,6 +55,7 @@ export default function TreasuryPage() {
     amount: '',
     description: '',
   })
+  const [editBalanceValue, setEditBalanceValue] = useState('')
 
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const currentUser = useAuthStore.getState().user
@@ -497,7 +499,10 @@ export default function TreasuryPage() {
                       </p>
                       {isAdmin && (
                         <button
-                          onClick={() => setSelectedAccountId(account.id)}
+                          onClick={() => {
+                            setSelectedAccountId(account.id)
+                            setEditBalanceValue(Math.round(account.balance).toString())
+                          }}
                           className="text-xs text-gray-400 hover:text-krt-orange"
                         >
                           Bearbeiten
@@ -570,12 +575,10 @@ export default function TreasuryPage() {
 
               <div>
                 <label className="label">Anfangsstand (aUEC)</label>
-                <input
-                  type="number"
+                <CurrencyInput
                   value={accountFormData.initial_balance}
-                  onChange={(e) => setAccountFormData({ ...accountFormData, initial_balance: e.target.value })}
+                  onChange={(value) => setAccountFormData({ ...accountFormData, initial_balance: value })}
                   placeholder="0"
-                  className="input"
                 />
               </div>
 
@@ -661,13 +664,10 @@ export default function TreasuryPage() {
 
               <div>
                 <label className="label">Betrag (aUEC)</label>
-                <input
-                  type="number"
-                  min="1"
+                <CurrencyInput
                   value={transferFormData.amount}
-                  onChange={(e) => setTransferFormData({ ...transferFormData, amount: e.target.value })}
-                  placeholder="z.B. 5000000"
-                  className="input"
+                  onChange={(value) => setTransferFormData({ ...transferFormData, amount: value })}
+                  placeholder="z.B. 5.000.000"
                   required
                 />
               </div>
@@ -726,10 +726,7 @@ export default function TreasuryPage() {
                   <form
                     onSubmit={(e) => {
                       e.preventDefault()
-                      const input = (e.target as HTMLFormElement).elements.namedItem('balance') as HTMLInputElement
-                      // Bereinige Eingabe: entferne Tausendertrennzeichen, ersetze Komma durch Punkt
-                      const cleaned = input.value.replace(/\./g, '').replace(',', '.')
-                      const balance = parseFloat(cleaned)
+                      const balance = parseFloat(editBalanceValue)
                       if (isNaN(balance)) {
                         alert('Bitte gib eine gültige Zahl ein')
                         return
@@ -750,24 +747,12 @@ export default function TreasuryPage() {
 
                     <div>
                       <label className="label">Neuer Stand (aUEC)</label>
-                      <input
-                        type="text"
-                        name="balance"
-                        defaultValue={Math.round(account.balance).toString()}
-                        className="input font-mono"
+                      <CurrencyInput
+                        value={editBalanceValue}
+                        onChange={setEditBalanceValue}
                         required
-                        placeholder="z.B. 23990339"
-                        onPaste={(e) => {
-                          // Bei Paste: Tausendertrennzeichen entfernen
-                          e.preventDefault()
-                          const text = e.clipboardData.getData('text')
-                          // Entferne Punkte (Tausender) und ersetze Komma durch Punkt (Dezimal)
-                          const cleaned = text.replace(/\./g, '').replace(',', '.')
-                          const input = e.target as HTMLInputElement
-                          input.value = cleaned
-                        }}
+                        placeholder="z.B. 23.990.339"
                       />
-                      <p className="text-xs text-gray-500 mt-1">Nur Zahlen, keine Tausendertrennzeichen</p>
                     </div>
 
                     <div className="flex gap-3">
@@ -851,13 +836,10 @@ export default function TreasuryPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="label">Betrag (aUEC)</label>
-                <input
-                  type="number"
-                  min="1"
+                <CurrencyInput
                   value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  placeholder="z.B. 5000000"
-                  className="input"
+                  onChange={(value) => setFormData({ ...formData, amount: value })}
+                  placeholder="z.B. 5.000.000"
                   required
                 />
               </div>
@@ -1194,12 +1176,9 @@ export default function TreasuryPage() {
 
               <div>
                 <label className="label">Betrag (aUEC)</label>
-                <input
-                  type="number"
-                  min="1"
+                <CurrencyInput
                   value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  className="input"
+                  onChange={(value) => setFormData({ ...formData, amount: value })}
                   required
                 />
               </div>
