@@ -667,21 +667,21 @@ export default function MissionDetailPage() {
                 const name = (unit.name || '').toLowerCase()
                 const type = (unit.unit_type || '').toLowerCase()
 
-                // Mapping für bekannte Einheiten
+                // Mapping für bekannte Einheiten (starcitizen.tools images)
                 if (name.includes('gks') || type.includes('capital') || name.includes('idris') || name.includes('polaris') || name.includes('javelin')) {
-                  return 'https://media.robertsspaceindustries.com/fmhdkmvhi6ep7/source.jpg' // Idris
+                  return 'https://media.starcitizen.tools/d/dd/Idris_M_flying_over_world_-_cropped.jpg' // Idris
                 }
                 if (name.includes('jäger') || name.includes('jaeger') || type.includes('fighter') || name.includes('gladius')) {
-                  return 'https://media.robertsspaceindustries.com/t99xbkfhdoml9/source.jpg' // Gladius
+                  return 'https://media.starcitizen.tools/0/0c/Gladius_-_Flying_away_from_world_through_debris.jpg' // Gladius
                 }
                 if (name.includes('fps') || name.includes('squad') || type.includes('infantry') || name.includes('boden')) {
-                  return 'https://media.robertsspaceindustries.com/l7s0h8bz6mcmt/source.jpg' // Marines
+                  return 'https://media.starcitizen.tools/9/93/Valkyrie_in_SelfLand_-_Isometric.jpg' // Marines (Valkyrie landed)
                 }
                 if (name.includes('dropship') || name.includes('transport') || name.includes('starlancer') || name.includes('valkyrie')) {
-                  return 'https://media.robertsspaceindustries.com/8lejsysh3nmxo/source.jpg' // Valkyrie
+                  return 'https://media.starcitizen.tools/0/07/Valkyrie_flying_through_debris_shooting_back_at_ships_-_cut.jpg' // Valkyrie
                 }
                 if (name.includes('bomber') || name.includes('retaliator') || name.includes('eclipse')) {
-                  return 'https://media.robertsspaceindustries.com/s8z5e0gpfyp9a/source.jpg' // Retaliator
+                  return 'https://media.starcitizen.tools/7/7c/Retaliator_flying_through_gasseous_asteroid_field_firing_torpedo.jpg' // Retaliator
                 }
                 return null
               }
