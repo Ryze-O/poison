@@ -1065,25 +1065,99 @@ export default function InventoryPage() {
                             {new Date(request.created_at).toLocaleDateString('de-DE')}
                           </p>
                         </div>
-                        {/* Kommentar-Button für Pioneers */}
-                        {(isPioneer || isAdmin) && (
-                          <button
-                            onClick={() => {
-                              setCommentModal({
-                                requestId: request.id,
-                                orderNumber: request.order_number,
-                                currentPioneerComment: request.pioneer_comment,
-                                currentPublicComment: request.public_comment
-                              })
-                              setPioneerComment(request.pioneer_comment || '')
-                              setPublicComment(request.public_comment || '')
-                            }}
-                            className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
-                            title="Kommentar bearbeiten"
-                          >
-                            <MessageCircle size={18} />
-                          </button>
-                        )}
+                        {/* Aktions-Buttons basierend auf Status und Berechtigungen */}
+                        <div className="flex flex-col gap-2 flex-shrink-0">
+                          {/* Kommentar-Button für Pioneers */}
+                          {(isPioneer || isAdmin) && (
+                            <button
+                              onClick={() => {
+                                setCommentModal({
+                                  requestId: request.id,
+                                  orderNumber: request.order_number,
+                                  currentPioneerComment: request.pioneer_comment,
+                                  currentPublicComment: request.public_comment
+                                })
+                                setPioneerComment(request.pioneer_comment || '')
+                                setPublicComment(request.public_comment || '')
+                              }}
+                              className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+                              title="Kommentar bearbeiten"
+                            >
+                              <MessageCircle size={18} />
+                            </button>
+                          )}
+
+                          {/* PENDING: Freigeben/Ablehnen (Owner oder Pioneer) */}
+                          {request.status === 'pending' && (
+                            request.owner.id === user?.id ||
+                            (isPioneer && request.owner.is_pioneer && request.owner.id !== user?.id)
+                          ) && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setRejectModal({
+                                  requestId: request.id,
+                                  componentName: request.component.name,
+                                  requesterName: request.requester.display_name || request.requester.username
+                                })}
+                                className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/30"
+                                title="Ablehnen"
+                              >
+                                <X size={18} />
+                              </button>
+                              <button
+                                onClick={() => approveRequestMutation.mutate(request.id)}
+                                disabled={approveRequestMutation.isPending}
+                                className="btn btn-primary text-sm py-1.5 px-3"
+                                title="Freigeben"
+                              >
+                                <Check size={16} className="mr-1" />
+                                Freigeben
+                              </button>
+                            </div>
+                          )}
+
+                          {/* APPROVED: Ausliefern (Owner oder Pioneer) */}
+                          {request.status === 'approved' && (
+                            request.owner.id === user?.id ||
+                            (isPioneer && request.owner.is_pioneer && request.owner.id !== user?.id)
+                          ) && (
+                            <button
+                              onClick={() => deliverMutation.mutate(request.id)}
+                              disabled={deliverMutation.isPending}
+                              className="btn bg-blue-600 hover:bg-blue-700 text-sm py-1.5 px-3 flex items-center gap-1"
+                              title="Als ausgeliefert markieren"
+                            >
+                              <Truck size={16} />
+                              Ausgeliefert
+                            </button>
+                          )}
+
+                          {/* AWAITING_RECEIPT: Empfang bestätigen (Requester) */}
+                          {request.status === 'awaiting_receipt' && request.requester.id === user?.id && (
+                            <button
+                              onClick={() => confirmReceiptMutation.mutate(request.id)}
+                              disabled={confirmReceiptMutation.isPending}
+                              className="btn bg-green-600 hover:bg-green-700 text-sm py-1.5 px-3 flex items-center gap-1"
+                              title="Erhalt bestätigen"
+                            >
+                              <Check size={16} />
+                              {confirmReceiptMutation.isPending ? '...' : 'Erhalt bestätigen'}
+                            </button>
+                          )}
+
+                          {/* AWAITING_RECEIPT: Admin kann auch bestätigen */}
+                          {request.status === 'awaiting_receipt' && isAdmin && request.requester.id !== user?.id && (
+                            <button
+                              onClick={() => confirmReceiptMutation.mutate(request.id)}
+                              disabled={confirmReceiptMutation.isPending}
+                              className="btn bg-yellow-600 hover:bg-yellow-700 text-sm py-1.5 px-3 flex items-center gap-1"
+                              title="Als Admin bestätigen"
+                            >
+                              <Check size={16} />
+                              {confirmReceiptMutation.isPending ? '...' : 'Als Admin bestätigen'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}

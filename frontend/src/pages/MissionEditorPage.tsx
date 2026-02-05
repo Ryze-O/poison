@@ -163,7 +163,7 @@ const saveCustomCategory = (category: string): boolean => {
 }
 
 // Prüfe ob eine Kategorie speicherbar ist (custom und noch nicht gespeichert)
-const isSaveableCategory = (category: string | null): boolean => {
+const isSaveableCategory = (category: string | null | undefined): boolean => {
   if (!category || category.trim() === '') return false
   const trimmed = category.trim()
 
