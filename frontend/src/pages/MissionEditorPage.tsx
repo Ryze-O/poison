@@ -44,8 +44,9 @@ const CUSTOM_FREQUENCIES_KEY = 'poison_custom_frequencies'
 // Prüfe ob eine Frequenz gültig ist (Format: XXX.XX, z.B. 102.11)
 const isValidFrequency = (freq: string): boolean => {
   if (!freq || freq.trim() === '') return false
-  // Format: 1-3 Ziffern, Punkt, 1-2 Ziffern (z.B. "102.11", "1.0")
-  const pattern = /^\d{1,3}\.\d{1,2}$/
+  // Format: 1-3 Ziffern, Punkt, GENAU 2 Ziffern (z.B. "102.11", "102.00")
+  // Ungültig: "102.0", "102.1" etc.
+  const pattern = /^\d{1,3}\.\d{2}$/
   return pattern.test(freq.trim())
 }
 

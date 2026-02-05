@@ -375,7 +375,8 @@ function SlotRow({ position, assignment, operationalRoles, users, missionId, onU
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mission-assignment-data', missionId] })
-      queryClient.invalidateQueries({ queryKey: ['mission', missionId] })
+      // WICHTIG: String() weil MissionDetailPage id als String von useParams() erhält
+      queryClient.invalidateQueries({ queryKey: ['mission', String(missionId)] })
       onUpdate()
     },
   })
@@ -388,7 +389,8 @@ function SlotRow({ position, assignment, operationalRoles, users, missionId, onU
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mission-assignment-data', missionId] })
-      queryClient.invalidateQueries({ queryKey: ['mission', missionId] })
+      // WICHTIG: String() weil MissionDetailPage id als String von useParams() erhält
+      queryClient.invalidateQueries({ queryKey: ['mission', String(missionId)] })
       onUpdate()
     },
   })
@@ -401,7 +403,8 @@ function SlotRow({ position, assignment, operationalRoles, users, missionId, onU
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mission-assignment-data', missionId] })
-      queryClient.invalidateQueries({ queryKey: ['mission', missionId] })
+      // WICHTIG: String() weil MissionDetailPage id als String von useParams() erhält
+      queryClient.invalidateQueries({ queryKey: ['mission', String(missionId)] })
       onUpdate()
       setUserValue({ userId: null, placeholder: null })
     },

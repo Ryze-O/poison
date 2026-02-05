@@ -1144,8 +1144,11 @@ async def get_briefing(
                     placeholders_used.add(assign.placeholder_name)
                     assigned_names.append(assign.placeholder_name)
 
+            # Verwende position_type (Einsatzrolle) falls vorhanden, sonst pos.name
+            display_name = pos.position_type if pos.position_type else pos.name
+
             positions.append({
-                "name": pos.name,
+                "name": display_name,
                 "assigned": assigned_names,
                 "is_required": pos.is_required,
                 "min_count": pos.min_count,
