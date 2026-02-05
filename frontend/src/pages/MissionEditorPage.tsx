@@ -31,11 +31,60 @@ import GroupedLocationSelect from '../components/GroupedLocationSelect'
 
 type WizardStep = 1 | 2 | 3 | 4
 
-// Standard-Funkfrequenzen
-const FREQUENCY_PRESETS = {
+// Standard-Funkfrequenzen (Basis)
+const BASE_FREQUENCY_PRESETS = {
   el: { label: 'Einsatzleitung', options: ['102.11', '102.12'] },
   intern: { label: 'Intern', options: ['102.31', '102.32', '102.51', '102.52', '102.61', '102.62', '102.70'] },
   targets: { label: 'Targets', options: ['102.91', '102.92'] },
+}
+
+// LocalStorage Key für benutzerdefinierte Frequenzen
+const CUSTOM_FREQUENCIES_KEY = 'poison_custom_frequencies'
+
+// Lade benutzerdefinierte Frequenzen aus localStorage
+const loadCustomFrequencies = (): Record<string, string[]> => {
+  try {
+    const stored = localStorage.getItem(CUSTOM_FREQUENCIES_KEY)
+    return stored ? JSON.parse(stored) : { el: [], intern: [], targets: [] }
+  } catch {
+    return { el: [], intern: [], targets: [] }
+  }
+}
+
+// Speichere benutzerdefinierte Frequenz
+const saveCustomFrequency = (key: string, frequency: string) => {
+  if (!frequency || frequency.trim() === '') return
+
+  const custom = loadCustomFrequencies()
+  const baseOptions = BASE_FREQUENCY_PRESETS[key as keyof typeof BASE_FREQUENCY_PRESETS]?.options || []
+
+  // Nur speichern wenn es keine Standard-Frequenz ist und noch nicht gespeichert wurde
+  if (!baseOptions.includes(frequency) && !custom[key]?.includes(frequency)) {
+    if (!custom[key]) custom[key] = []
+    custom[key].push(frequency)
+    // Maximal 10 Custom-Frequenzen pro Kategorie speichern
+    if (custom[key].length > 10) custom[key] = custom[key].slice(-10)
+    localStorage.setItem(CUSTOM_FREQUENCIES_KEY, JSON.stringify(custom))
+  }
+}
+
+// Kombiniere Basis-Presets mit benutzerdefinierten Frequenzen
+const getFrequencyPresets = () => {
+  const custom = loadCustomFrequencies()
+  return {
+    el: {
+      label: 'Einsatzleitung',
+      options: [...BASE_FREQUENCY_PRESETS.el.options, ...custom.el.filter(f => !BASE_FREQUENCY_PRESETS.el.options.includes(f))],
+    },
+    intern: {
+      label: 'Intern',
+      options: [...BASE_FREQUENCY_PRESETS.intern.options, ...custom.intern.filter(f => !BASE_FREQUENCY_PRESETS.intern.options.includes(f))],
+    },
+    targets: {
+      label: 'Targets',
+      options: [...BASE_FREQUENCY_PRESETS.targets.options, ...custom.targets.filter(f => !BASE_FREQUENCY_PRESETS.targets.options.includes(f))],
+    },
+  }
 }
 
 interface LocalUnit extends MissionUnitCreate {
@@ -370,6 +419,7 @@ export default function MissionEditorPage() {
         ship_id: unit.ship_id,
         radio_frequencies: unit.radio_frequencies,
         sort_order: unit.sort_order,
+        crew_count: unit.crew_count,
         positions: unit.positions.map((p, idx) => ({
           // Filter out '__custom__' marker and empty strings - use fallback name
           name: (!p.name || p.name === '__custom__') ? `Position ${idx + 1}` : p.name,
@@ -469,6 +519,11 @@ export default function MissionEditorPage() {
   }
 
   const setFrequency = (localId: string, key: string, value: string) => {
+    // Custom-Frequenz speichern (wenn nicht leer und nicht bereits ein Preset)
+    if (value && value.trim() !== '') {
+      saveCustomFrequency(key, value.trim())
+    }
+
     setUnits(units.map((u) => {
       if (u._localId !== localId) return u
       const currentFreqs = u.radio_frequencies || {}
@@ -1088,10 +1143,10 @@ export default function MissionEditorPage() {
                   <div className="border-t border-gray-700 pt-4 mt-4">
                     <label className="block text-sm text-gray-400 mb-2">
                       Funkfrequenzen (optional)
-                      <InfoTooltip text="Lege Funkfrequenzen für diese Einheit fest. Einsatzleitung (EL), Intern und Targets sind gängige Kanäle." />
+                      <InfoTooltip text="Lege Funkfrequenzen für diese Einheit fest. Custom-Frequenzen werden automatisch für zukünftige Einsätze gespeichert." />
                     </label>
                     <div className="grid grid-cols-3 gap-3">
-                      {Object.entries(FREQUENCY_PRESETS).map(([key, preset]) => (
+                      {Object.entries(getFrequencyPresets()).map(([key, preset]) => (
                         <div key={key}>
                           <label className="block text-xs text-gray-500 mb-1">{preset.label}</label>
                           <div className="flex gap-1">

@@ -358,6 +358,17 @@ async def update_mission(
         mission.title = mission_data.title
     if mission_data.description is not None:
         mission.description = mission_data.description
+
+    # Strukturierte Beschreibungsfelder
+    if mission_data.mission_context is not None:
+        mission.mission_context = mission_data.mission_context
+    if mission_data.mission_objective is not None:
+        mission.mission_objective = mission_data.mission_objective
+    if mission_data.preparation_notes is not None:
+        mission.preparation_notes = mission_data.preparation_notes
+    if mission_data.special_notes is not None:
+        mission.special_notes = mission_data.special_notes
+
     if mission_data.scheduled_date is not None:
         mission.scheduled_date = mission_data.scheduled_date
     if mission_data.duration_minutes is not None:
@@ -570,6 +581,7 @@ async def create_unit(
         ship_id=unit_data.ship_id,
         radio_frequencies=unit_data.radio_frequencies,
         sort_order=unit_data.sort_order,
+        crew_count=unit_data.crew_count or 1,
     )
     db.add(unit)
     db.flush()
@@ -630,6 +642,8 @@ async def update_unit(
         unit.radio_frequencies = unit_data.radio_frequencies
     if unit_data.sort_order is not None:
         unit.sort_order = unit_data.sort_order
+    if unit_data.crew_count is not None:
+        unit.crew_count = unit_data.crew_count
 
     db.commit()
     db.refresh(unit)
