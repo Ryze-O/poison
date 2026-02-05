@@ -1112,6 +1112,7 @@ async def get_briefing(
     """Generiert das formatierte Briefing-Dokument."""
     mission = db.query(Mission).options(
         joinedload(Mission.start_location),
+        joinedload(Mission.units).joinedload(MissionUnit.positions).joinedload(MissionPosition.required_role),
         joinedload(Mission.units).joinedload(MissionUnit.positions).joinedload(MissionPosition.assignments).joinedload(MissionAssignment.user),
         joinedload(Mission.phases)
     ).filter(Mission.id == mission_id).first()
@@ -1144,8 +1145,13 @@ async def get_briefing(
                     placeholders_used.add(assign.placeholder_name)
                     assigned_names.append(assign.placeholder_name)
 
-            # Verwende position_type (Einsatzrolle) falls vorhanden, sonst pos.name
-            display_name = pos.position_type if pos.position_type else pos.name
+            # Verwende position_type, dann required_role.name als Fallback, sonst pos.name
+            if pos.position_type:
+                display_name = pos.position_type
+            elif pos.required_role:
+                display_name = pos.required_role.name
+            else:
+                display_name = pos.name
 
             positions.append({
                 "name": display_name,
