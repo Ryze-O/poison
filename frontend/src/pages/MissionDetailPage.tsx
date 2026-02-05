@@ -739,14 +739,12 @@ export default function MissionDetailPage() {
                           >
                             {/* Rolle (links) */}
                             <div className="flex-1 min-w-0">
-                              {pos.position_type ? (
+                              {pos.position_type || pos.required_role_name ? (
                                 <span className="text-krt-orange font-medium text-sm truncate block">
-                                  {pos.position_type}
+                                  {pos.position_type || pos.required_role_name}
                                 </span>
                               ) : (
-                                <span className="text-gray-500 text-sm">
-                                  {pos.name}
-                                </span>
+                                <span className="text-gray-500 text-sm">—</span>
                               )}
                             </div>
 

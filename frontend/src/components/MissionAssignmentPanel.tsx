@@ -155,7 +155,8 @@ function UserListItem({ user, isSelected, onSelect }: UserListItemProps) {
   }
 
   const badge = getRoleBadge(user)
-  const hasValidAvatar = user.avatar && user.discord_id && !imgError
+  // Avatar ist bereits volle URL oder null
+  const hasValidAvatar = user.avatar && !imgError
 
   return (
     <button
@@ -168,7 +169,7 @@ function UserListItem({ user, isSelected, onSelect }: UserListItemProps) {
       <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center overflow-hidden flex-shrink-0">
         {hasValidAvatar ? (
           <img
-            src={`https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png?size=32`}
+            src={user.avatar!}
             alt=""
             className="w-full h-full object-cover"
             onError={() => setImgError(true)}

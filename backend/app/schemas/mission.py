@@ -151,6 +151,7 @@ class MissionPositionResponse(MissionPositionBase):
     id: int
     unit_id: int
     required_role_id: Optional[int] = None
+    required_role_name: Optional[str] = None  # Aufgelöster Rollenname
     assignments: List[MissionAssignmentResponse] = []
 
     class Config:

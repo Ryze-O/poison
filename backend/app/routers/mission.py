@@ -192,6 +192,18 @@ async def get_mission(
     # Baue Response
     response = mission_to_response(mission, db)
 
+    # Lade Operational Roles für Namensauflösung
+    role_ids = set()
+    for unit in mission.units:
+        for pos in unit.positions:
+            if pos.required_role_id:
+                role_ids.add(pos.required_role_id)
+
+    role_names = {}
+    if role_ids:
+        roles = db.query(OperationalRole).filter(OperationalRole.id.in_(role_ids)).all()
+        role_names = {r.id: r.name for r in roles}
+
     # Füge Units mit Positionen und Assignments hinzu
     units = []
     for unit in sorted(mission.units, key=lambda u: u.sort_order):
@@ -220,6 +232,7 @@ async def get_mission(
                 "min_count": pos.min_count,
                 "max_count": pos.max_count,
                 "required_role_id": pos.required_role_id,
+                "required_role_name": role_names.get(pos.required_role_id) if pos.required_role_id else None,
                 "notes": pos.notes,
                 "sort_order": pos.sort_order,
                 "assignments": assignments,

@@ -594,6 +594,7 @@ export interface MissionPosition {
   min_count: number
   max_count: number
   required_role_id: number | null
+  required_role_name: string | null  // Aufgelöster Rollenname
   notes: string | null
   sort_order: number
   assignments: MissionAssignment[]
