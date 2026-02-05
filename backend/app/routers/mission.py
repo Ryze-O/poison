@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.location import Location
+from app.models.staffel import CommandGroup, OperationalRole
 from app.models.mission import (
     Mission, MissionPhase, MissionUnit, MissionPosition,
     MissionRegistration, MissionAssignment, MissionTemplate,
@@ -32,7 +33,9 @@ from app.schemas.mission import (
     MissionRegistrationCreate, MissionRegistrationResponse,
     MissionAssignmentCreate, MissionAssignmentUpdate, MissionAssignmentResponse,
     MissionTemplateResponse, BriefingResponse, BriefingUnit,
-    RadioFrequencyPreset, RadioFrequencyPresetsResponse
+    RadioFrequencyPreset, RadioFrequencyPresetsResponse,
+    AssignmentDataResponse, GroupedOperationalRole, OperationalRoleSimple,
+    EligibleUser, UnitWithPositions, PositionWithAssignments
 )
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
@@ -42,20 +45,20 @@ router = APIRouter()
 
 # ============== Helper Functions ==============
 
-def is_mission_manager(user: User, mission: Mission) -> bool:
-    """Prüft ob User Offizier+, Admin oder Ersteller ist."""
+def is_mission_manager(user: User, mission: Mission = None) -> bool:
+    """Prüft ob User Offizier+, Admin, Treasurer oder KG-Verwalter ist."""
     return (
         user.role in [UserRole.ADMIN, UserRole.OFFICER, UserRole.TREASURER]
-        or mission.created_by_id == user.id
+        or user.is_kg_verwalter
     )
 
 
 def check_mission_manager(user: User, mission: Mission):
-    """Wirft 403 wenn User kein Offizier+ oder Ersteller ist."""
+    """Wirft 403 wenn User kein Offizier+, Admin, Treasurer oder KG-Verwalter ist."""
     if not is_mission_manager(user, mission):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Nur Offiziere oder der Ersteller können diese Aktion durchführen"
+            detail="Nur Offiziere, Admins, Schatzmeister oder KG-Verwalter können diese Aktion durchführen"
         )
 
 
@@ -251,6 +254,7 @@ async def get_mission(
             "preferred_unit_id": reg.preferred_unit_id,
             "preferred_position_id": reg.preferred_position_id,
             "availability_note": reg.availability_note,
+            "ship_info": reg.ship_info,
             "status": reg.status,
             "registered_at": reg.registered_at,
             "has_ships": ship_count > 0,
@@ -591,20 +595,37 @@ async def create_unit(
     db.add(unit)
     db.flush()
 
-    # Positionen hinzufügen
-    for pos_data in unit_data.positions:
-        pos = MissionPosition(
-            unit_id=unit.id,
-            name=pos_data.name,
-            position_type=pos_data.position_type,
-            is_required=pos_data.is_required,
-            min_count=pos_data.min_count,
-            max_count=pos_data.max_count,
-            required_role_id=pos_data.required_role_id,
-            notes=pos_data.notes,
-            sort_order=pos_data.sort_order,
-        )
-        db.add(pos)
+    # Positionen hinzufügen (falls übergeben)
+    if unit_data.positions:
+        for pos_data in unit_data.positions:
+            pos = MissionPosition(
+                unit_id=unit.id,
+                name=pos_data.name,
+                position_type=pos_data.position_type,
+                is_required=pos_data.is_required,
+                min_count=pos_data.min_count,
+                max_count=pos_data.max_count,
+                required_role_id=pos_data.required_role_id,
+                notes=pos_data.notes,
+                sort_order=pos_data.sort_order,
+            )
+            db.add(pos)
+    else:
+        # Auto-Generierung: Erstelle crew_count leere Positionen
+        crew_count = unit_data.crew_count or 1
+        for i in range(crew_count):
+            pos = MissionPosition(
+                unit_id=unit.id,
+                name=f"Platz {i + 1}",
+                position_type=None,
+                is_required=True,
+                min_count=1,
+                max_count=1,
+                required_role_id=None,
+                notes=None,
+                sort_order=i,
+            )
+            db.add(pos)
 
     db.commit()
     db.refresh(unit)
@@ -829,6 +850,7 @@ async def register_for_mission(
         preferred_unit_id=reg_data.preferred_unit_id,
         preferred_position_id=reg_data.preferred_position_id,
         availability_note=reg_data.availability_note,
+        ship_info=reg_data.ship_info,
         status="registered",
     )
     db.add(reg)
@@ -1114,3 +1136,130 @@ async def get_briefing(
         frequency_table=frequency_table,
         placeholders_used=sorted(placeholders_used),
     )
+
+
+# ============== Assignment Data ==============
+
+@router.get("/{mission_id}/assignment-data", response_model=AssignmentDataResponse)
+async def get_assignment_data(
+    mission_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Gibt alle Daten für das Zuweisungs-UI zurück."""
+    mission = db.query(Mission).options(
+        joinedload(Mission.units).joinedload(MissionUnit.positions).joinedload(MissionPosition.assignments).joinedload(MissionAssignment.user)
+    ).filter(Mission.id == mission_id).first()
+
+    if not mission:
+        raise HTTPException(status_code=404, detail="Mission nicht gefunden")
+
+    can_manage = is_mission_manager(current_user, mission)
+
+    # Build units with positions
+    units = []
+    for unit in sorted(mission.units, key=lambda u: u.sort_order):
+        positions = []
+        for pos in sorted(unit.positions, key=lambda p: p.sort_order):
+            assignments = []
+            for assign in pos.assignments:
+                assignments.append({
+                    "id": assign.id,
+                    "position_id": assign.position_id,
+                    "user_id": assign.user_id,
+                    "placeholder_name": assign.placeholder_name,
+                    "user": assign.user,
+                    "is_backup": assign.is_backup,
+                    "is_training": assign.is_training,
+                    "notes": assign.notes,
+                    "assigned_at": assign.assigned_at,
+                    "assigned_by_id": assign.assigned_by_id,
+                })
+            positions.append({
+                "id": pos.id,
+                "name": pos.name,
+                "position_type": pos.position_type,
+                "required_role_id": pos.required_role_id,
+                "sort_order": pos.sort_order,
+                "assignments": assignments,
+            })
+        units.append({
+            "id": unit.id,
+            "name": unit.name,
+            "unit_type": unit.unit_type,
+            "ship_name": unit.ship_name,
+            "crew_count": unit.crew_count,
+            "sort_order": unit.sort_order,
+            "positions": positions,
+        })
+
+    # Get operational roles grouped by command group
+    # Filter out leadership roles (KG-Leiter, Stellv) from the dropdown list
+    command_groups = db.query(CommandGroup).options(
+        joinedload(CommandGroup.operational_roles)
+    ).order_by(CommandGroup.sort_order).all()
+
+    operational_roles = []
+    for cg in command_groups:
+        # Filter out leadership roles - they stay at top level but aren't shown in dropdown
+        roles = [
+            {
+                "id": role.id,
+                "name": role.name,
+                "description": role.description,
+            }
+            for role in sorted(cg.operational_roles, key=lambda r: r.sort_order)
+            if role.name.lower() not in ["kg-leiter", "stellv", "stellv.", "stellvertreter"]
+        ]
+        if roles:  # Only add command group if it has non-leadership roles
+            operational_roles.append({
+                "command_group_id": cg.id,
+                "command_group_name": cg.name,
+                "command_group_full": cg.full_name,
+                "roles": roles,
+            })
+
+    # Get all users sorted (officers first, then alphabetically)
+    users = db.query(User).filter(User.role != UserRole.GUEST).all()
+
+    # Sort: Officers/Admins > KG-Verwalter > Pioneers > alphabetically
+    def user_sort_key(user):
+        # Priority order: Admin=0, Officer=1, Treasurer=2, KG-Verwalter=3, Pioneer=4, others=5
+        priority = 5
+        if user.role == UserRole.ADMIN:
+            priority = 0
+        elif user.role == UserRole.OFFICER:
+            priority = 1
+        elif user.role == UserRole.TREASURER:
+            priority = 2
+        elif user.is_kg_verwalter:
+            priority = 3
+        elif user.is_pioneer:
+            priority = 4
+        return (priority, (user.display_name or user.username).lower())
+
+    sorted_users = sorted(users, key=user_sort_key)
+
+    eligible_users = [
+        {
+            "id": u.id,
+            "username": u.username,
+            "display_name": u.display_name,
+            "discord_id": u.discord_id,
+            "avatar": u.avatar,
+            "role": u.role.value,
+            "is_officer": u.role in [UserRole.ADMIN, UserRole.OFFICER],
+            "is_kg_verwalter": u.is_kg_verwalter,
+            "is_pioneer": u.is_pioneer,
+        }
+        for u in sorted_users
+    ]
+
+    return {
+        "mission_id": mission.id,
+        "mission_title": mission.title,
+        "units": units,
+        "operational_roles": operational_roles,
+        "eligible_users": eligible_users,
+        "can_manage": can_manage,
+    }

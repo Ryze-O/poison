@@ -201,6 +201,7 @@ class MissionRegistrationBase(BaseModel):
     preferred_unit_id: Optional[int] = None
     preferred_position_id: Optional[int] = None
     availability_note: Optional[str] = None
+    ship_info: Optional[str] = None  # "Habe meine Polaris meta-gefittet am Einsatzort bereit"
 
 
 class MissionRegistrationCreate(MissionRegistrationBase):
@@ -214,6 +215,7 @@ class MissionRegistrationResponse(MissionRegistrationBase):
     user: Optional[UserResponse] = None
     status: str
     registered_at: Optional[datetime] = None
+    ship_info: Optional[str] = None
     # Optional: Info ob User Schiffe hat
     has_ships: bool = False
 
@@ -346,3 +348,73 @@ class RadioFrequencyPreset(BaseModel):
 class RadioFrequencyPresetsResponse(BaseModel):
     """Alle Standard-Funkfrequenzen."""
     presets: List[RadioFrequencyPreset]
+
+
+# ============== Assignment UI Schemas ==============
+
+class OperationalRoleSimple(BaseModel):
+    """Einfache Einsatzrolle für Assignment-UI."""
+    id: int
+    name: str
+    description: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class GroupedOperationalRole(BaseModel):
+    """Einsatzrollen gruppiert nach Kommandogruppe."""
+    command_group_id: int
+    command_group_name: str  # "CW", "SW", "P"
+    command_group_full: str  # "Capital Warfare"
+    roles: List[OperationalRoleSimple]
+
+
+class EligibleUser(BaseModel):
+    """User mit Zusatzinfos für Assignment-UI."""
+    id: int
+    username: str
+    display_name: Optional[str] = None
+    discord_id: Optional[str] = None
+    avatar: Optional[str] = None
+    role: str
+    is_officer: bool
+    is_kg_verwalter: bool
+    is_pioneer: bool
+
+
+class PositionWithAssignments(BaseModel):
+    """Position mit bestehenden Assignments."""
+    id: int
+    name: str
+    position_type: Optional[str] = None
+    required_role_id: Optional[int] = None
+    sort_order: int
+    assignments: List[MissionAssignmentResponse]
+
+    class Config:
+        from_attributes = True
+
+
+class UnitWithPositions(BaseModel):
+    """Unit mit Positionen für Assignment-UI."""
+    id: int
+    name: str
+    unit_type: Optional[str] = None
+    ship_name: Optional[str] = None
+    crew_count: int
+    sort_order: int
+    positions: List[PositionWithAssignments]
+
+    class Config:
+        from_attributes = True
+
+
+class AssignmentDataResponse(BaseModel):
+    """Alle Daten für das Assignment-UI."""
+    mission_id: int
+    mission_title: str
+    units: List[UnitWithPositions]
+    operational_roles: List[GroupedOperationalRole]
+    eligible_users: List[EligibleUser]
+    can_manage: bool

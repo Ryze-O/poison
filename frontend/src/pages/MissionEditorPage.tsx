@@ -41,11 +41,35 @@ const BASE_FREQUENCY_PRESETS = {
 // LocalStorage Key für benutzerdefinierte Frequenzen
 const CUSTOM_FREQUENCIES_KEY = 'poison_custom_frequencies'
 
-// Lade benutzerdefinierte Frequenzen aus localStorage
+// Prüfe ob eine Frequenz gültig ist (Format: XXX.XX, z.B. 102.11)
+const isValidFrequency = (freq: string): boolean => {
+  if (!freq || freq.trim() === '') return false
+  // Muss mindestens Format X.X haben (z.B. "1.0" oder "102.11")
+  const pattern = /^\d{1,3}\.\d{1,2}$/
+  return pattern.test(freq.trim())
+}
+
+// Lade benutzerdefinierte Frequenzen aus localStorage (filtert ungültige Einträge)
 const loadCustomFrequencies = (): Record<string, string[]> => {
   try {
     const stored = localStorage.getItem(CUSTOM_FREQUENCIES_KEY)
-    return stored ? JSON.parse(stored) : { el: [], intern: [], targets: [] }
+    if (!stored) return { el: [], intern: [], targets: [] }
+
+    const parsed = JSON.parse(stored)
+    // Filtere ungültige Frequenzen heraus
+    const cleaned: Record<string, string[]> = { el: [], intern: [], targets: [] }
+    for (const key of ['el', 'intern', 'targets']) {
+      if (Array.isArray(parsed[key])) {
+        cleaned[key] = parsed[key].filter(isValidFrequency)
+      }
+    }
+
+    // Speichere bereinigten Stand zurück
+    if (JSON.stringify(parsed) !== JSON.stringify(cleaned)) {
+      localStorage.setItem(CUSTOM_FREQUENCIES_KEY, JSON.stringify(cleaned))
+    }
+
+    return cleaned
   } catch {
     return { el: [], intern: [], targets: [] }
   }
@@ -54,6 +78,9 @@ const loadCustomFrequencies = (): Record<string, string[]> => {
 // Speichere benutzerdefinierte Frequenz
 const saveCustomFrequency = (key: string, frequency: string) => {
   if (!frequency || frequency.trim() === '') return
+
+  // Nur gültige Frequenzen speichern
+  if (!isValidFrequency(frequency)) return
 
   const custom = loadCustomFrequencies()
   const baseOptions = BASE_FREQUENCY_PRESETS[key as keyof typeof BASE_FREQUENCY_PRESETS]?.options || []
@@ -154,11 +181,14 @@ export default function MissionEditorPage() {
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
   const templateId = searchParams.get('template')
+  const stepParam = searchParams.get('step')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const isEditing = !!id
 
-  const [currentStep, setCurrentStep] = useState<WizardStep>(1)
+  // Initial step from URL parameter (1-4)
+  const initialStep = stepParam ? Math.min(4, Math.max(1, Number(stepParam))) as WizardStep : 1
+  const [currentStep, setCurrentStep] = useState<WizardStep>(initialStep)
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(
     templateId ? Number(templateId) : null
   )
@@ -421,6 +451,17 @@ export default function MissionEditorPage() {
       }
     }
 
+    // Speichere Custom-Frequenzen aus allen Units (nur beim Speichern, nicht bei jeder Eingabe)
+    for (const unit of units) {
+      if (unit.radio_frequencies) {
+        Object.entries(unit.radio_frequencies).forEach(([key, freq]) => {
+          if (freq && freq.trim() !== '') {
+            saveCustomFrequency(key, freq.trim())
+          }
+        })
+      }
+    }
+
     // Create new units with positions
     for (const unit of units) {
       await apiClient.post(`/api/missions/${missionId}/units`, {
@@ -531,11 +572,7 @@ export default function MissionEditorPage() {
   }
 
   const setFrequency = (localId: string, key: string, value: string) => {
-    // Custom-Frequenz speichern (wenn nicht leer und nicht bereits ein Preset)
-    if (value && value.trim() !== '') {
-      saveCustomFrequency(key, value.trim())
-    }
-
+    // Nur den lokalen State aktualisieren - Custom-Frequenzen werden erst beim Speichern persistiert
     setUnits(units.map((u) => {
       if (u._localId !== localId) return u
       const currentFreqs = u.radio_frequencies || {}
@@ -1440,18 +1477,37 @@ export default function MissionEditorPage() {
         </button>
 
         {currentStep < 4 ? (
-          <button
-            onClick={() => setCurrentStep((currentStep + 1) as WizardStep)}
-            disabled={
-              (currentStep === 1 && !canProceedStep1) ||
-              (currentStep === 2 && !canProceedStep2) ||
-              (currentStep === 3 && !canProceedStep3)
-            }
-            className="flex items-center gap-2 px-4 py-2 bg-krt-orange rounded hover:bg-krt-orange/80 disabled:opacity-50"
-          >
-            Weiter
-            <ArrowRight size={16} />
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Speichern-Button auf jedem Step (nur beim Bearbeiten) */}
+            {isEditing && (
+              <button
+                onClick={handleSave}
+                disabled={isSaving || !canProceedStep1}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded hover:bg-green-700 disabled:opacity-50"
+              >
+                {isSaving ? (
+                  <>Speichern...</>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    Speichern
+                  </>
+                )}
+              </button>
+            )}
+            <button
+              onClick={() => setCurrentStep((currentStep + 1) as WizardStep)}
+              disabled={
+                (currentStep === 1 && !canProceedStep1) ||
+                (currentStep === 2 && !canProceedStep2) ||
+                (currentStep === 3 && !canProceedStep3)
+              }
+              className="flex items-center gap-2 px-4 py-2 bg-krt-orange rounded hover:bg-krt-orange/80 disabled:opacity-50"
+            >
+              Weiter
+              <ArrowRight size={16} />
+            </button>
+          </div>
         ) : (
           <button
             onClick={handleSave}

@@ -631,6 +631,7 @@ export interface MissionRegistration {
   preferred_unit_id: number | null
   preferred_position_id: number | null
   availability_note: string | null
+  ship_info: string | null
   status: string
   registered_at: string
   has_ships: boolean
@@ -746,6 +747,7 @@ export interface MissionRegistrationCreate {
   preferred_unit_id?: number | null
   preferred_position_id?: number | null
   availability_note?: string | null
+  ship_info?: string | null
 }
 
 export interface RadioFrequencyPreset {
@@ -785,4 +787,59 @@ export interface Briefing {
   units: BriefingUnit[]
   frequency_table: Array<Record<string, string>>
   placeholders_used: string[]
+}
+
+// ============== Assignment UI ==============
+
+export interface OperationalRoleSimple {
+  id: number
+  name: string
+  description: string | null
+}
+
+export interface GroupedOperationalRole {
+  command_group_id: number
+  command_group_name: string  // "CW", "SW", "P"
+  command_group_full: string  // "Capital Warfare"
+  roles: OperationalRoleSimple[]
+}
+
+export interface EligibleUser {
+  id: number
+  username: string
+  display_name: string | null
+  discord_id: string | null
+  avatar: string | null
+  role: string
+  is_officer: boolean
+  is_kg_verwalter: boolean
+  is_pioneer: boolean
+}
+
+export interface PositionWithAssignments {
+  id: number
+  name: string
+  position_type: string | null
+  required_role_id: number | null
+  sort_order: number
+  assignments: MissionAssignment[]
+}
+
+export interface UnitWithPositions {
+  id: number
+  name: string
+  unit_type: string | null
+  ship_name: string | null
+  crew_count: number
+  sort_order: number
+  positions: PositionWithAssignments[]
+}
+
+export interface AssignmentData {
+  mission_id: number
+  mission_title: string
+  units: UnitWithPositions[]
+  operational_roles: GroupedOperationalRole[]
+  eligible_users: EligibleUser[]
+  can_manage: boolean
 }

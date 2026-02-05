@@ -20,11 +20,11 @@ import {
   AlertCircle,
   Trash2,
 } from 'lucide-react'
+import MissionAssignmentPanel from '../components/MissionAssignmentPanel'
 import type {
   MissionDetail,
   MissionStatus,
   Briefing,
-  User,
 } from '../api/types'
 
 const STATUS_LABELS: Record<MissionStatus, string> = {
@@ -54,13 +54,9 @@ export default function MissionDetailPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [copied, setCopied] = useState(false)
   const [registrationNote, setRegistrationNote] = useState('')
+  const [shipInfo, setShipInfo] = useState('')
   const [selectedUnitId, setSelectedUnitId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-
-  // Quick Assignment state
-  const [assignPositionId, setAssignPositionId] = useState<number | null>(null)
-  const [assignUserId, setAssignUserId] = useState<number | null>(null)
-  const [assignPlaceholder, setAssignPlaceholder] = useState('')
 
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
   const currentUser = useAuthStore.getState().user
@@ -76,12 +72,6 @@ export default function MissionDetailPage() {
     enabled: activeTab === 'briefing',
   })
 
-  const { data: allUsers } = useQuery<User[]>({
-    queryKey: ['users'],
-    queryFn: () => apiClient.get('/api/users').then((r) => r.data),
-    enabled: activeTab === 'participants',
-  })
-
   const isOwner = mission?.created_by_id === currentUser?.id
   const canManage = effectiveRole === 'admin' || effectiveRole === 'officer' || effectiveRole === 'treasurer' || isOwner
 
@@ -91,6 +81,7 @@ export default function MissionDetailPage() {
       apiClient.post(`/api/missions/${id}/register`, {
         preferred_unit_id: selectedUnitId,
         availability_note: registrationNote || null,
+        ship_info: shipInfo || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mission', id] })
@@ -130,18 +121,6 @@ export default function MissionDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['missions'] })
       navigate('/einsaetze')
-    },
-  })
-
-  const assignMutation = useMutation({
-    mutationFn: (data: { position_id: number; user_id?: number | null; placeholder_name?: string | null }) =>
-      apiClient.post(`/api/missions/${id}/assignments`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['mission', id] })
-      // Reset form
-      setAssignPositionId(null)
-      setAssignUserId(null)
-      setAssignPlaceholder('')
     },
   })
 
@@ -405,7 +384,18 @@ export default function MissionDetailPage() {
         <div className="space-y-6">
           {/* Pre-Briefing */}
           <div className="bg-krt-dark rounded-lg border border-gray-700 p-6">
-            <h2 className="text-lg font-semibold mb-4">Voraussetzungen</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Voraussetzungen</h2>
+              {canManage && (
+                <Link
+                  to={`/einsaetze/${id}/bearbeiten?step=1`}
+                  className="p-1.5 text-gray-400 hover:text-krt-orange rounded hover:bg-gray-700"
+                  title="Bearbeiten"
+                >
+                  <Edit3 size={16} />
+                </Link>
+              )}
+            </div>
             <div className="grid gap-4 md:grid-cols-2">
               {mission.start_location_name && (
                 <div className="flex items-start gap-3">
@@ -449,7 +439,18 @@ export default function MissionDetailPage() {
           {/* Strukturierte Beschreibung */}
           {(mission.mission_context || mission.mission_objective || mission.preparation_notes || mission.special_notes) && (
             <div className="bg-krt-dark rounded-lg border border-gray-700 p-6">
-              <h2 className="text-lg font-semibold mb-4">Beschreibung</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">Beschreibung</h2>
+                {canManage && (
+                  <Link
+                    to={`/einsaetze/${id}/bearbeiten?step=1`}
+                    className="p-1.5 text-gray-400 hover:text-krt-orange rounded hover:bg-gray-700"
+                    title="Bearbeiten"
+                  >
+                    <Edit3 size={16} />
+                  </Link>
+                )}
+              </div>
               <div className="space-y-4">
                 {mission.mission_context && (
                   <div>
@@ -485,7 +486,18 @@ export default function MissionDetailPage() {
           {/* Phasen */}
           {mission.phases.length > 0 && (
             <div className="bg-krt-dark rounded-lg border border-gray-700 p-6">
-              <h2 className="text-lg font-semibold mb-4">Ablauf</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">Ablauf</h2>
+                {canManage && (
+                  <Link
+                    to={`/einsaetze/${id}/bearbeiten?step=3`}
+                    className="p-1.5 text-gray-400 hover:text-krt-orange rounded hover:bg-gray-700"
+                    title="Bearbeiten"
+                  >
+                    <Edit3 size={16} />
+                  </Link>
+                )}
+              </div>
               <div className="space-y-4">
                 {mission.phases
                   .sort((a, b) => a.sort_order - b.sort_order)
@@ -591,6 +603,21 @@ export default function MissionDetailPage() {
                       className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">
+                      Schiff am Einsatzort bereit (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={shipInfo}
+                      onChange={(e) => setShipInfo(e.target.value)}
+                      placeholder="z.B. 'Polaris meta-gefittet am Treffpunkt'"
+                      className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Teile dem Planer mit, welches Schiff du für den Einsatz bereit hast
+                    </p>
+                  </div>
                   <button
                     onClick={() => registerMutation.mutate()}
                     disabled={registerMutation.isPending}
@@ -607,7 +634,19 @@ export default function MissionDetailPage() {
       )}
 
       {activeTab === 'units' && (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-4">
+          {canManage && (
+            <div className="flex justify-end">
+              <Link
+                to={`/einsaetze/${id}/bearbeiten?step=2`}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-krt-orange border border-gray-600 rounded hover:border-krt-orange"
+              >
+                <Edit3 size={14} />
+                Einheiten bearbeiten
+              </Link>
+            </div>
+          )}
+          <div className="grid gap-4 md:grid-cols-2">
           {mission.units
             .sort((a, b) => a.sort_order - b.sort_order)
             .map((unit) => (
@@ -666,6 +705,7 @@ export default function MissionDetailPage() {
                 </div>
               </div>
             ))}
+          </div>
         </div>
       )}
 
@@ -700,6 +740,9 @@ export default function MissionDetailPage() {
                         {reg.availability_note && (
                           <div className="text-xs text-gray-400">{reg.availability_note}</div>
                         )}
+                        {reg.ship_info && (
+                          <div className="text-xs text-krt-orange">🚀 {reg.ship_info}</div>
+                        )}
                       </div>
                       {!reg.has_ships && (
                         <span className="text-xs text-yellow-400 flex items-center gap-1">
@@ -724,78 +767,8 @@ export default function MissionDetailPage() {
             )}
           </div>
 
-          {/* Quick Assign (for managers) */}
-          {canManage && allUsers && (
-            <div className="bg-krt-dark rounded-lg border border-gray-700 p-6">
-              <h2 className="text-lg font-semibold mb-4">Schnell-Zuweisung</h2>
-              <p className="text-sm text-gray-400 mb-4">
-                Wähle eine Position und weise einen User oder Platzhalter zu.
-              </p>
-              <div className="grid gap-4 md:grid-cols-4">
-                <select
-                  value={assignPositionId || ''}
-                  onChange={(e) => setAssignPositionId(e.target.value ? Number(e.target.value) : null)}
-                  className="bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
-                >
-                  <option value="">Position wählen...</option>
-                  {mission.units.flatMap((unit) =>
-                    unit.positions.map((pos) => (
-                      <option key={pos.id} value={pos.id}>
-                        {unit.name} - {pos.name}
-                      </option>
-                    ))
-                  )}
-                </select>
-                <select
-                  value={assignUserId || ''}
-                  onChange={(e) => {
-                    setAssignUserId(e.target.value ? Number(e.target.value) : null)
-                    if (e.target.value) setAssignPlaceholder('')
-                  }}
-                  className="bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
-                >
-                  <option value="">User wählen...</option>
-                  {allUsers
-                    .filter((u) => ['member', 'officer', 'treasurer', 'admin'].includes(u.role))
-                    .map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.display_name || user.username}
-                      </option>
-                    ))}
-                </select>
-                <input
-                  type="text"
-                  value={assignPlaceholder}
-                  onChange={(e) => {
-                    setAssignPlaceholder(e.target.value)
-                    if (e.target.value) setAssignUserId(null)
-                  }}
-                  placeholder="Oder Platzhalter (XXXXX)"
-                  className="bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white"
-                />
-                <button
-                  onClick={() => {
-                    if (!assignPositionId) return
-                    if (!assignUserId && !assignPlaceholder) return
-                    assignMutation.mutate({
-                      position_id: assignPositionId,
-                      user_id: assignUserId || null,
-                      placeholder_name: assignPlaceholder || null,
-                    })
-                  }}
-                  disabled={!assignPositionId || (!assignUserId && !assignPlaceholder) || assignMutation.isPending}
-                  className="px-4 py-2 bg-krt-orange rounded hover:bg-krt-orange/80 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {assignMutation.isPending ? 'Zuweisen...' : 'Zuweisen'}
-                </button>
-              </div>
-              {assignMutation.isError && (
-                <p className="text-red-400 text-sm mt-2">
-                  Fehler beim Zuweisen. Möglicherweise ist die Position bereits besetzt.
-                </p>
-              )}
-            </div>
-          )}
+          {/* Assignment Panel (for managers) */}
+          {canManage && <MissionAssignmentPanel missionId={mission.id} />}
         </div>
       )}
 
