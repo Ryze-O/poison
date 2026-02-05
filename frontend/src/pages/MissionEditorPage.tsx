@@ -33,9 +33,9 @@ type WizardStep = 1 | 2 | 3 | 4
 
 // Standard-Funkfrequenzen (Basis)
 const BASE_FREQUENCY_PRESETS = {
-  el: { label: 'Einsatzleitung', options: ['102.11', '102.12'] },
+  el: { label: 'Einsatzleitung', options: ['102.00', '102.11', '102.12'] },
   intern: { label: 'Intern', options: ['102.31', '102.32', '102.51', '102.52', '102.61', '102.62', '102.70'] },
-  targets: { label: 'Targets', options: ['102.91', '102.92'] },
+  targets: { label: 'Targets', options: ['102.90', '102.91', '102.92'] },
 }
 
 // LocalStorage Key für benutzerdefinierte Frequenzen
@@ -44,7 +44,7 @@ const CUSTOM_FREQUENCIES_KEY = 'poison_custom_frequencies'
 // Prüfe ob eine Frequenz gültig ist (Format: XXX.XX, z.B. 102.11)
 const isValidFrequency = (freq: string): boolean => {
   if (!freq || freq.trim() === '') return false
-  // Muss mindestens Format X.X haben (z.B. "1.0" oder "102.11")
+  // Format: 1-3 Ziffern, Punkt, 1-2 Ziffern (z.B. "102.11", "1.0")
   const pattern = /^\d{1,3}\.\d{1,2}$/
   return pattern.test(freq.trim())
 }
@@ -57,10 +57,13 @@ const loadCustomFrequencies = (): Record<string, string[]> => {
 
     const parsed = JSON.parse(stored)
     // Filtere ungültige Frequenzen heraus
+    // Nur Frequenzen die mit "102." beginnen und das Format 102.XX haben
     const cleaned: Record<string, string[]> = { el: [], intern: [], targets: [] }
     for (const key of ['el', 'intern', 'targets']) {
       if (Array.isArray(parsed[key])) {
-        cleaned[key] = parsed[key].filter(isValidFrequency)
+        cleaned[key] = parsed[key].filter((f: string) =>
+          isValidFrequency(f) && f.startsWith('102.')
+        )
       }
     }
 
@@ -79,8 +82,8 @@ const loadCustomFrequencies = (): Record<string, string[]> => {
 const saveCustomFrequency = (key: string, frequency: string) => {
   if (!frequency || frequency.trim() === '') return
 
-  // Nur gültige Frequenzen speichern
-  if (!isValidFrequency(frequency)) return
+  // Nur gültige Frequenzen speichern (Format 102.XX)
+  if (!isValidFrequency(frequency) || !frequency.startsWith('102.')) return
 
   const custom = loadCustomFrequencies()
   const baseOptions = BASE_FREQUENCY_PRESETS[key as keyof typeof BASE_FREQUENCY_PRESETS]?.options || []
@@ -112,6 +115,75 @@ const getFrequencyPresets = () => {
       options: [...BASE_FREQUENCY_PRESETS.targets.options, ...custom.targets.filter(f => !BASE_FREQUENCY_PRESETS.targets.options.includes(f))],
     },
   }
+}
+
+// ============== Custom Unit Categories ==============
+
+// Standard-Kategorien
+const BASE_UNIT_CATEGORIES = ['GKS', 'Jäger', 'Dropship', 'BEAST', 'DEALS']
+
+// LocalStorage Key für benutzerdefinierte Kategorien
+const CUSTOM_CATEGORIES_KEY = 'poison_custom_unit_categories'
+
+// Lade benutzerdefinierte Kategorien aus localStorage
+const loadCustomCategories = (): string[] => {
+  try {
+    const stored = localStorage.getItem(CUSTOM_CATEGORIES_KEY)
+    if (!stored) return []
+    const parsed = JSON.parse(stored)
+    if (!Array.isArray(parsed)) return []
+    // Nur valide Strings zurückgeben
+    return parsed.filter((c: unknown) => typeof c === 'string' && c.trim().length > 0)
+  } catch {
+    return []
+  }
+}
+
+// Speichere benutzerdefinierte Kategorie
+const saveCustomCategory = (category: string): boolean => {
+  if (!category || category.trim() === '') return false
+  const trimmed = category.trim()
+
+  // Nicht speichern wenn es eine Basis-Kategorie ist
+  if (BASE_UNIT_CATEGORIES.includes(trimmed)) return false
+
+  // Nicht speichern wenn es mit einer Zahl beginnt (z.B. "1. Jäger")
+  if (/^\d/.test(trimmed)) return false
+
+  const custom = loadCustomCategories()
+
+  // Nicht speichern wenn bereits vorhanden (case-insensitive)
+  if (custom.some(c => c.toLowerCase() === trimmed.toLowerCase())) return false
+
+  custom.push(trimmed)
+  // Maximal 20 Custom-Kategorien speichern
+  if (custom.length > 20) custom.shift()
+  localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(custom))
+  return true
+}
+
+// Prüfe ob eine Kategorie speicherbar ist (custom und noch nicht gespeichert)
+const isSaveableCategory = (category: string | null): boolean => {
+  if (!category || category.trim() === '') return false
+  const trimmed = category.trim()
+
+  // Nicht speicherbar wenn es eine Basis-Kategorie ist
+  if (BASE_UNIT_CATEGORIES.includes(trimmed)) return false
+
+  // Nicht speicherbar wenn es mit einer Zahl beginnt
+  if (/^\d/.test(trimmed)) return false
+
+  // Nicht speicherbar wenn bereits gespeichert
+  const custom = loadCustomCategories()
+  if (custom.some(c => c.toLowerCase() === trimmed.toLowerCase())) return false
+
+  return true
+}
+
+// Alle verfügbaren Kategorien (Basis + Custom)
+const getAllCategories = (): string[] => {
+  const custom = loadCustomCategories()
+  return [...BASE_UNIT_CATEGORIES, ...custom.filter(c => !BASE_UNIT_CATEGORIES.includes(c))]
 }
 
 interface LocalUnit extends MissionUnitCreate {
@@ -1067,7 +1139,7 @@ export default function MissionEditorPage() {
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">
               Anmeldekategorien
-              <InfoTooltip text="Kategorien sind die Gruppen, auf die sich User anmelden können (z.B. GKS, Jäger, FPS Squad). Die genaue Rollenzuweisung erfolgt später." />
+              <InfoTooltip text="Kategorien sind die Gruppen, auf die sich User anmelden können (z.B. GKS, Jäger, Dropship). Die genaue Rollenzuweisung erfolgt später." />
             </h2>
             <button
               onClick={addUnit}
@@ -1129,11 +1201,12 @@ export default function MissionEditorPage() {
                     <div>
                       <label className="block text-sm text-gray-400 mb-1">
                         Kategorie
-                        <InfoTooltip text="Art der Kategorie, z.B. GKS, Jäger, Squad, BEAST, DEALS - oder eigenen Typ eingeben" />
+                        <InfoTooltip text="Art der Kategorie, z.B. GKS, Jäger, Dropship, BEAST, DEALS - oder eigenen Typ eingeben" />
                       </label>
                       <div className="flex flex-wrap gap-1 mb-2">
-                        {['GKS', 'Jäger', 'Squad', 'BEAST', 'DEALS'].map((preset) => {
+                        {getAllCategories().map((preset) => {
                           const isSelected = unit.unit_type === preset
+                          const isCustom = !BASE_UNIT_CATEGORIES.includes(preset)
                           return (
                             <button
                               key={preset}
@@ -1148,7 +1221,9 @@ export default function MissionEditorPage() {
                               className={`px-2 py-0.5 rounded text-xs border ${
                                 isSelected
                                   ? 'bg-krt-orange/20 border-krt-orange text-krt-orange'
-                                  : 'bg-gray-700 border-gray-600 hover:bg-gray-600'
+                                  : isCustom
+                                    ? 'bg-blue-900/30 border-blue-600/50 hover:bg-blue-900/50 text-blue-300'
+                                    : 'bg-gray-700 border-gray-600 hover:bg-gray-600'
                               }`}
                             >
                               {preset}
@@ -1156,15 +1231,32 @@ export default function MissionEditorPage() {
                           )
                         })}
                       </div>
-                      <input
-                        type="text"
-                        value={unit.unit_type || ''}
-                        onChange={(e) =>
-                          updateUnit(unit._localId, { unit_type: e.target.value || null })
-                        }
-                        placeholder="Oder eigenen Typ eingeben..."
-                        className="w-full bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white text-sm"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={unit.unit_type || ''}
+                          onChange={(e) =>
+                            updateUnit(unit._localId, { unit_type: e.target.value || null })
+                          }
+                          placeholder="Oder eigenen Typ eingeben..."
+                          className="flex-1 bg-krt-dark border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                        />
+                        {isSaveableCategory(unit.unit_type) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (saveCustomCategory(unit.unit_type!)) {
+                                // Force re-render by updating the unit (no actual change)
+                                updateUnit(unit._localId, { unit_type: unit.unit_type })
+                              }
+                            }}
+                            title="Kategorie für später speichern"
+                            className="px-3 py-2 bg-blue-600/20 border border-blue-600/50 text-blue-400 rounded hover:bg-blue-600/30"
+                          >
+                            <Save size={16} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm text-gray-400 mb-1">

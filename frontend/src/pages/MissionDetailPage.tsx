@@ -796,7 +796,7 @@ export default function MissionDetailPage() {
                     <div className="flex items-center gap-3">
                       {reg.user?.avatar ? (
                         <img
-                          src={`https://cdn.discordapp.com/avatars/${reg.user.discord_id}/${reg.user.avatar}.png`}
+                          src={reg.user.avatar}
                           alt=""
                           className="w-8 h-8 rounded-full"
                         />

@@ -211,12 +211,30 @@ async def get_mission(
         for pos in sorted(unit.positions, key=lambda p: p.sort_order):
             assignments = []
             for assign in pos.assignments:
+                # User-Daten explizit serialisieren
+                user_data = None
+                if assign.user:
+                    user_data = {
+                        "id": assign.user.id,
+                        "username": assign.user.username,
+                        "display_name": assign.user.display_name,
+                        "discord_id": assign.user.discord_id,
+                        "avatar": assign.user.avatar,
+                        "avatar_custom": assign.user.avatar_custom,
+                        "role": assign.user.role,
+                        "is_pioneer": assign.user.is_pioneer,
+                        "is_treasurer": assign.user.is_treasurer,
+                        "is_kg_verwalter": assign.user.is_kg_verwalter,
+                        "is_pending": assign.user.is_pending,
+                        "aliases": assign.user.aliases,
+                        "created_at": assign.user.created_at,
+                    }
                 assignments.append({
                     "id": assign.id,
                     "position_id": assign.position_id,
                     "user_id": assign.user_id,
                     "placeholder_name": assign.placeholder_name,
-                    "user": assign.user,
+                    "user": user_data,
                     "is_backup": assign.is_backup,
                     "is_training": assign.is_training,
                     "notes": assign.notes,
@@ -259,11 +277,29 @@ async def get_mission(
     registrations = []
     for reg in mission.registrations:
         ship_count = db.query(UserShip).filter(UserShip.user_id == reg.user_id).count()
+        # User-Daten explizit serialisieren
+        user_data = None
+        if reg.user:
+            user_data = {
+                "id": reg.user.id,
+                "username": reg.user.username,
+                "display_name": reg.user.display_name,
+                "discord_id": reg.user.discord_id,
+                "avatar": reg.user.avatar,
+                "avatar_custom": reg.user.avatar_custom,
+                "role": reg.user.role,
+                "is_pioneer": reg.user.is_pioneer,
+                "is_treasurer": reg.user.is_treasurer,
+                "is_kg_verwalter": reg.user.is_kg_verwalter,
+                "is_pending": reg.user.is_pending,
+                "aliases": reg.user.aliases,
+                "created_at": reg.user.created_at,
+            }
         registrations.append({
             "id": reg.id,
             "mission_id": reg.mission_id,
             "user_id": reg.user_id,
-            "user": reg.user,
+            "user": user_data,
             "preferred_unit_id": reg.preferred_unit_id,
             "preferred_position_id": reg.preferred_position_id,
             "availability_note": reg.availability_note,
@@ -1176,12 +1212,30 @@ async def get_assignment_data(
         for pos in sorted(unit.positions, key=lambda p: p.sort_order):
             assignments = []
             for assign in pos.assignments:
+                # User-Daten explizit serialisieren
+                user_data = None
+                if assign.user:
+                    user_data = {
+                        "id": assign.user.id,
+                        "username": assign.user.username,
+                        "display_name": assign.user.display_name,
+                        "discord_id": assign.user.discord_id,
+                        "avatar": assign.user.avatar,
+                        "avatar_custom": assign.user.avatar_custom,
+                        "role": assign.user.role,
+                        "is_pioneer": assign.user.is_pioneer,
+                        "is_treasurer": assign.user.is_treasurer,
+                        "is_kg_verwalter": assign.user.is_kg_verwalter,
+                        "is_pending": assign.user.is_pending,
+                        "aliases": assign.user.aliases,
+                        "created_at": assign.user.created_at,
+                    }
                 assignments.append({
                     "id": assign.id,
                     "position_id": assign.position_id,
                     "user_id": assign.user_id,
                     "placeholder_name": assign.placeholder_name,
-                    "user": assign.user,
+                    "user": user_data,
                     "is_backup": assign.is_backup,
                     "is_training": assign.is_training,
                     "notes": assign.notes,
