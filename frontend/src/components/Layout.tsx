@@ -389,7 +389,7 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className={clsx(
-        'flex-1 p-6 lg:p-8 overflow-auto relative transition-[margin] duration-200',
+        'flex-1 pt-16 px-4 pb-6 lg:pt-8 lg:px-8 lg:pb-8 overflow-auto relative transition-[margin] duration-200',
         // Margin für Sidebar, außer auf Staffelstruktur-Seite (wenn Sidebar versteckt)
         shouldHideSidebar ? 'lg:ml-0' : 'lg:ml-64'
       )}>
