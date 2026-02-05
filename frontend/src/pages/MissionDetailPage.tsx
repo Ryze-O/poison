@@ -82,7 +82,6 @@ export default function MissionDetailPage() {
     enabled: activeTab === 'briefing',
   })
 
-  const isOwner = mission?.created_by_id === currentUser?.id
   const canManage = effectiveRole === 'admin' || effectiveRole === 'officer' || currentUser?.is_kg_verwalter
 
   // Mutations
