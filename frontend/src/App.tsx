@@ -48,7 +48,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 // Route nur für Offiziere und höher (Datenbank-Seiten)
 function OfficerRoute({ children }: { children: React.ReactNode }) {
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
-  const isOfficerOrHigher = effectiveRole === 'officer' || effectiveRole === 'treasurer' || effectiveRole === 'admin'
+  const isOfficerOrHigher = effectiveRole === 'officer' || effectiveRole === 'admin'
 
   if (!isOfficerOrHigher) {
     return <Navigate to="/" replace />

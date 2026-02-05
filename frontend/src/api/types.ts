@@ -1,5 +1,5 @@
-// Benutzer-Rollen
-export type UserRole = 'guest' | 'loot_guest' | 'member' | 'officer' | 'treasurer' | 'admin'
+// Benutzer-Rollen (Kassenwart ist kein Rang sondern ein Flag: is_treasurer)
+export type UserRole = 'guest' | 'loot_guest' | 'member' | 'officer' | 'admin'
 
 // Benutzer
 export interface User {

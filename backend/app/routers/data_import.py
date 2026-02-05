@@ -194,7 +194,8 @@ async def import_members(
 
     - Username: Eindeutiger Benutzername (Pflicht)
     - DisplayName: Anzeigename in der Staffel (optional)
-    - Rolle: member, officer, treasurer, admin (optional, default: member)
+    - Rolle: member, officer, kassenwart, admin (optional, default: member)
+      (kassenwart/treasurer = officer mit Kassenwart-Flag)
 
     Duplikat-Erkennung (case-insensitive):
     - Existiert ein User mit gleichem Username? → Übersprungen
@@ -224,11 +225,13 @@ async def import_members(
         'mitglied': UserRole.MEMBER,
         'officer': UserRole.OFFICER,
         'offizier': UserRole.OFFICER,
-        'treasurer': UserRole.TREASURER,
-        'kassenwart': UserRole.TREASURER,
+        'treasurer': UserRole.OFFICER,  # Kassenwart = Officer + is_treasurer Flag
+        'kassenwart': UserRole.OFFICER,  # Kassenwart = Officer + is_treasurer Flag
         'admin': UserRole.ADMIN,
         'administrator': UserRole.ADMIN,
     }
+    # Rollen die zusätzlich das is_treasurer Flag setzen
+    treasurer_roles = {'treasurer', 'kassenwart'}
 
     # Alle existierenden User laden für Duplikat-Check
     all_users = db.query(User).all()
@@ -289,11 +292,15 @@ async def import_members(
                 warnings.append(f"Zeile {row_num}: Unbekannte Rolle '{role_str}', verwende 'member'")
 
             # Neuen User anlegen (ohne Discord-ID)
+            # Kassenwart-Flag setzen wenn Rolle treasurer/kassenwart war
+            is_treasurer = role_str in treasurer_roles
+
             new_user = User(
                 discord_id=None,  # Wird bei Discord-Login nachträglich gesetzt
                 username=username,
                 display_name=display_name,
-                role=role
+                role=role,
+                is_treasurer=is_treasurer
             )
             db.add(new_user)
 

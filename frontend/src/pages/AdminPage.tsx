@@ -894,7 +894,6 @@ export default function AdminPage() {
                 >
                   <option value="member">Member (nur ansehen)</option>
                   <option value="officer">Officer</option>
-                  <option value="treasurer">Treasurer</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
@@ -965,7 +964,6 @@ export default function AdminPage() {
                       <span className="font-medium">{token.name}</span>
                       <span className={`px-2 py-0.5 rounded text-xs ${
                         token.role === 'admin' ? 'bg-krt-orange/30 text-krt-orange' :
-                        token.role === 'treasurer' ? 'bg-krt-orange/20 text-krt-orange/80' :
                         token.role === 'officer' ? 'bg-krt-orange/20 text-krt-orange/80' :
                         'bg-gray-700 text-gray-400'
                       }`}>

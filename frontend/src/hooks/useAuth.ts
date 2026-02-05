@@ -71,8 +71,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   canUsePreviewMode: () => {
     const { user } = get()
     if (!user) return false
-    // Offiziere, Kassenwartin, Admins können Vorschaumodus nutzen
-    return ['officer', 'treasurer', 'admin'].includes(user.role)
+    // Offiziere und Admins können Vorschaumodus nutzen
+    return ['officer', 'admin'].includes(user.role)
   },
 }))
 

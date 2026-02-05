@@ -25,7 +25,7 @@ export default function ComponentsPage() {
 
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
-  const canCreate = effectiveRole === 'officer' || effectiveRole === 'treasurer' || effectiveRole === 'admin'
+  const canCreate = effectiveRole === 'officer' || effectiveRole === 'admin'
   const canDelete = effectiveRole === 'admin'
   const isAdmin = effectiveRole === 'admin'
 

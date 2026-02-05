@@ -37,3 +37,13 @@ def check_role_or_pioneer(user: User, required_role: UserRole) -> bool:
         status_code=status.HTTP_403_FORBIDDEN,
         detail=f"Diese Aktion erfordert mindestens die Rolle: {required_role.value} oder Pioneer-Status"
     )
+
+
+def check_treasurer(user: User) -> bool:
+    """Prüft ob der Benutzer Kassenwart (is_treasurer) oder Admin ist."""
+    if user.is_treasurer or user.role == UserRole.ADMIN:
+        return True
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Diese Aktion erfordert Kassenwart-Berechtigung"
+    )

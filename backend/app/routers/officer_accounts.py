@@ -15,7 +15,7 @@ from app.schemas.officer_account import (
     OfficerTransferCreate,
 )
 from app.auth.jwt import get_current_user
-from app.auth.dependencies import check_role
+from app.auth.dependencies import check_role, check_treasurer
 
 router = APIRouter()
 
@@ -26,7 +26,7 @@ async def get_all_accounts(
     current_user: User = Depends(get_current_user)
 ):
     """Gibt alle Offizier-Konten mit Kontoständen zurück. Nur Treasurer+."""
-    check_role(current_user, UserRole.TREASURER)
+    check_treasurer(current_user)
 
     accounts = db.query(OfficerAccount).all()
     total_balance = sum(acc.balance for acc in accounts)
@@ -44,7 +44,7 @@ async def get_account(
     current_user: User = Depends(get_current_user)
 ):
     """Gibt ein Offizier-Konto mit Transaktionen zurück. Nur Treasurer+."""
-    check_role(current_user, UserRole.TREASURER)
+    check_treasurer(current_user)
 
     account = db.query(OfficerAccount).filter(OfficerAccount.id == account_id).first()
     if not account:
@@ -128,7 +128,7 @@ async def create_transaction(
     current_user: User = Depends(get_current_user)
 ):
     """Erstellt eine Transaktion auf einem Offizier-Konto. Nur Treasurer+."""
-    check_role(current_user, UserRole.TREASURER)
+    check_treasurer(current_user)
 
     account = db.query(OfficerAccount).filter(OfficerAccount.id == account_id).first()
     if not account:
@@ -169,7 +169,7 @@ async def transfer_between_accounts(
     current_user: User = Depends(get_current_user)
 ):
     """Überweist Geld zwischen zwei Offizier-Konten. Nur Treasurer+."""
-    check_role(current_user, UserRole.TREASURER)
+    check_treasurer(current_user)
 
     if data.amount <= 0:
         raise HTTPException(

@@ -112,7 +112,7 @@ export default function Layout() {
 
   const isInPreviewMode = previewRole !== null
   const effectiveRole = previewRole || user?.role
-  const isOfficerOrHigher = effectiveRole === 'officer' || effectiveRole === 'treasurer' || effectiveRole === 'admin'
+  const isOfficerOrHigher = effectiveRole === 'officer' || effectiveRole === 'admin'
   const isAdmin = !isInPreviewMode && user?.role === 'admin'
   const isPioneer = user?.is_pioneer === true
 

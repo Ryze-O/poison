@@ -6,12 +6,17 @@ import enum
 
 
 class UserRole(str, enum.Enum):
-    """Benutzer-Rollen mit aufsteigenden Berechtigungen."""
+    """Benutzer-Rollen mit aufsteigenden Berechtigungen.
+
+    Zusätzliche Flags (unabhängig von Rolle):
+    - is_pioneer: Verantwortlich für Versorgung/Logistik
+    - is_treasurer: Kassenwart, verwaltet Staffelkasse (nur für Officer+)
+    - is_kg_verwalter: Kann Staffelstruktur bearbeiten
+    """
     GUEST = "guest"            # Kann fast nichts sehen (wartet auf Freischaltung)
     LOOT_GUEST = "loot_guest"  # Kann Loot erhalten, nur Leserechte
     MEMBER = "member"          # Kann nur sehen
     OFFICER = "officer"        # Kann Loot erfassen, eigenes Lager verwalten
-    TREASURER = "treasurer"    # Wie Officer + Kasse verwalten
     ADMIN = "admin"            # Alles
 
 
@@ -43,8 +48,7 @@ class User(Base):
             UserRole.LOOT_GUEST: 0,
             UserRole.MEMBER: 1,
             UserRole.OFFICER: 2,
-            UserRole.TREASURER: 3,
-            UserRole.ADMIN: 4,
+            UserRole.ADMIN: 3,
         }
         return role_hierarchy[self.role] >= role_hierarchy[required_role]
 

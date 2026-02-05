@@ -27,7 +27,7 @@ export default function ItemsPage() {
 
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
-  const canCreate = effectiveRole === 'officer' || effectiveRole === 'treasurer' || effectiveRole === 'admin'
+  const canCreate = effectiveRole === 'officer' || effectiveRole === 'admin'
   const canDelete = effectiveRole === 'admin'
 
   const { data: items } = useQuery<Item[]>({

@@ -57,8 +57,8 @@ export default function TreasuryPage() {
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const currentUser = useAuthStore.getState().user
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
-  // Kassenwarte (is_treasurer Flag) UND Rolle treasurer/admin haben Zugriff
-  const canManage = effectiveRole === 'treasurer' || effectiveRole === 'admin' || currentUser?.is_treasurer === true
+  // Kassenwarte (is_treasurer Flag) oder Admins haben Zugriff
+  const canManage = effectiveRole === 'admin' || currentUser?.is_treasurer === true
   const isAdmin = effectiveRole === 'admin'
   const fileInputRef = useRef<HTMLInputElement>(null)
 

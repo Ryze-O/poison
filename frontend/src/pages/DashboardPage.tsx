@@ -17,7 +17,7 @@ export default function DashboardPage() {
 
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
-  const canManageSession = effectiveRole === 'admin' || effectiveRole === 'officer' || effectiveRole === 'treasurer'
+  const canManageSession = effectiveRole === 'admin' || effectiveRole === 'officer'
 
   const { data: treasury } = useQuery<Treasury>({
     queryKey: ['treasury'],

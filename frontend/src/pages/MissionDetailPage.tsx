@@ -83,7 +83,7 @@ export default function MissionDetailPage() {
   })
 
   const isOwner = mission?.created_by_id === currentUser?.id
-  const canManage = effectiveRole === 'admin' || effectiveRole === 'officer' || effectiveRole === 'treasurer' || isOwner
+  const canManage = effectiveRole === 'admin' || effectiveRole === 'officer' || currentUser?.is_kg_verwalter
 
   // Mutations
   const registerMutation = useMutation({

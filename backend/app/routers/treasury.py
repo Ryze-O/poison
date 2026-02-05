@@ -11,7 +11,7 @@ from app.models.treasury import Treasury, TreasuryTransaction, TransactionType
 from app.models.officer_account import OfficerAccount, OfficerTransaction
 from app.schemas.treasury import TreasuryResponse, TransactionCreate, TransactionUpdate, TransactionResponse, CSVImportResponse
 from app.auth.jwt import get_current_user
-from app.auth.dependencies import check_role
+from app.auth.dependencies import check_role, check_treasurer
 
 router = APIRouter()
 
@@ -43,7 +43,7 @@ async def get_transactions(
     current_user: User = Depends(get_current_user)
 ):
     """Gibt die Transaktions-Historie zurück. Nur Treasurer+."""
-    check_role(current_user, UserRole.TREASURER)
+    check_treasurer(current_user)
 
     return db.query(TreasuryTransaction).order_by(
         TreasuryTransaction.created_at.desc()
@@ -57,7 +57,7 @@ async def create_transaction(
     current_user: User = Depends(get_current_user)
 ):
     """Erstellt eine neue Transaktion. Nur Treasurer+."""
-    check_role(current_user, UserRole.TREASURER)
+    check_treasurer(current_user)
 
     if transaction.amount <= 0:
         raise HTTPException(
@@ -139,7 +139,7 @@ async def get_summary(
     current_user: User = Depends(get_current_user)
 ):
     """Gibt eine Zusammenfassung der Kasse zurück. Nur Treasurer+."""
-    check_role(current_user, UserRole.TREASURER)
+    check_treasurer(current_user)
 
     treasury = get_or_create_treasury(db)
 
@@ -167,7 +167,7 @@ async def update_transaction(
     current_user: User = Depends(get_current_user)
 ):
     """Aktualisiert eine Transaktion. Nur Treasurer+."""
-    check_role(current_user, UserRole.TREASURER)
+    check_treasurer(current_user)
 
     transaction = db.query(TreasuryTransaction).filter(
         TreasuryTransaction.id == transaction_id

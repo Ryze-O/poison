@@ -57,7 +57,7 @@ async def get_officers(
 ):
     """Gibt alle Offiziere und höher zurück (für Lager-Übersicht)."""
     return db.query(User).filter(
-        User.role.in_([UserRole.OFFICER, UserRole.TREASURER, UserRole.ADMIN])
+        User.role.in_([UserRole.OFFICER, UserRole.ADMIN])
     ).all()
 
 
@@ -538,8 +538,7 @@ async def approve_pending_merge(
         UserRole.LOOT_GUEST: 0,
         UserRole.MEMBER: 1,
         UserRole.OFFICER: 2,
-        UserRole.TREASURER: 3,
-        UserRole.ADMIN: 4,
+        UserRole.ADMIN: 3,
     }
     if role_hierarchy.get(existing_user.role, 0) > role_hierarchy.get(discord_user.role, 0):
         discord_user.role = existing_user.role

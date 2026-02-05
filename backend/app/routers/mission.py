@@ -46,19 +46,19 @@ router = APIRouter()
 # ============== Helper Functions ==============
 
 def is_mission_manager(user: User, mission: Mission = None) -> bool:
-    """Prüft ob User Offizier+, Admin, Treasurer oder KG-Verwalter ist."""
+    """Prüft ob User Admin, Officer oder KG-Verwalter ist."""
     return (
-        user.role in [UserRole.ADMIN, UserRole.OFFICER, UserRole.TREASURER]
+        user.role in [UserRole.ADMIN, UserRole.OFFICER]
         or user.is_kg_verwalter
     )
 
 
 def check_mission_manager(user: User, mission: Mission):
-    """Wirft 403 wenn User kein Offizier+, Admin, Treasurer oder KG-Verwalter ist."""
+    """Wirft 403 wenn User kein Admin, Officer oder KG-Verwalter ist."""
     if not is_mission_manager(user, mission):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Nur Offiziere, Admins, Schatzmeister oder KG-Verwalter können diese Aktion durchführen"
+            detail="Nur Admins, Offiziere oder KG-Verwalter können diese Aktion durchführen"
         )
 
 
@@ -117,7 +117,7 @@ async def get_missions(
     )
 
     # Normale User sehen nur veröffentlichte Missionen (außer eigene)
-    if current_user.role not in [UserRole.ADMIN, UserRole.OFFICER, UserRole.TREASURER]:
+    if current_user.role not in [UserRole.ADMIN, UserRole.OFFICER]:
         query = query.filter(
             (Mission.status != MissionStatus.DRAFT) |
             (Mission.created_by_id == current_user.id)
@@ -319,11 +319,11 @@ async def create_mission(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Erstellt eine neue Mission. Nur Offiziere+ oder KG-Verwalter."""
-    if current_user.role not in [UserRole.ADMIN, UserRole.OFFICER, UserRole.TREASURER] and not current_user.is_kg_verwalter:
+    """Erstellt eine neue Mission. Nur Admins, Offiziere oder KG-Verwalter."""
+    if not is_mission_manager(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Nur Offiziere oder KG-Verwalter können Einsätze erstellen"
+            detail="Nur Admins, Offiziere oder KG-Verwalter können Einsätze erstellen"
         )
 
     # Location prüfen
@@ -1294,18 +1294,16 @@ async def get_assignment_data(
 
     # Sort: Officers/Admins > KG-Verwalter > Pioneers > alphabetically
     def user_sort_key(user):
-        # Priority order: Admin=0, Officer=1, Treasurer=2, KG-Verwalter=3, Pioneer=4, others=5
-        priority = 5
+        # Priority order: Admin=0, Officer=1, KG-Verwalter=2, Pioneer=3, others=4
+        priority = 4
         if user.role == UserRole.ADMIN:
             priority = 0
         elif user.role == UserRole.OFFICER:
             priority = 1
-        elif user.role == UserRole.TREASURER:
-            priority = 2
         elif user.is_kg_verwalter:
-            priority = 3
+            priority = 2
         elif user.is_pioneer:
-            priority = 4
+            priority = 3
         return (priority, (user.display_name or user.username).lower())
 
     sorted_users = sorted(users, key=user_sort_key)

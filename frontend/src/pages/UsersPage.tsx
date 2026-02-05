@@ -10,7 +10,6 @@ const roleLabels: Record<UserRole, string> = {
   loot_guest: 'Loot-Gast',
   member: 'Viper',
   officer: 'Offizier',
-  treasurer: 'Kassenwart',
   admin: 'Admin',
 }
 
@@ -19,7 +18,6 @@ const roleColors: Record<UserRole, string> = {
   loot_guest: 'bg-gray-500',
   member: 'bg-gray-600',
   officer: 'bg-krt-orange',
-  treasurer: 'bg-krt-orange',
   admin: 'bg-krt-orange',
 }
 
@@ -41,7 +39,7 @@ export default function UsersPage() {
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
   const isAdmin = effectiveRole === 'admin'
-  const isOfficer = effectiveRole === 'officer' || effectiveRole === 'treasurer' || isAdmin
+  const isOfficer = effectiveRole === 'officer' || isAdmin
 
   const { data: users } = useQuery<User[]>({
     queryKey: ['users'],
@@ -61,11 +59,10 @@ export default function UsersPage() {
 
     const roleOrder: Record<UserRole, number> = {
       admin: 0,
-      treasurer: 1,
-      officer: 2,
-      member: 3,
-      loot_guest: 4,
-      guest: 5,
+      officer: 1,
+      member: 2,
+      loot_guest: 3,
+      guest: 4,
     }
 
     return [...users].sort((a, b) => {
@@ -317,8 +314,8 @@ export default function UsersPage() {
             <span>Offizier - Kann verwalten</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`w-3 h-3 rounded-full ${roleColors.treasurer}`} />
-            <span>Kassenwart - + Kasse</span>
+            <Wallet size={14} className="text-krt-orange" />
+            <span>Kassenwart - Staffelkasse</span>
           </div>
           <div className="flex items-center gap-2">
             <span className={`w-3 h-3 rounded-full ${roleColors.admin}`} />
@@ -610,7 +607,7 @@ export default function UsersPage() {
             </h2>
 
             <div className="space-y-2 mb-6">
-              {(['member', 'officer', 'treasurer', 'admin'] as UserRole[]).map(
+              {(['member', 'officer', 'admin'] as UserRole[]).map(
                 (role) => (
                   <button
                     key={role}

@@ -192,7 +192,6 @@ export default function MissionsPage() {
   const canCreate =
     effectiveRole === 'admin' ||
     effectiveRole === 'officer' ||
-    effectiveRole === 'treasurer' ||
     user?.is_kg_verwalter
 
   const { data: missions, isLoading } = useQuery<Mission[]>({
