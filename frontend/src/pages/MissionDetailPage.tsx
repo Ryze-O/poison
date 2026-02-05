@@ -674,8 +674,11 @@ export default function MissionDetailPage() {
                 if (name.includes('jäger') || name.includes('jaeger') || type.includes('fighter') || name.includes('gladius')) {
                   return 'https://media.starcitizen.tools/0/0c/Gladius_-_Flying_away_from_world_through_debris.jpg' // Gladius
                 }
-                if (name.includes('fps') || name.includes('squad') || type.includes('infantry') || name.includes('boden')) {
-                  return 'https://media.starcitizen.tools/9/93/Valkyrie_in_SelfLand_-_Isometric.jpg' // Marines (Valkyrie landed)
+                if (name.includes('deals') || name.includes('fps') || name.includes('squad') || type.includes('infantry') || name.includes('boden')) {
+                  return 'https://media.starcitizen.tools/c/cd/StarMarine-UnderFire.jpg' // Marines unter Feuer
+                }
+                if (name.includes('beast') || name.includes('ballista') || type.includes('ground') || name.includes('fahrzeug')) {
+                  return 'https://media.starcitizen.tools/c/cb/Ballista_on_glassland_firing_weapons_-_cropped.jpg' // Ballista
                 }
                 if (name.includes('dropship') || name.includes('transport') || name.includes('starlancer') || name.includes('valkyrie')) {
                   return 'https://media.starcitizen.tools/0/07/Valkyrie_flying_through_debris_shooting_back_at_ships_-_cut.jpg' // Valkyrie
