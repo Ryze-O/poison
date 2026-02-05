@@ -189,6 +189,9 @@ export default function MissionEditorPage() {
   const [newLocationName, setNewLocationName] = useState('')
   const [newLocationSystem, setNewLocationSystem] = useState('')
 
+  // Delete confirmation state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
   // Fetch existing mission if editing
   const { data: existingMission, isLoading: missionLoading } = useQuery<MissionDetail>({
     queryKey: ['mission', id],
@@ -396,6 +399,15 @@ export default function MissionEditorPage() {
     },
   })
 
+  // Delete mission
+  const deleteMutation = useMutation({
+    mutationFn: () => apiClient.delete(`/api/missions/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['missions'] })
+      navigate('/einsaetze')
+    },
+  })
+
   const saveUnitsAndPhases = async (missionId: number) => {
     // Delete existing units and recreate (simpler than diffing)
     if (isEditing && existingMission) {
@@ -592,9 +604,20 @@ export default function MissionEditorPage() {
           <ArrowLeft size={20} />
           Zurück zur Übersicht
         </Link>
-        <h1 className="text-2xl font-bold">
-          {isEditing ? 'Einsatz bearbeiten' : 'Neuer Einsatz'}
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">
+            {isEditing ? 'Einsatz bearbeiten' : 'Neuer Einsatz'}
+          </h1>
+          {isEditing && (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600/20 border border-red-600/50 text-red-400 rounded hover:bg-red-600/30"
+            >
+              <Trash2 size={18} />
+              Einsatz löschen
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Step Indicator */}
@@ -1520,6 +1543,45 @@ export default function MissionEditorPage() {
                 className="px-4 py-2 bg-krt-orange rounded hover:bg-krt-orange/80 disabled:opacity-50"
               >
                 {createLocationMutation.isPending ? 'Erstellen...' : 'Ort erstellen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-krt-dark rounded-lg border border-red-600/50 max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-600/20 rounded-full">
+                <Trash2 size={24} className="text-red-400" />
+              </div>
+              <h2 className="text-xl font-bold text-red-400">Einsatz löschen</h2>
+            </div>
+
+            <p className="text-gray-300 mb-2">
+              Möchtest du diesen Einsatz wirklich löschen?
+            </p>
+            <p className="text-gray-400 text-sm mb-6">
+              <strong className="text-white">{missionData.title || 'Unbenannter Einsatz'}</strong>
+              <br />
+              Diese Aktion kann nicht rückgängig gemacht werden. Alle Einheiten, Positionen, Phasen und Anmeldungen werden ebenfalls gelöscht.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? 'Löschen...' : 'Endgültig löschen'}
               </button>
             </div>
           </div>
