@@ -357,6 +357,22 @@ function SlotRow({ position, assignment, operationalRoles, users, missionId, onU
     placeholder: assignment?.placeholder_name || null,
   })
 
+  // Sync state with props when assignment changes (e.g., after API response)
+  useEffect(() => {
+    setUserValue({
+      userId: assignment?.user_id || null,
+      placeholder: assignment?.placeholder_name || null,
+    })
+  }, [assignment?.user_id, assignment?.placeholder_name])
+
+  // Sync roleValue with position props
+  useEffect(() => {
+    setRoleValue({
+      roleId: position.required_role_id,
+      customText: position.position_type,
+    })
+  }, [position.required_role_id, position.position_type])
+
   // Update position (role)
   const updatePositionMutation = useMutation({
     mutationFn: async (data: { position_type?: string | null; required_role_id?: number | null }) => {
