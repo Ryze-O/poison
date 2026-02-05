@@ -448,21 +448,44 @@ export default function MissionEditorPage() {
     }
   }, [selectedTemplateId, templates, isEditing])
 
+  // Typ für die Mutation-Daten (enthält erfasste Werte zum Speicherzeitpunkt)
+  interface MutationData {
+    missionPayload: MissionCreate
+    capturedUnits: LocalUnit[]
+    capturedPhases: LocalPhase[]
+    unitIdsToDelete: number[]
+    phaseIdsToDelete: number[]
+  }
+
+  interface UpdateMutationData {
+    id: number
+    updates: Partial<LocalMissionData>
+    capturedUnits: LocalUnit[]
+    capturedPhases: LocalPhase[]
+    unitIdsToDelete: number[]
+    phaseIdsToDelete: number[]
+  }
+
   // Mutations
   const createMutation = useMutation({
-    mutationFn: async (data: MissionCreate) => {
-      const response = await apiClient.post('/api/missions', data)
+    mutationFn: async (data: MutationData) => {
+      const response = await apiClient.post('/api/missions', data.missionPayload)
       return response.data
     },
-    onSuccess: (newMission) => {
-      queryClient.invalidateQueries({ queryKey: ['missions'] })
-      // After creating, save units and phases
-      saveUnitsAndPhases(newMission.id)
+    onSuccess: (newMission, variables) => {
+      // After creating, save units and phases mit den erfassten Werten
+      saveUnitsAndPhases(
+        newMission.id,
+        variables.capturedUnits,
+        variables.capturedPhases,
+        [], // Keine Units zum Löschen bei neuer Mission
+        []  // Keine Phases zum Löschen bei neuer Mission
+      )
     },
   })
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { id: number; updates: Partial<LocalMissionData> }) => {
+    mutationFn: async (data: UpdateMutationData) => {
       const payload = {
         title: data.updates.title,
         mission_context: data.updates.mission_context || null,
@@ -480,11 +503,15 @@ export default function MissionEditorPage() {
       const response = await apiClient.patch(`/api/missions/${data.id}`, payload)
       return response.data
     },
-    onSuccess: () => {
-      // WICHTIG: NICHT invalidateQueries hier aufrufen!
-      // Das würde einen Refetch auslösen, der den units State überschreibt
-      // während saveUnitsAndPhases noch läuft (Race Condition)
-      saveUnitsAndPhases(Number(id))
+    onSuccess: (_result, variables) => {
+      // Nutze die zum Speicherzeitpunkt erfassten Werte, NICHT die aktuellen Closures!
+      saveUnitsAndPhases(
+        variables.id,
+        variables.capturedUnits,
+        variables.capturedPhases,
+        variables.unitIdsToDelete,
+        variables.phaseIdsToDelete
+      )
     },
   })
 
@@ -512,21 +539,26 @@ export default function MissionEditorPage() {
     },
   })
 
-  const saveUnitsAndPhases = async (missionId: number) => {
-    // Delete existing units and recreate (simpler than diffing)
-    if (isEditing && existingMission) {
-      // Delete old units
-      for (const unit of existingMission.units) {
-        await apiClient.delete(`/api/missions/${missionId}/units/${unit.id}`)
-      }
-      // Delete old phases
-      for (const phase of existingMission.phases) {
-        await apiClient.delete(`/api/missions/${missionId}/phases/${phase.id}`)
-      }
+  // WICHTIG: Diese Funktion erhält alle Daten als Parameter, um Closure-Probleme zu vermeiden!
+  // Die Werte werden zum Zeitpunkt des Aufrufs erfasst, nicht als stale Closures.
+  const saveUnitsAndPhases = async (
+    missionId: number,
+    unitsToSave: LocalUnit[],
+    phasesToSave: LocalPhase[],
+    unitIdsToDelete: number[],
+    phaseIdsToDelete: number[]
+  ) => {
+    // Delete existing units
+    for (const unitId of unitIdsToDelete) {
+      await apiClient.delete(`/api/missions/${missionId}/units/${unitId}`)
+    }
+    // Delete existing phases
+    for (const phaseId of phaseIdsToDelete) {
+      await apiClient.delete(`/api/missions/${missionId}/phases/${phaseId}`)
     }
 
     // Speichere Custom-Frequenzen aus allen Units (nur beim Speichern, nicht bei jeder Eingabe)
-    for (const unit of units) {
+    for (const unit of unitsToSave) {
       if (unit.radio_frequencies) {
         Object.entries(unit.radio_frequencies).forEach(([key, freq]) => {
           if (freq && freq.trim() !== '') {
@@ -537,7 +569,7 @@ export default function MissionEditorPage() {
     }
 
     // Create new units with positions
-    for (const unit of units) {
+    for (const unit of unitsToSave) {
       await apiClient.post(`/api/missions/${missionId}/units`, {
         name: unit.name,
         unit_type: unit.unit_type,
@@ -562,7 +594,7 @@ export default function MissionEditorPage() {
     }
 
     // Create phases
-    for (const phase of phases) {
+    for (const phase of phasesToSave) {
       await apiClient.post(`/api/missions/${missionId}/phases`, {
         phase_number: phase.phase_number,
         title: phase.title,
@@ -596,10 +628,31 @@ export default function MissionEditorPage() {
       template_id: selectedTemplateId,
     }
 
+    // WICHTIG: Erfasse die aktuellen Werte JETZT, bevor die Mutation startet!
+    // Diese Werte werden durch die Mutation durchgereicht und später verwendet.
+    // So vermeiden wir Closure-Probleme bei async Operationen.
+    const capturedUnits = [...units]
+    const capturedPhases = [...phases]
+    const unitIdsToDelete = existingMission ? existingMission.units.map(u => u.id) : []
+    const phaseIdsToDelete = existingMission ? existingMission.phases.map(p => p.id) : []
+
     if (isEditing) {
-      updateMutation.mutate({ id: Number(id), updates: missionData })
+      updateMutation.mutate({
+        id: Number(id),
+        updates: missionData,
+        capturedUnits,
+        capturedPhases,
+        unitIdsToDelete,
+        phaseIdsToDelete,
+      })
     } else {
-      createMutation.mutate(payload)
+      createMutation.mutate({
+        missionPayload: payload,
+        capturedUnits,
+        capturedPhases,
+        unitIdsToDelete: [],
+        phaseIdsToDelete: [],
+      })
     }
   }
 
