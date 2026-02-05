@@ -511,14 +511,16 @@ function KommandogruppeCard({
               )}
             </div>
 
-            {/* Einsatzrollen Übersicht */}
+            {/* Einsatzrollen Übersicht (ohne KG-Leitung, die wird oben angezeigt) */}
             <div>
               <h4 className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-2">
                 <Shield size={14} className="text-krt-orange" />
                 Einsatzrollen
               </h4>
               <div className="space-y-2">
-                {group.operational_roles.map(role => {
+                {group.operational_roles
+                  .filter(role => role.name !== 'KG-Leiter' && role.name !== 'Stellv. KG-Leiter')
+                  .map(role => {
                   const assignedCount = role.users.length
                   const trainingCount = role.users.filter(u => u.is_training).length
                   return (
