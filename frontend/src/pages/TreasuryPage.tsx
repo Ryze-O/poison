@@ -84,12 +84,25 @@ export default function TreasuryPage() {
     enabled: canManage,
   })
 
-  // Alle User (für Konto-Erstellung)
+  // Alle User (für Konto-Erstellung und Beteiligter-Auswahl)
   const { data: allUsers } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: () => apiClient.get('/api/users').then((r) => r.data),
-    enabled: isAdmin && showAccountForm,
+    enabled: canManage && (showAccountForm || showForm || editingTransaction !== null),
   })
+
+  // Sortierte User für Dropdown (alphabetisch nach Display-Name)
+  const sortedUsers = useMemo(() => {
+    if (!allUsers) return []
+    return [...allUsers].sort((a, b) => {
+      const nameA = (a.display_name || a.username).toLowerCase()
+      const nameB = (b.display_name || b.username).toLowerCase()
+      return nameA.localeCompare(nameB, 'de')
+    })
+  }, [allUsers])
+
+  // State für "Anderer User" Freitext
+  const [showCustomBeneficiary, setShowCustomBeneficiary] = useState(false)
 
   // Gefilterte und sortierte Transaktionen (nach Datum absteigend)
   const filteredTransactions = useMemo(() => {
@@ -309,10 +322,14 @@ export default function TreasuryPage() {
       received_by_account_id: '',
       beneficiary: '',
     })
+    setShowCustomBeneficiary(false)
   }
 
   const openEditModal = (tx: Transaction) => {
     setEditingTransaction(tx)
+    // Prüfe ob beneficiary ein bekannter User ist
+    const isKnownUser = allUsers?.some(u => (u.display_name || u.username) === tx.beneficiary)
+    setShowCustomBeneficiary(!!tx.beneficiary && !isKnownUser)
     setFormData({
       amount: Math.abs(tx.amount).toString(),
       type: tx.transaction_type,
@@ -920,13 +937,50 @@ export default function TreasuryPage() {
                 <label className="label">
                   {formData.type === 'income' ? 'Einzahler / Spender' : 'Empfänger'}
                 </label>
-                <input
-                  type="text"
-                  value={formData.beneficiary}
-                  onChange={(e) => setFormData({ ...formData, beneficiary: e.target.value })}
-                  placeholder={formData.type === 'income' ? 'z.B. Mastersinflare' : 'z.B. Silva-7'}
-                  className="input"
-                />
+                {showCustomBeneficiary ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={formData.beneficiary}
+                      onChange={(e) => setFormData({ ...formData, beneficiary: e.target.value })}
+                      placeholder="Name eingeben..."
+                      className="input flex-1"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCustomBeneficiary(false)
+                        setFormData({ ...formData, beneficiary: '' })
+                      }}
+                      className="btn btn-secondary px-3"
+                      title="Zurück zur Auswahl"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={formData.beneficiary}
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') {
+                        setShowCustomBeneficiary(true)
+                        setFormData({ ...formData, beneficiary: '' })
+                      } else {
+                        setFormData({ ...formData, beneficiary: e.target.value })
+                      }
+                    }}
+                    className="input"
+                  >
+                    <option value="">-- Auswählen --</option>
+                    {sortedUsers.map(user => (
+                      <option key={user.id} value={user.display_name || user.username}>
+                        {user.display_name || user.username}
+                      </option>
+                    ))}
+                    <option value="__custom__">── Andere Person... ──</option>
+                  </select>
+                )}
               </div>
               <div>
                 <label className="label">Beschreibung / Event</label>
@@ -1272,13 +1326,56 @@ export default function TreasuryPage() {
                 <label className="label">
                   {formData.type === 'income' ? 'Einzahler / Spender' : 'Empfänger'}
                 </label>
-                <input
-                  type="text"
-                  value={formData.beneficiary}
-                  onChange={(e) => setFormData({ ...formData, beneficiary: e.target.value })}
-                  placeholder={formData.type === 'income' ? 'z.B. Mastersinflare' : 'z.B. Silva-7'}
-                  className="input"
-                />
+                {showCustomBeneficiary ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={formData.beneficiary}
+                      onChange={(e) => setFormData({ ...formData, beneficiary: e.target.value })}
+                      placeholder="Name eingeben..."
+                      className="input flex-1"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCustomBeneficiary(false)
+                        setFormData({ ...formData, beneficiary: '' })
+                      }}
+                      className="btn btn-secondary px-3"
+                      title="Zurück zur Auswahl"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={sortedUsers.some(u => (u.display_name || u.username) === formData.beneficiary) ? formData.beneficiary : (formData.beneficiary ? '__custom__' : '')}
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') {
+                        setShowCustomBeneficiary(true)
+                        setFormData({ ...formData, beneficiary: '' })
+                      } else {
+                        setFormData({ ...formData, beneficiary: e.target.value })
+                      }
+                    }}
+                    className="input"
+                  >
+                    <option value="">-- Auswählen --</option>
+                    {sortedUsers.map(user => (
+                      <option key={user.id} value={user.display_name || user.username}>
+                        {user.display_name || user.username}
+                      </option>
+                    ))}
+                    <option value="__custom__">── Andere Person... ──</option>
+                  </select>
+                )}
+                {/* Zeige aktuellen Wert wenn er nicht in der Liste ist */}
+                {!showCustomBeneficiary && formData.beneficiary && !sortedUsers.some(u => (u.display_name || u.username) === formData.beneficiary) && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Aktuell: "{formData.beneficiary}" (nicht in User-Liste)
+                  </p>
+                )}
               </div>
 
               <div>
