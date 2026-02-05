@@ -136,6 +136,64 @@ function RoleSelector({ value, onChange, operationalRoles, className = '' }: Rol
   )
 }
 
+// ============== UserListItem ==============
+
+interface UserListItemProps {
+  user: EligibleUser
+  isSelected: boolean
+  onSelect: () => void
+}
+
+function UserListItem({ user, isSelected, onSelect }: UserListItemProps) {
+  const [imgError, setImgError] = useState(false)
+
+  const getRoleBadge = (u: EligibleUser) => {
+    if (u.is_officer) return { text: 'Offizier', color: 'bg-yellow-600' }
+    if (u.is_kg_verwalter) return { text: 'KG', color: 'bg-purple-600' }
+    if (u.is_pioneer) return { text: 'Pioneer', color: 'bg-green-600' }
+    return null
+  }
+
+  const badge = getRoleBadge(user)
+  const hasValidAvatar = user.avatar && user.discord_id && !imgError
+
+  return (
+    <button
+      onClick={onSelect}
+      className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-700 ${
+        isSelected ? 'bg-krt-orange/20' : ''
+      }`}
+    >
+      {/* Avatar */}
+      <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+        {hasValidAvatar ? (
+          <img
+            src={`https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png?size=32`}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <span className="text-xs text-gray-400">
+            {(user.display_name || user.username).charAt(0).toUpperCase()}
+          </span>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm text-white truncate">
+          {user.display_name || user.username}
+        </div>
+        {user.display_name && user.display_name !== user.username && (
+          <div className="text-xs text-gray-500 truncate">@{user.username}</div>
+        )}
+      </div>
+      {badge && (
+        <span className={`px-2 py-0.5 rounded text-xs ${badge.color}`}>{badge.text}</span>
+      )}
+    </button>
+  )
+}
+
 // ============== UserAutocomplete ==============
 
 interface UserAutocompleteProps {
@@ -196,13 +254,6 @@ function UserAutocomplete({ value, onChange, users, className = '' }: UserAutoco
     onChange({ userId: null, placeholder: null })
     setSearchTerm('')
     setPlaceholderInput('')
-  }
-
-  const getRoleBadge = (user: EligibleUser) => {
-    if (user.is_officer) return { text: 'Offizier', color: 'bg-yellow-600' }
-    if (user.is_kg_verwalter) return { text: 'KG', color: 'bg-purple-600' }
-    if (user.is_pioneer) return { text: 'Pioneer', color: 'bg-green-600' }
-    return null
   }
 
   return (
@@ -266,44 +317,14 @@ function UserAutocomplete({ value, onChange, users, className = '' }: UserAutoco
 
           {/* User list */}
           {filteredUsers.length > 0 ? (
-            filteredUsers.map((user) => {
-              const badge = getRoleBadge(user)
-              return (
-                <button
-                  key={user.id}
-                  onClick={() => handleSelectUser(user)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-700 ${
-                    value.userId === user.id ? 'bg-krt-orange/20' : ''
-                  }`}
-                >
-                  {/* Avatar */}
-                  <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center overflow-hidden">
-                    {user.avatar ? (
-                      <img
-                        src={`https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png?size=32`}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-xs text-gray-400">
-                        {(user.display_name || user.username).charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-white truncate">
-                      {user.display_name || user.username}
-                    </div>
-                    {user.display_name && user.display_name !== user.username && (
-                      <div className="text-xs text-gray-500 truncate">@{user.username}</div>
-                    )}
-                  </div>
-                  {badge && (
-                    <span className={`px-2 py-0.5 rounded text-xs ${badge.color}`}>{badge.text}</span>
-                  )}
-                </button>
-              )
-            })
+            filteredUsers.map((user) => (
+              <UserListItem
+                key={user.id}
+                user={user}
+                isSelected={value.userId === user.id}
+                onSelect={() => handleSelectUser(user)}
+              />
+            ))
           ) : (
             <div className="px-3 py-4 text-center text-gray-400 text-sm">Keine User gefunden</div>
           )}

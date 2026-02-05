@@ -45,6 +45,16 @@ const STATUS_COLORS: Record<MissionStatus, string> = {
   cancelled: 'bg-red-500',
 }
 
+// ROE Übersetzungen
+const ROE_TRANSLATIONS: Record<string, string> = {
+  'Weapons Hold': 'Nur schießen auf Befehl',
+  'Weapons Tight': 'Reaktiv handeln, dem Handeln des Gegners angepasst',
+  'Weapons Free': 'Ich schieße auf alles',
+}
+
+// Funkfrequenz-Schlüssel in fester Reihenfolge
+const FREQUENCY_ORDER = ['el', 'intern', 'targets']
+
 type TabType = 'overview' | 'units' | 'participants' | 'briefing'
 
 export default function MissionDetailPage() {
@@ -149,7 +159,10 @@ export default function MissionDetailPage() {
     if (briefing.start_location) text += `• Treffpunkt: ${briefing.start_location}\n`
     if (briefing.equipment_level) text += `• Ausrüstung: ${briefing.equipment_level}\n`
     if (briefing.target_group) text += `• Zielgruppe: ${briefing.target_group}\n`
-    if (briefing.rules_of_engagement) text += `• ROE: ${briefing.rules_of_engagement}\n`
+    if (briefing.rules_of_engagement) {
+      const translation = ROE_TRANSLATIONS[briefing.rules_of_engagement]
+      text += `• ROE: ${briefing.rules_of_engagement}${translation ? ` - ${translation}` : ''}\n`
+    }
     text += `\n`
 
     // Strukturierte Beschreibung
@@ -201,9 +214,9 @@ export default function MissionDetailPage() {
       text += `\nFUNKFREQUENZEN\n`
       text += `───────────────────────────────────────\n`
       briefing.frequency_table.forEach((row) => {
-        const entries = Object.entries(row)
-          .filter(([k]) => k !== 'unit')
-          .map(([k, v]) => `${k}: ${v}`)
+        const entries = FREQUENCY_ORDER
+          .filter((key) => row[key] !== undefined)
+          .map((key) => `${key}: ${row[key]}`)
           .join(' | ')
         text += `${row.unit}: ${entries}\n`
       })
@@ -646,65 +659,124 @@ export default function MissionDetailPage() {
               </Link>
             </div>
           )}
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2">
           {mission.units
             .sort((a, b) => a.sort_order - b.sort_order)
-            .map((unit) => (
-              <div key={unit.id} className="bg-krt-dark rounded-lg border border-gray-700 p-4">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-semibold text-lg">{unit.name}</h3>
-                    {unit.ship_name && (
-                      <span className="text-sm text-gray-400">{unit.ship_name}</span>
+            .map((unit) => {
+              // Bestimme Bild basierend auf Unit-Typ oder Name
+              const getUnitImage = () => {
+                const name = (unit.name || '').toLowerCase()
+                const type = (unit.unit_type || '').toLowerCase()
+
+                // Mapping für bekannte Einheiten
+                if (name.includes('gks') || type.includes('capital') || name.includes('idris') || name.includes('polaris') || name.includes('javelin')) {
+                  return 'https://media.robertsspaceindustries.com/fmhdkmvhi6ep7/source.jpg' // Idris
+                }
+                if (name.includes('jäger') || name.includes('jaeger') || type.includes('fighter') || name.includes('gladius')) {
+                  return 'https://media.robertsspaceindustries.com/t99xbkfhdoml9/source.jpg' // Gladius
+                }
+                if (name.includes('fps') || name.includes('squad') || type.includes('infantry') || name.includes('boden')) {
+                  return 'https://media.robertsspaceindustries.com/l7s0h8bz6mcmt/source.jpg' // Marines
+                }
+                if (name.includes('dropship') || name.includes('transport') || name.includes('starlancer') || name.includes('valkyrie')) {
+                  return 'https://media.robertsspaceindustries.com/8lejsysh3nmxo/source.jpg' // Valkyrie
+                }
+                if (name.includes('bomber') || name.includes('retaliator') || name.includes('eclipse')) {
+                  return 'https://media.robertsspaceindustries.com/s8z5e0gpfyp9a/source.jpg' // Retaliator
+                }
+                return null
+              }
+
+              const unitImage = getUnitImage()
+
+              return (
+                <div key={unit.id} className="bg-krt-dark rounded-lg border border-gray-700 overflow-hidden">
+                  {/* Header mit Bild */}
+                  <div className="relative h-32">
+                    {unitImage ? (
+                      <img
+                        src={unitImage}
+                        alt={unit.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Fallback bei Ladefehler
+                          e.currentTarget.style.display = 'none'
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-krt-orange/20 to-krt-darker" />
                     )}
-                  </div>
-                  {unit.radio_frequencies && (
-                    <div className="flex items-center gap-1 text-xs text-gray-400">
-                      <Radio size={14} />
-                      {Object.values(unit.radio_frequencies).slice(0, 2).join(', ')}
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  {unit.positions
-                    .sort((a, b) => a.sort_order - b.sort_order)
-                    .map((pos) => (
-                      <div
-                        key={pos.id}
-                        className="flex justify-between items-center py-2 border-b border-gray-700 last:border-0"
-                      >
+                    {/* Overlay für bessere Lesbarkeit */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-krt-dark via-krt-dark/50 to-transparent" />
+                    {/* Unit Name overlay */}
+                    <div className="absolute bottom-0 left-0 right-0 p-4">
+                      <div className="flex justify-between items-end">
                         <div>
-                          <span className={pos.is_required ? '' : 'text-gray-400'}>
-                            {pos.name}
-                          </span>
-                          {pos.max_count > 1 && (
-                            <span className="text-xs text-gray-500 ml-1">
-                              ({pos.assignments.length}/{pos.max_count})
-                            </span>
+                          <h3 className="font-bold text-xl text-white drop-shadow-lg">{unit.name}</h3>
+                          {unit.ship_name && (
+                            <span className="text-sm text-gray-300">{unit.ship_name}</span>
                           )}
                         </div>
-                        <div className="text-right">
-                          {pos.assignments.length > 0 ? (
-                            pos.assignments.map((a) => (
-                              <div key={a.id} className="text-sm">
-                                {a.user?.display_name || a.user?.username || a.placeholder_name}
-                                {a.is_training && (
-                                  <span className="text-yellow-400 ml-1">(i.A.)</span>
-                                )}
-                                {a.is_backup && (
-                                  <span className="text-gray-400 ml-1">(Backup)</span>
-                                )}
-                              </div>
-                            ))
-                          ) : (
-                            <span className="text-gray-500">—</span>
-                          )}
-                        </div>
+                        {unit.radio_frequencies && (
+                          <div className="flex items-center gap-1 text-xs text-gray-300 bg-black/40 px-2 py-1 rounded">
+                            <Radio size={12} />
+                            {Object.values(unit.radio_frequencies).slice(0, 2).join(', ')}
+                          </div>
+                        )}
                       </div>
-                    ))}
+                    </div>
+                  </div>
+
+                  {/* Positionen */}
+                  <div className="p-4">
+                    <div className="space-y-1">
+                      {unit.positions
+                        .sort((a, b) => a.sort_order - b.sort_order)
+                        .map((pos) => (
+                          <div
+                            key={pos.id}
+                            className="flex items-center gap-2 py-2 border-b border-gray-700/50 last:border-0"
+                          >
+                            {/* Rolle (links) */}
+                            <div className="flex-1 min-w-0">
+                              {pos.position_type ? (
+                                <span className="text-krt-orange font-medium text-sm truncate block">
+                                  {pos.position_type}
+                                </span>
+                              ) : (
+                                <span className="text-gray-500 text-sm">
+                                  {pos.name}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* User (rechts) */}
+                            <div className="flex-1 text-right">
+                              {pos.assignments.length > 0 ? (
+                                pos.assignments.map((a) => (
+                                  <div key={a.id} className="flex items-center justify-end gap-2">
+                                    <span className="text-white text-sm font-medium">
+                                      {a.user?.display_name || a.user?.username || a.placeholder_name}
+                                    </span>
+                                    {a.is_training && (
+                                      <span className="text-xs px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded">i.A.</span>
+                                    )}
+                                    {a.is_backup && (
+                                      <span className="text-xs px-1.5 py-0.5 bg-gray-500/20 text-gray-400 rounded">Backup</span>
+                                    )}
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-gray-600 text-sm">—</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -812,7 +884,14 @@ export default function MissionDetailPage() {
                   )}
                   {briefing.target_group && <div>• Zielgruppe: {briefing.target_group}</div>}
                   {briefing.rules_of_engagement && (
-                    <div>• ROE: {briefing.rules_of_engagement}</div>
+                    <div>
+                      • ROE: {briefing.rules_of_engagement}
+                      {ROE_TRANSLATIONS[briefing.rules_of_engagement] && (
+                        <span className="text-gray-400 ml-2">
+                          - {ROE_TRANSLATIONS[briefing.rules_of_engagement]}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -904,11 +983,11 @@ export default function MissionDetailPage() {
                       {briefing.frequency_table.map((row, idx) => (
                         <tr key={idx}>
                           <td className="pr-4">{row.unit}</td>
-                          {Object.entries(row)
-                            .filter(([k]) => k !== 'unit')
-                            .map(([k, v]) => (
-                              <td key={k} className="pr-4 text-gray-400">
-                                {k}: {v}
+                          {FREQUENCY_ORDER
+                            .filter((key) => row[key] !== undefined)
+                            .map((key) => (
+                              <td key={key} className="pr-4 text-gray-400">
+                                {key}: {row[key]}
                               </td>
                             ))}
                         </tr>
