@@ -73,6 +73,10 @@ def mission_to_response(mission: Mission, db: Session) -> dict:
         "id": mission.id,
         "title": mission.title,
         "description": mission.description,
+        "mission_context": mission.mission_context,
+        "mission_objective": mission.mission_objective,
+        "preparation_notes": mission.preparation_notes,
+        "special_notes": mission.special_notes,
         "scheduled_date": mission.scheduled_date,
         "duration_minutes": mission.duration_minutes,
         "status": mission.status,
@@ -227,6 +231,7 @@ async def get_mission(
             "ship_id": unit.ship_id,
             "radio_frequencies": unit.radio_frequencies,
             "sort_order": unit.sort_order,
+            "crew_count": unit.crew_count,
             "positions": positions,
         })
     response["units"] = units
