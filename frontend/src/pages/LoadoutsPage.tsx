@@ -2,9 +2,9 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, Search, ChevronDown, ChevronRight, ExternalLink, Check, X, Send, Trash2, Edit2, Save, Loader, Ship as ShipIcon, Calendar } from 'lucide-react'
+import { Plus, Search, ChevronDown, ChevronRight, ExternalLink, Check, X, Send, Trash2, Edit2, Save, Loader, Ship as ShipIcon, Calendar, Download } from 'lucide-react'
 import ComponentSearchModal from '../components/ComponentSearchModal'
-import type { MetaLoadout, MetaLoadoutList, ShipWithHardpoints, ShipSearchResult, LoadoutCheck, Component, UserLoadout } from '../api/types'
+import type { MetaLoadout, MetaLoadoutList, ShipWithHardpoints, ShipSearchResult, LoadoutCheck, Component, UserLoadout, ErkulImportResponse } from '../api/types'
 
 // Hardpoint-Typ Labels und Farben
 const hardpointTypeLabels: Record<string, string> = {
@@ -66,6 +66,11 @@ export default function LoadoutsPage() {
   const [editDesc, setEditDesc] = useState('')
   const [editErkul, setEditErkul] = useState('')
   const [editVersionDate, setEditVersionDate] = useState('')
+
+  // Erkul Import state
+  const [showErkulImport, setShowErkulImport] = useState<number | null>(null) // loadout_id
+  const [erkulUrl, setErkulUrl] = useState('')
+  const [erkulResult, setErkulResult] = useState<ErkulImportResponse | null>(null)
 
   // UserLoadout (Meine gefitteten Schiffe) state
   const [showAddMyShip, setShowAddMyShip] = useState(false)
@@ -184,6 +189,19 @@ export default function LoadoutsPage() {
     onSuccess: (_, shipId) => {
       queryClient.invalidateQueries({ queryKey: ['ship', shipId] })
       if (selectedLoadoutId) queryClient.invalidateQueries({ queryKey: ['loadout', selectedLoadoutId] })
+    },
+  })
+
+  const erkulImportMutation = useMutation({
+    mutationFn: async ({ loadoutId, erkulUrl }: { loadoutId: number; erkulUrl: string }) => {
+      const res = await apiClient.post(`/api/loadouts/${loadoutId}/import-erkul`, { erkul_url: erkulUrl })
+      return res.data as ErkulImportResponse
+    },
+    onSuccess: (data, vars) => {
+      setErkulResult(data)
+      setErkulUrl('')
+      queryClient.invalidateQueries({ queryKey: ['loadout', vars.loadoutId] })
+      queryClient.invalidateQueries({ queryKey: ['loadouts'] })
     },
   })
 
@@ -631,6 +649,41 @@ export default function LoadoutsPage() {
                             {new Date(ms.loadout.version_date).toLocaleDateString('de-DE')}
                           </p>
                         )}
+                        {/* Komponenten-Zusammenfassung */}
+                        {ms.loadout.items && ms.loadout.items.length > 0 && (
+                          <div className="mt-1.5 space-y-0.5">
+                            {hardpointOrder
+                              .filter(type => ms.loadout.items.some(i => i.hardpoint_type === type))
+                              .map(type => {
+                                const items = ms.loadout.items.filter(i => i.hardpoint_type === type)
+                                // Komponenten zählen und gruppieren
+                                const counts = new Map<string, number>()
+                                items.forEach(i => {
+                                  const name = i.component.name
+                                  counts.set(name, (counts.get(name) || 0) + 1)
+                                })
+                                const parts = Array.from(counts.entries()).map(([name, count]) =>
+                                  count > 1 ? `${count}x ${name}` : name
+                                )
+                                return (
+                                  <p key={type} className="text-[10px] text-gray-500 leading-tight">
+                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${
+                                      hardpointTypeColors[type]?.includes('red') ? 'bg-red-400' :
+                                      hardpointTypeColors[type]?.includes('pink') ? 'bg-pink-400' :
+                                      hardpointTypeColors[type]?.includes('rose') ? 'bg-rose-400' :
+                                      hardpointTypeColors[type]?.includes('green') ? 'bg-green-400' :
+                                      hardpointTypeColors[type]?.includes('yellow') ? 'bg-yellow-400' :
+                                      hardpointTypeColors[type]?.includes('sky') ? 'bg-sky-400' :
+                                      hardpointTypeColors[type]?.includes('purple') ? 'bg-purple-400' :
+                                      'bg-gray-400'
+                                    }`} />
+                                    <span className="text-gray-600">{hardpointTypeLabels[type] || type}:</span>{' '}
+                                    {parts.join(', ')}
+                                  </p>
+                                )
+                              })}
+                          </div>
+                        )}
                         {ms.notes && (
                           <p className="text-[10px] text-gray-500 mt-1">{ms.notes}</p>
                         )}
@@ -849,6 +902,75 @@ export default function LoadoutsPage() {
                               >
                                 {importHardpointsMutation.isPending ? 'Importiere...' : 'Hardpoints von FleetYards importieren'}
                               </button>
+                            )}
+
+                            {/* Erkul Import */}
+                            {isOfficer && (
+                              <div className="space-y-2">
+                                {showErkulImport === selectedLoadout.id ? (
+                                  <div className="bg-gray-800/40 rounded-lg p-3 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        value={erkulUrl}
+                                        onChange={(e) => setErkulUrl(e.target.value)}
+                                        placeholder="Erkul-Link oder Code (z.B. 4ZwmqCps)"
+                                        className="input flex-1 text-sm"
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' && erkulUrl.trim()) {
+                                            erkulImportMutation.mutate({ loadoutId: selectedLoadout.id, erkulUrl: erkulUrl.trim() })
+                                          }
+                                        }}
+                                      />
+                                      <button
+                                        onClick={() => erkulImportMutation.mutate({ loadoutId: selectedLoadout.id, erkulUrl: erkulUrl.trim() })}
+                                        disabled={erkulImportMutation.isPending || !erkulUrl.trim()}
+                                        className="btn btn-primary text-sm flex items-center gap-1"
+                                      >
+                                        {erkulImportMutation.isPending ? <Loader size={14} className="animate-spin" /> : <Download size={14} />}
+                                        Importieren
+                                      </button>
+                                      <button
+                                        onClick={() => { setShowErkulImport(null); setErkulResult(null); setErkulUrl('') }}
+                                        className="btn btn-secondary text-sm"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    </div>
+
+                                    {erkulImportMutation.isError && (
+                                      <p className="text-sm text-red-400">
+                                        Fehler: {(erkulImportMutation.error as Error).message || 'Import fehlgeschlagen'}
+                                      </p>
+                                    )}
+
+                                    {erkulResult && (
+                                      <div className="space-y-2">
+                                        <div className="flex items-center gap-3 text-sm">
+                                          <span className="text-krt-orange font-medium">{erkulResult.erkul_name}</span>
+                                          <span className="text-green-400">{erkulResult.imported_count} importiert</span>
+                                          {erkulResult.unmatched_count > 0 && (
+                                            <span className="text-yellow-400">{erkulResult.unmatched_count} nicht gefunden</span>
+                                          )}
+                                        </div>
+                                        {erkulResult.unmatched_items.length > 0 && (
+                                          <div className="text-xs text-gray-400">
+                                            <span className="text-yellow-400">Nicht zugeordnet: </span>
+                                            {erkulResult.unmatched_items.join(', ')}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => { setShowErkulImport(selectedLoadout.id); setErkulResult(null) }}
+                                    className="btn btn-secondary text-sm flex items-center gap-1"
+                                  >
+                                    <Download size={14} />
+                                    Von Erkul importieren
+                                  </button>
+                                )}
+                              </div>
                             )}
 
                             {/* Slot-Ansicht: Hardpoints des Schiffs */}

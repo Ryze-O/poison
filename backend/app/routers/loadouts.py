@@ -17,6 +17,7 @@ from app.schemas.loadout import (
     MetaLoadoutCreate, MetaLoadoutUpdate, MetaLoadoutItemsSet,
     LoadoutCheckResponse, LoadoutCheckItem,
     UserLoadoutCreate, UserLoadoutUpdate, UserLoadoutResponse, UserLoadoutWithUser,
+    ErkulImportRequest, ErkulImportResponse, ErkulImportedItem,
 )
 
 router = APIRouter()
@@ -145,6 +146,7 @@ async def list_my_ships(
     loadouts = db.query(UserLoadout).options(
         joinedload(UserLoadout.loadout).joinedload(MetaLoadout.ship),
         joinedload(UserLoadout.loadout).joinedload(MetaLoadout.created_by),
+        joinedload(UserLoadout.loadout).joinedload(MetaLoadout.items).joinedload(MetaLoadoutItem.component),
         joinedload(UserLoadout.ship),
     ).filter(
         UserLoadout.user_id == current_user.id
@@ -182,6 +184,7 @@ async def create_my_ship(
     return db.query(UserLoadout).options(
         joinedload(UserLoadout.loadout).joinedload(MetaLoadout.ship),
         joinedload(UserLoadout.loadout).joinedload(MetaLoadout.created_by),
+        joinedload(UserLoadout.loadout).joinedload(MetaLoadout.items).joinedload(MetaLoadoutItem.component),
         joinedload(UserLoadout.ship),
     ).filter(UserLoadout.id == user_loadout.id).first()
 
@@ -212,6 +215,7 @@ async def update_my_ship(
     return db.query(UserLoadout).options(
         joinedload(UserLoadout.loadout).joinedload(MetaLoadout.ship),
         joinedload(UserLoadout.loadout).joinedload(MetaLoadout.created_by),
+        joinedload(UserLoadout.loadout).joinedload(MetaLoadout.items).joinedload(MetaLoadoutItem.component),
         joinedload(UserLoadout.ship),
     ).filter(UserLoadout.id == ul.id).first()
 
@@ -430,6 +434,176 @@ async def set_loadout_items(
         joinedload(MetaLoadout.created_by),
         joinedload(MetaLoadout.items).joinedload(MetaLoadoutItem.component),
     ).filter(MetaLoadout.id == loadout_id).first()
+
+
+# ============== Erkul Import ==============
+
+@router.post("/{loadout_id}/import-erkul", response_model=ErkulImportResponse)
+async def import_from_erkul(
+    loadout_id: int,
+    data: ErkulImportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Loadout-Items von Erkul.games importieren (Officer+)."""
+    import httpx
+    import base64
+    import json
+    import re
+
+    check_role(current_user, UserRole.OFFICER)
+
+    loadout = db.query(MetaLoadout).filter(MetaLoadout.id == loadout_id).first()
+    if not loadout:
+        raise HTTPException(status_code=404, detail="Loadout nicht gefunden")
+
+    # Erkul-Code aus URL extrahieren
+    erkul_input = data.erkul_url.strip()
+    match = re.search(r'(?:loadout/|calculator;loadout=)([a-zA-Z0-9]+)', erkul_input)
+    code = match.group(1) if match else erkul_input
+
+    # Erkul API abrufen
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"https://server.erkul.games/loadouts/{code}",
+                headers={
+                    "Origin": "https://www.erkul.games",
+                    "Referer": "https://www.erkul.games/",
+                },
+            )
+            resp.raise_for_status()
+            erkul_data = resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Erkul API Fehler: {str(e)}")
+
+    # Base64-Loadout dekodieren
+    try:
+        loadout_json = json.loads(base64.b64decode(erkul_data["loadout"]))
+    except Exception:
+        raise HTTPException(status_code=502, detail="Erkul Loadout-Daten konnten nicht dekodiert werden")
+
+    erkul_name = erkul_data.get("name", "Unbekannt")
+    erkul_ship = loadout_json.get("ship", {}).get("localName", "Unbekannt")
+
+    # Erkul calculatorType -> unsere hardpoint_type Zuordnung
+    TYPE_MAP = {
+        "power-plant": "power_plant",
+        "cooler": "cooler",
+        "shield": "shield",
+        "qdrive": "quantum_drive",
+        "weapon": "weapon_gun",
+        "mount": "weapon_gun",  # Gimbal-Mount enthält Waffe
+        "turret": "turret",
+        "missile-rack": "missile_launcher",
+    }
+
+    # Ignorierte Typen (Stock-Items, nicht customizable)
+    SKIP_TYPES = {"paint", "controller-flight", "radar", "life-support", "jumpdrive"}
+
+    # Alle Komponenten aus dem Erkul-Loadout sammeln
+    extracted_items = []
+
+    def extract_components(items, parent_type=None):
+        """Rekursiv Komponenten aus verschachteltem Erkul-Loadout extrahieren."""
+        for item in (items or []):
+            calc_type = item.get("item", {}).get("calculatorType", "")
+            local_name = item.get("item", {}).get("localName", "")
+            is_stock = item.get("item", {}).get("stock", False)
+
+            if calc_type in SKIP_TYPES or not local_name:
+                continue
+
+            # Bei mount: die Unter-Waffe ist relevant, nicht der Mount selbst
+            if calc_type == "mount":
+                sub_items = item.get("loadout", [])
+                if sub_items:
+                    for sub in sub_items:
+                        sub_type = sub.get("item", {}).get("calculatorType", "")
+                        sub_name = sub.get("item", {}).get("localName", "")
+                        if sub_type == "weapon" and sub_name:
+                            extracted_items.append(("weapon_gun", sub_name))
+                continue
+
+            # Bei missile-rack: die Raketen einzeln ignorieren, nur den Rack nehmen
+            if calc_type == "missile-rack":
+                hp_type = TYPE_MAP.get(calc_type)
+                if hp_type and not is_stock:
+                    extracted_items.append((hp_type, local_name))
+                continue
+
+            # Normale Komponente
+            hp_type = TYPE_MAP.get(calc_type)
+            if hp_type and not is_stock:
+                extracted_items.append((hp_type, local_name))
+
+    extract_components(loadout_json.get("loadout", []))
+
+    # Alte Items löschen
+    db.query(MetaLoadoutItem).filter(MetaLoadoutItem.loadout_id == loadout_id).delete()
+
+    # Komponenten matchen und Items erstellen
+    slot_counters: dict[str, int] = {}
+    imported_items = []
+    unmatched_items = []
+
+    for hp_type, erkul_local_name in extracted_items:
+        slot_idx = slot_counters.get(hp_type, 0)
+        slot_counters[hp_type] = slot_idx + 1
+
+        # Case-insensitive Match gegen class_name
+        component = db.query(Component).filter(
+            Component.class_name.ilike(erkul_local_name)
+        ).first()
+
+        if component:
+            # Hardpoint finden (wenn vorhanden)
+            hardpoint = db.query(ShipHardpoint).filter(
+                ShipHardpoint.ship_id == loadout.ship_id,
+                ShipHardpoint.hardpoint_type == hp_type,
+                ShipHardpoint.slot_index == slot_idx,
+            ).first()
+
+            item = MetaLoadoutItem(
+                loadout_id=loadout_id,
+                hardpoint_type=hp_type,
+                slot_index=slot_idx,
+                component_id=component.id,
+                hardpoint_id=hardpoint.id if hardpoint else None,
+            )
+            db.add(item)
+
+            imported_items.append(ErkulImportedItem(
+                hardpoint_type=hp_type,
+                slot_index=slot_idx,
+                component_id=component.id,
+                component_name=component.name,
+                erkul_local_name=erkul_local_name,
+                matched=True,
+            ))
+        else:
+            unmatched_items.append(erkul_local_name)
+            imported_items.append(ErkulImportedItem(
+                hardpoint_type=hp_type,
+                slot_index=slot_idx,
+                erkul_local_name=erkul_local_name,
+                matched=False,
+            ))
+
+    # Erkul-Link auf dem Loadout speichern
+    erkul_url = f"https://www.erkul.games/loadout/{code}"
+    loadout.erkul_link = erkul_url
+
+    db.commit()
+
+    return ErkulImportResponse(
+        erkul_name=erkul_name,
+        erkul_ship=erkul_ship,
+        imported_count=len([i for i in imported_items if i.matched]),
+        unmatched_count=len(unmatched_items),
+        unmatched_items=unmatched_items,
+        items=imported_items,
+    )
 
 
 # ============== User-Aktionen ==============

@@ -146,6 +146,35 @@ class LoadoutCheckResponse(BaseModel):
 
 # ============== UserLoadout Schemas ==============
 
+# ============== Erkul Import Schemas ==============
+
+class ErkulImportRequest(BaseModel):
+    """Erkul-Link oder Code zum Importieren."""
+    erkul_url: str  # URL oder Code (z.B. "4ZwmqCps" oder "https://www.erkul.games/loadout/4ZwmqCps")
+
+
+class ErkulImportedItem(BaseModel):
+    """Ein importierter Slot aus Erkul."""
+    hardpoint_type: str
+    slot_index: int
+    component_id: Optional[int] = None
+    component_name: Optional[str] = None
+    erkul_local_name: str
+    matched: bool
+
+
+class ErkulImportResponse(BaseModel):
+    """Ergebnis eines Erkul-Imports."""
+    erkul_name: str
+    erkul_ship: str
+    imported_count: int
+    unmatched_count: int
+    unmatched_items: List[str]
+    items: List[ErkulImportedItem]
+
+
+# ============== UserLoadout Schemas ==============
+
 class UserLoadoutCreate(BaseModel):
     loadout_id: int
     ship_nickname: Optional[str] = None
@@ -169,7 +198,7 @@ class UserLoadoutResponse(BaseModel):
     notes: Optional[str]
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
-    loadout: MetaLoadoutListResponse
+    loadout: MetaLoadoutResponse
     ship: ShipResponse
 
     class Config:

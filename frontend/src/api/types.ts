@@ -962,7 +962,7 @@ export interface UserLoadout {
   notes: string | null
   created_at: string
   updated_at: string | null
-  loadout: MetaLoadoutList
+  loadout: MetaLoadout
   ship: Ship
 }
 
@@ -976,4 +976,24 @@ export interface UserLoadoutResolved {
   ship_nickname: string | null
   loadout_name: string | null
   is_ready: boolean
+}
+
+// ============== Erkul Import ==============
+
+export interface ErkulImportedItem {
+  hardpoint_type: string
+  slot_index: number
+  component_id: number | null
+  component_name: string | null
+  erkul_local_name: string
+  matched: boolean
+}
+
+export interface ErkulImportResponse {
+  erkul_name: string
+  erkul_ship: string
+  imported_count: number
+  unmatched_count: number
+  unmatched_items: string[]
+  items: ErkulImportedItem[]
 }
