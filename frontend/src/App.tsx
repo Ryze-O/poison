@@ -21,6 +21,7 @@ import AssignmentMatrixPage from './pages/AssignmentMatrixPage'
 import MissionsPage from './pages/MissionsPage'
 import MissionDetailPage from './pages/MissionDetailPage'
 import MissionEditorPage from './pages/MissionEditorPage'
+import LoadoutsPage from './pages/LoadoutsPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, user } = useAuthStore()
@@ -85,6 +86,7 @@ function App() {
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="treasury" element={<TreasuryPage />} />
         <Route path="components" element={<ComponentBrowserPage />} />
+        <Route path="loadouts" element={<LoadoutsPage />} />
         {/* Datenbank-Seiten (nur Offiziere+) */}
         <Route path="items" element={<OfficerRoute><ItemsPage /></OfficerRoute>} />
         <Route path="locations" element={<OfficerRoute><LocationsPage /></OfficerRoute>} />

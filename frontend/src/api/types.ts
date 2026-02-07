@@ -414,6 +414,21 @@ export interface InventoryDashboard {
   total_pioneers: number
 }
 
+// ============== Transfer Request Summary ==============
+
+export interface TransferRequestSummaryItem {
+  component: Component
+  total_quantity: number
+  request_count: number
+  requests: TransferRequest[]
+}
+
+export interface TransferRequestSummary {
+  items: TransferRequestSummaryItem[]
+  total_demand: number
+  total_requests: number
+}
+
 // ============== Staffelstruktur ==============
 
 export type MemberStatus = 'ACTIVE' | 'RECRUIT' | 'INACTIVE' | 'ABSENT'
@@ -637,6 +652,8 @@ export interface MissionRegistration {
   preferred_position_id: number | null
   availability_note: string | null
   ship_info: string | null
+  user_loadout_ids: number[] | null
+  user_loadouts_resolved: UserLoadoutResolved[] | null
   status: string
   registered_at: string
   has_ships: boolean
@@ -753,6 +770,7 @@ export interface MissionRegistrationCreate {
   preferred_position_id?: number | null
   availability_note?: string | null
   ship_info?: string | null
+  user_loadout_ids?: number[] | null
 }
 
 export interface RadioFrequencyPreset {
@@ -847,4 +865,115 @@ export interface AssignmentData {
   operational_roles: GroupedOperationalRole[]
   eligible_users: EligibleUser[]
   can_manage: boolean
+}
+
+// ============== Meta-Loadouts ==============
+
+export interface ShipHardpoint {
+  id: number
+  hardpoint_type: string  // cooler, shield, power_plant, quantum_drive, weapon_gun, turret, missile_launcher
+  size: number
+  slot_index: number
+  default_component_name: string | null
+}
+
+export interface Ship {
+  id: number
+  name: string
+  slug: string | null
+  manufacturer: string | null
+  image_url: string | null
+  size_class: string | null
+  focus: string | null
+}
+
+export interface ShipWithHardpoints extends Ship {
+  hardpoints: ShipHardpoint[]
+}
+
+export interface ShipSearchResult {
+  id: number | null
+  name: string
+  slug: string | null
+  manufacturer: string
+  source: 'local' | 'fleetyards'
+}
+
+export interface MetaLoadoutItem {
+  id: number
+  hardpoint_type: string
+  slot_index: number
+  hardpoint_id: number | null
+  component: Component
+}
+
+export interface MetaLoadout {
+  id: number
+  ship: Ship
+  name: string
+  description: string | null
+  erkul_link: string | null
+  is_active: boolean
+  version_date: string | null
+  created_by: User | null
+  items: MetaLoadoutItem[]
+  created_at: string
+  updated_at: string | null
+}
+
+export interface MetaLoadoutList {
+  id: number
+  ship: Ship
+  name: string
+  description: string | null
+  erkul_link: string | null
+  is_active: boolean
+  version_date: string | null
+  created_by: User | null
+  created_at: string
+}
+
+export interface LoadoutCheckItem {
+  hardpoint_type: string
+  slot_index: number
+  component: Component
+  required: number
+  in_inventory: number
+  available_from_pioneers: number
+}
+
+export interface LoadoutCheck {
+  loadout: MetaLoadout
+  items: LoadoutCheckItem[]
+  total_required: number
+  total_owned: number
+  total_missing: number
+}
+
+// ============== UserLoadout (Gefittete Schiffe) ==============
+
+export interface UserLoadout {
+  id: number
+  user_id: number
+  loadout_id: number
+  ship_id: number
+  ship_nickname: string | null
+  is_ready: boolean
+  notes: string | null
+  created_at: string
+  updated_at: string | null
+  loadout: MetaLoadoutList
+  ship: Ship
+}
+
+export interface UserLoadoutWithUser extends UserLoadout {
+  user: User
+}
+
+export interface UserLoadoutResolved {
+  id: number
+  ship_name: string | null
+  ship_nickname: string | null
+  loadout_name: string | null
+  is_ready: boolean
 }

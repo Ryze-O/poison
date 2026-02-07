@@ -5,7 +5,7 @@ import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
 import { Plus, Minus, ArrowRight, Search, History, Package, MapPin, ArrowRightLeft, ChevronDown, ChevronRight, Bell, Check, X, Send, Copy, Truck, MessageCircle, Clock } from 'lucide-react'
 import AutocompleteInput, { AutocompleteSuggestion } from '../components/AutocompleteInput'
-import type { InventoryItem, User, Component, Location, TransferRequest, PendingRequestsCount, ComponentSearchResult, InventoryDashboard } from '../api/types'
+import type { InventoryItem, User, Component, Location, TransferRequest, PendingRequestsCount, ComponentSearchResult, InventoryDashboard, TransferRequestSummary } from '../api/types'
 
 type InventoryAction = 'add' | 'remove' | 'loot' | 'transfer_in' | 'transfer_out'
 
@@ -83,12 +83,25 @@ const categoryColors: Record<string, string> = {
   'Salvage': 'bg-teal-500/20 text-teal-400 border-teal-500/40',
 }
 
+// Farben pro Item-Klasse (Military, Civilian, etc.)
+const itemClassColors: Record<string, string> = {
+  'Military': 'bg-red-500/20 text-red-400 border-red-500/40',
+  'Civilian': 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+  'Industrial': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+  'Stealth': 'bg-purple-500/20 text-purple-400 border-purple-500/40',
+  'Competition': 'bg-green-500/20 text-green-400 border-green-500/40',
+}
+
 function getCategoryColor(category: string): string {
   return categoryColors[category] || 'bg-gray-700/50 text-gray-300 border-gray-600/50'
 }
 
 function getSubCategoryColor(subCategory: string): string {
   return subCategoryColors[subCategory] || 'bg-gray-700/50 text-gray-300 border-gray-600/50'
+}
+
+function getItemClassColor(itemClass: string): string {
+  return itemClassColors[itemClass] || 'bg-gray-700/50 text-gray-300 border-gray-600/50'
 }
 
 export default function InventoryPage() {
@@ -121,12 +134,20 @@ export default function InventoryPage() {
   const [patchNewLocation, setPatchNewLocation] = useState<number | null>(null)
   const [patchKeptItems, setPatchKeptItems] = useState<Map<number, number>>(new Map()) // ID → Menge
   const [filterSubCategory, setFilterSubCategory] = useState<string>('')
-  const [alleLagerSort, setAlleLagerSort] = useState<'alpha' | 'kategorie'>('alpha') // Sortierung Alle Lager
+  const [filterItemClass, setFilterItemClass] = useState<string>('') // Military, Civilian, etc.
+  const [filterGrade, setFilterGrade] = useState<string>('') // A, B, C, D
+  const [alleLagerSort, setAlleLagerSort] = useState<'alpha' | 'kategorie' | 'klasse'>('alpha') // Sortierung Alle Lager
+  const [mergedPioneerView, setMergedPioneerView] = useState(false) // Pioneer-Lager zusammenführen
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set())
   const [editingUserId, setEditingUserId] = useState<number | null>(null)
   // Transfer Request States
   const [showTransferRequests, setShowTransferRequests] = useState(false)
+  const [showDemandSummary, setShowDemandSummary] = useState(false)
+  const [expandedSummaryItems, setExpandedSummaryItems] = useState<Set<number>>(new Set())
+  const [summaryFilterSize, setSummaryFilterSize] = useState('')
+  const [summaryFilterGrade, setSummaryFilterGrade] = useState('')
+  const [summaryFilterSubCategory, setSummaryFilterSubCategory] = useState('')
   const [orderSearchTerm, setOrderSearchTerm] = useState('')
   const [orderSearchResults, setOrderSearchResults] = useState<TransferRequest[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
@@ -359,6 +380,19 @@ export default function InventoryPage() {
       })
     }
   }, [showTransferRequests])
+
+  // Demand Summary Query (für Pioneers/Admins)
+  const { data: demandSummary } = useQuery<TransferRequestSummary>({
+    queryKey: ['transfer-requests', 'summary', summaryFilterSize, summaryFilterGrade, summaryFilterSubCategory],
+    queryFn: () => {
+      const params = new URLSearchParams()
+      if (summaryFilterSize) params.set('size', summaryFilterSize)
+      if (summaryFilterGrade) params.set('grade', summaryFilterGrade)
+      if (summaryFilterSubCategory) params.set('sub_category', summaryFilterSubCategory)
+      return apiClient.get(`/api/inventory/transfer-requests/summary?${params.toString()}`).then(r => r.data)
+    },
+    enabled: showDemandSummary && (isPioneer || isAdmin),
+  })
 
   // Dashboard Query
   const { data: dashboard, isLoading: isDashboardLoading, error: dashboardError } = useQuery<InventoryDashboard>({
@@ -644,7 +678,11 @@ export default function InventoryPage() {
       filterLocation === '' ||
       (filterLocation === '0' && !item.location) ||
       (filterLocation !== '0' && item.location?.id === parseInt(filterLocation))
-    return matchesSearch && matchesCategory && matchesSubCategory && matchesLocation
+    const matchesItemClass =
+      !filterItemClass || item.component.item_class === filterItemClass
+    const matchesGrade =
+      !filterGrade || item.component.grade === filterGrade
+    return matchesSearch && matchesCategory && matchesSubCategory && matchesLocation && matchesItemClass && matchesGrade
   })
 
   // Gruppiere Inventar nach Kategorie und Unterkategorie
@@ -706,6 +744,79 @@ export default function InventoryPage() {
       o.id === user?.id || o.is_pioneer
     )
   }, [officers, isAdmin, isPioneer, user?.id])
+
+  // Zusammengeführtes Pioneer-Lager (für normale User)
+  interface MergedItem {
+    component: Component
+    totalQuantity: number
+    sources: { userId: number; userName: string; quantity: number; locationName: string; inventoryId?: number }[]
+  }
+  const mergedPioneerInventory = useMemo((): MergedItem[] => {
+    if (!mergedPioneerView || !allInventory || !visibleOfficers) return []
+    const pioneerIds = new Set(visibleOfficers.filter(o => o.is_pioneer).map(o => o.id))
+    const pioneerItems = allInventory.filter(i => pioneerIds.has(i.user_id))
+
+    const merged = new Map<number, MergedItem>()
+    pioneerItems.forEach(item => {
+      // Filter anwenden
+      if (search && !item.component.name.toLowerCase().includes(search.toLowerCase())) return
+      if (filterCategory && item.component.category !== filterCategory) return
+      if (filterItemClass && item.component.item_class !== filterItemClass) return
+      if (filterGrade && item.component.grade !== filterGrade) return
+
+      const officer = visibleOfficers.find(o => o.id === item.user_id)
+      const source = {
+        userId: item.user_id,
+        userName: officer?.display_name || officer?.username || '?',
+        quantity: item.quantity,
+        locationName: item.location?.name || 'Ohne Standort',
+        inventoryId: item.id,
+      }
+
+      const existing = merged.get(item.component.id)
+      if (existing) {
+        existing.totalQuantity += item.quantity
+        existing.sources.push(source)
+      } else {
+        merged.set(item.component.id, {
+          component: item.component,
+          totalQuantity: item.quantity,
+          sources: [source],
+        })
+      }
+    })
+
+    return [...merged.values()].sort((a, b) => a.component.name.localeCompare(b.component.name))
+  }, [mergedPioneerView, allInventory, visibleOfficers, search, filterCategory, filterItemClass, filterGrade])
+
+  // Merged Inventory nach Kategorie gruppiert
+  const mergedByCategory = useMemo(() => {
+    const groups: Record<string, MergedItem[]> = {}
+    mergedPioneerInventory.forEach(item => {
+      const cat = alleLagerSort === 'kategorie'
+        ? (item.component.sub_category || 'Sonstige')
+        : alleLagerSort === 'klasse'
+          ? (item.component.item_class || 'Unbekannt')
+          : (item.component.category || 'Sonstige')
+      if (!groups[cat]) groups[cat] = []
+      groups[cat].push(item)
+    })
+    // Bei Klasse: innerhalb jeder Gruppe nach Size dann Grade sortieren
+    if (alleLagerSort === 'klasse') {
+      Object.values(groups).forEach(items => {
+        items.sort((a, b) => {
+          const sizeA = a.component.size ?? 99
+          const sizeB = b.component.size ?? 99
+          if (sizeA !== sizeB) return sizeA - sizeB
+          const gradeA = a.component.grade ?? 'Z'
+          const gradeB = b.component.grade ?? 'Z'
+          if (gradeA !== gradeB) return gradeA.localeCompare(gradeB)
+          return a.component.name.localeCompare(b.component.name)
+        })
+      })
+    }
+    return groups
+  }, [mergedPioneerInventory, alleLagerSort])
 
   // Pending Requests für Badge
   const pendingAsOwner = (pendingCount?.as_owner_pending ?? 0) + (pendingCount?.as_owner_approved ?? 0) + (pendingCount?.as_owner_awaiting ?? 0)
@@ -829,6 +940,29 @@ export default function InventoryPage() {
                 ))}
               </optgroup>
             ))}
+          </select>
+          <select
+            value={filterItemClass}
+            onChange={(e) => setFilterItemClass(e.target.value)}
+            className="input md:w-36"
+          >
+            <option value="">Alle Klassen</option>
+            <option value="Military">Military</option>
+            <option value="Civilian">Civilian</option>
+            <option value="Industrial">Industrial</option>
+            <option value="Stealth">Stealth</option>
+            <option value="Competition">Competition</option>
+          </select>
+          <select
+            value={filterGrade}
+            onChange={(e) => setFilterGrade(e.target.value)}
+            className="input md:w-28"
+          >
+            <option value="">Alle Grades</option>
+            <option value="A">Grade A</option>
+            <option value="B">Grade B</option>
+            <option value="C">Grade C</option>
+            <option value="D">Grade D</option>
           </select>
         </div>
       </div>
@@ -1045,6 +1179,148 @@ export default function InventoryPage() {
               )}
             </div>
           </div>
+
+          {/* Nachfrage-Summary Toggle (nur Pioneer/Admin) */}
+          {(isPioneer || isAdmin) && (
+            <div className="mb-4">
+              <button
+                onClick={() => setShowDemandSummary(!showDemandSummary)}
+                className={`btn text-sm ${showDemandSummary ? 'btn-primary' : 'btn-secondary'} flex items-center gap-2`}
+              >
+                <Package size={16} />
+                Nachfrage-Übersicht
+                {demandSummary && demandSummary.total_requests > 0 && (
+                  <span className="bg-krt-orange/20 text-krt-orange text-xs px-1.5 py-0.5 rounded-full">
+                    {demandSummary.total_requests}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Nachfrage-Summary Ansicht */}
+          {showDemandSummary && (isPioneer || isAdmin) && (
+            <div className="mb-6 border border-gray-700/50 rounded-lg p-4">
+              <h3 className="text-sm font-bold text-gray-300 mb-3">
+                Aggregierte Nachfrage
+                {demandSummary && (
+                  <span className="text-xs text-gray-500 ml-2">
+                    ({demandSummary.total_demand} Items in {demandSummary.total_requests} Bestellungen)
+                  </span>
+                )}
+              </h3>
+
+              {/* Filter */}
+              <div className="flex gap-2 mb-3 flex-wrap">
+                <select
+                  value={summaryFilterSize}
+                  onChange={(e) => setSummaryFilterSize(e.target.value)}
+                  className="input text-xs py-1 px-2 w-24"
+                >
+                  <option value="">Size</option>
+                  {[1, 2, 3, 4, 5].map(s => (
+                    <option key={s} value={s}>Size {s}</option>
+                  ))}
+                </select>
+                <select
+                  value={summaryFilterGrade}
+                  onChange={(e) => setSummaryFilterGrade(e.target.value)}
+                  className="input text-xs py-1 px-2 w-24"
+                >
+                  <option value="">Grade</option>
+                  {['A', 'B', 'C', 'D'].map(g => (
+                    <option key={g} value={g}>Grade {g}</option>
+                  ))}
+                </select>
+                <select
+                  value={summaryFilterSubCategory}
+                  onChange={(e) => setSummaryFilterSubCategory(e.target.value)}
+                  className="input text-xs py-1 px-2 w-36"
+                >
+                  <option value="">Kategorie</option>
+                  {['Coolers', 'Power Plants', 'Shields', 'Quantum Drives', 'Weapons', 'Guns', 'Turrets', 'Missile Launchers'].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                {(summaryFilterSize || summaryFilterGrade || summaryFilterSubCategory) && (
+                  <button
+                    onClick={() => { setSummaryFilterSize(''); setSummaryFilterGrade(''); setSummaryFilterSubCategory('') }}
+                    className="btn btn-secondary text-xs py-1 px-2"
+                  >
+                    <X size={12} /> Reset
+                  </button>
+                )}
+              </div>
+
+              {/* Summary Items */}
+              {demandSummary?.items && demandSummary.items.length > 0 ? (
+                <div className="space-y-1">
+                  {demandSummary.items.map((item) => {
+                    const isExpanded = expandedSummaryItems.has(item.component.id)
+                    return (
+                      <div key={item.component.id} className="border border-gray-700/30 rounded-lg overflow-hidden">
+                        <button
+                          onClick={() => {
+                            const next = new Set(expandedSummaryItems)
+                            if (isExpanded) next.delete(item.component.id)
+                            else next.add(item.component.id)
+                            setExpandedSummaryItems(next)
+                          }}
+                          className="w-full flex items-center justify-between p-2.5 hover:bg-gray-800/50 transition-colors text-left"
+                        >
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {isExpanded ? <ChevronDown size={14} className="text-krt-orange flex-shrink-0" /> : <ChevronRight size={14} className="text-gray-400 flex-shrink-0" />}
+                            <span className="font-medium text-sm truncate">{item.component.name}</span>
+                            {item.component.sub_category && (
+                              <span className={`text-[10px] px-1.5 py-0 rounded border whitespace-nowrap flex-shrink-0 ${getSubCategoryColor(item.component.sub_category)}`}>
+                                {item.component.sub_category}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <span className="text-krt-orange font-bold text-sm">{item.total_quantity}x</span>
+                            <span className="text-xs text-gray-500">({item.request_count} {item.request_count === 1 ? 'Bestellung' : 'Bestellungen'})</span>
+                          </div>
+                        </button>
+
+                        {/* Expanded: Einzelne Bestellungen */}
+                        {isExpanded && (
+                          <div className="border-t border-gray-700/30 bg-gray-900/30 p-2 space-y-1.5">
+                            {item.requests.map((req: TransferRequest) => (
+                              <div key={req.id} className="flex items-center justify-between px-3 py-1.5 bg-gray-800/30 rounded text-xs">
+                                <div className="flex items-center gap-2">
+                                  {req.order_number && (
+                                    <span className="font-mono text-krt-orange">{req.order_number}</span>
+                                  )}
+                                  <span className="text-gray-400">
+                                    {req.requester?.display_name || req.requester?.username} → {req.owner?.display_name || req.owner?.username}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{req.quantity}x</span>
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                    req.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                                    req.status === 'approved' ? 'bg-blue-500/20 text-blue-400' :
+                                    'bg-gray-500/20 text-gray-400'
+                                  }`}>
+                                    {req.status === 'pending' ? 'Offen' : req.status === 'approved' ? 'Freigegeben' : req.status}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : demandSummary ? (
+                <p className="text-sm text-gray-500">Keine offenen Anfragen.</p>
+              ) : (
+                <p className="text-sm text-gray-500">Laden...</p>
+              )}
+            </div>
+          )}
 
           {/* Suchergebnisse */}
           {orderSearchResults !== null && (
@@ -2091,31 +2367,144 @@ export default function InventoryPage() {
 
       {/* Alle Lager */}
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h2 className="text-xl font-bold">
             {isAdmin ? 'Alle Lager' : isPioneer ? 'Lager-Übersicht (nur Ansicht)' : 'Sichtbare Lager'}
           </h2>
-          <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-0.5">
-            <button
-              onClick={() => setAlleLagerSort('alpha')}
-              className={`px-3 py-1 text-xs rounded-md transition-colors ${alleLagerSort === 'alpha' ? 'bg-krt-orange text-white' : 'text-gray-400 hover:text-gray-300'}`}
-            >
-              A-Z
-            </button>
-            <button
-              onClick={() => setAlleLagerSort('kategorie')}
-              className={`px-3 py-1 text-xs rounded-md transition-colors ${alleLagerSort === 'kategorie' ? 'bg-krt-orange text-white' : 'text-gray-400 hover:text-gray-300'}`}
-            >
-              Kategorie
-            </button>
+          <div className="flex items-center gap-3">
+            {/* Merged View Toggle (nur für normale Member) */}
+            {!isAdmin && !isPioneer && (
+              <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-0.5">
+                <button
+                  onClick={() => setMergedPioneerView(false)}
+                  className={`px-3 py-1 text-xs rounded-md transition-colors ${!mergedPioneerView ? 'bg-krt-orange text-white' : 'text-gray-400 hover:text-gray-300'}`}
+                >
+                  Einzeln
+                </button>
+                <button
+                  onClick={() => setMergedPioneerView(true)}
+                  className={`px-3 py-1 text-xs rounded-md transition-colors ${mergedPioneerView ? 'bg-krt-orange text-white' : 'text-gray-400 hover:text-gray-300'}`}
+                >
+                  Zusammengeführt
+                </button>
+              </div>
+            )}
+            {/* Sort Toggle */}
+            <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-0.5">
+              <button
+                onClick={() => setAlleLagerSort('alpha')}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${alleLagerSort === 'alpha' ? 'bg-krt-orange text-white' : 'text-gray-400 hover:text-gray-300'}`}
+              >
+                A-Z
+              </button>
+              <button
+                onClick={() => setAlleLagerSort('kategorie')}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${alleLagerSort === 'kategorie' ? 'bg-krt-orange text-white' : 'text-gray-400 hover:text-gray-300'}`}
+              >
+                Kategorie
+              </button>
+              <button
+                onClick={() => setAlleLagerSort('klasse')}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${alleLagerSort === 'klasse' ? 'bg-krt-orange text-white' : 'text-gray-400 hover:text-gray-300'}`}
+              >
+                Klasse
+              </button>
+            </div>
           </div>
         </div>
-        {!isAdmin && !isPioneer && (
+        {!isAdmin && !isPioneer && !mergedPioneerView && (
           <p className="text-sm text-gray-400 mb-4">
             Du siehst dein eigenes Lager und die Lager der Pioneers. Um Items von anderen anzufordern, klicke auf "Anfragen".
           </p>
         )}
-        {visibleOfficers && inventoryByUser ? (
+        {mergedPioneerView ? (
+          /* Zusammengeführte Pioneer-Lager Ansicht */
+          Object.keys(mergedByCategory).length > 0 ? (
+            <div className="space-y-4">
+              {Object.entries(mergedByCategory)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([category, items]) => {
+                  const getColorFn = alleLagerSort === 'kategorie' ? getSubCategoryColor : alleLagerSort === 'klasse' ? getItemClassColor : getCategoryColor
+                  return (
+                    <div key={category}>
+                      <h4 className="text-sm font-medium mb-2 border-b border-gray-700/50 pb-1 flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded border text-xs ${getColorFn(category)}`}>
+                          {category}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          ({items.reduce((sum, i) => sum + i.totalQuantity, 0)})
+                        </span>
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {items.map((item) => {
+                          // Pioneer mit höchstem Bestand für Anfrage
+                          const bestSource = [...item.sources].sort((a, b) => b.quantity - a.quantity)[0]
+                          return (
+                            <div key={item.component.id} className="p-3 bg-gray-800/30 rounded-lg">
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <p className="font-medium text-sm truncate">{item.component.name}</p>
+                                {item.component.sub_category && alleLagerSort !== 'kategorie' && (
+                                  <span className={`text-[10px] px-1.5 py-0 rounded border whitespace-nowrap ${getSubCategoryColor(item.component.sub_category)}`}>
+                                    {item.component.sub_category}
+                                  </span>
+                                )}
+                              </div>
+                              {(item.component.size || item.component.grade || item.component.item_class) && (
+                                <div className="flex items-center gap-1 mb-1">
+                                  {item.component.size && (
+                                    <span className="text-[10px] px-1 py-0 rounded bg-gray-700/50 text-gray-400">S{item.component.size}</span>
+                                  )}
+                                  {item.component.grade && (
+                                    <span className="text-[10px] px-1 py-0 rounded bg-gray-700/50 text-gray-400">{item.component.grade}</span>
+                                  )}
+                                  {item.component.item_class && alleLagerSort !== 'klasse' && (
+                                    <span className={`text-[10px] px-1 py-0 rounded border ${getItemClassColor(item.component.item_class)}`}>{item.component.item_class}</span>
+                                  )}
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-krt-orange font-medium">{item.totalQuantity}x</p>
+                                  {user && (
+                                    <button
+                                      onClick={() => {
+                                        setRequestModal({
+                                          ownerId: bestSource.userId,
+                                          ownerName: bestSource.userName,
+                                          component: item.component,
+                                          quantity: bestSource.quantity,
+                                          locationId: null,
+                                        })
+                                        setRequestAmount(1)
+                                      }}
+                                      className="p-1 bg-gray-600/20 text-gray-400 rounded hover:bg-gray-600/30"
+                                      title={`Anfragen bei ${bestSource.userName}`}
+                                    >
+                                      <Send size={12} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-[11px] text-gray-500 leading-relaxed">
+                                {item.sources.map((src, idx) => (
+                                  <span key={src.userId + '-' + idx}>
+                                    {idx > 0 && ' · '}
+                                    {src.userName} ({src.quantity}x, {src.locationName})
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          ) : (
+            <p className="text-gray-400">Keine Pioneer-Lager vorhanden.</p>
+          )
+        ) : visibleOfficers && inventoryByUser ? (
           <div className="space-y-3">
             {visibleOfficers.map((officer) => {
               const items = inventoryByUser[officer.id]?.filter((item) => {
@@ -2128,13 +2517,18 @@ export default function InventoryPage() {
                   filterLocation === '' ||
                   (filterLocation === '0' && !item.location) ||
                   (filterLocation !== '0' && item.location?.id === parseInt(filterLocation))
-                return matchesSearch && matchesCategory && matchesLocation
+                const matchesItemClass =
+                  !filterItemClass || item.component.item_class === filterItemClass
+                const matchesGrade =
+                  !filterGrade || item.component.grade === filterGrade
+                return matchesSearch && matchesCategory && matchesLocation && matchesItemClass && matchesGrade
               })
               if (!items || items.length === 0) return null
 
-              // Gruppiere nach Kategorie oder Sub-Kategorie
+              // Gruppiere nach Kategorie, Sub-Kategorie oder Klasse
               const byCategory: Record<string, InventoryItem[]> = {}
               const bySubCategory: Record<string, InventoryItem[]> = {}
+              const byClass: Record<string, InventoryItem[]> = {}
               items.forEach(item => {
                 const cat = item.component.category || 'Sonstige'
                 if (!byCategory[cat]) byCategory[cat] = []
@@ -2143,9 +2537,27 @@ export default function InventoryPage() {
                 const subCat = item.component.sub_category || 'Sonstige'
                 if (!bySubCategory[subCat]) bySubCategory[subCat] = []
                 bySubCategory[subCat].push(item)
+
+                const cls = item.component.item_class || 'Unbekannt'
+                if (!byClass[cls]) byClass[cls] = []
+                byClass[cls].push(item)
               })
-              const displayGroups = alleLagerSort === 'kategorie' ? bySubCategory : byCategory
-              const getColorFn = alleLagerSort === 'kategorie' ? getSubCategoryColor : getCategoryColor
+              // Bei Klasse: innerhalb jeder Gruppe nach Size dann Grade sortieren
+              if (alleLagerSort === 'klasse') {
+                Object.values(byClass).forEach(classItems => {
+                  classItems.sort((a, b) => {
+                    const sizeA = a.component.size ?? 99
+                    const sizeB = b.component.size ?? 99
+                    if (sizeA !== sizeB) return sizeA - sizeB
+                    const gradeA = a.component.grade ?? 'Z'
+                    const gradeB = b.component.grade ?? 'Z'
+                    if (gradeA !== gradeB) return gradeA.localeCompare(gradeB)
+                    return a.component.name.localeCompare(b.component.name)
+                  })
+                })
+              }
+              const displayGroups = alleLagerSort === 'kategorie' ? bySubCategory : alleLagerSort === 'klasse' ? byClass : byCategory
+              const getColorFn = alleLagerSort === 'kategorie' ? getSubCategoryColor : alleLagerSort === 'klasse' ? getItemClassColor : getCategoryColor
 
               const isExpanded = expandedUsers.has(officer.id)
               const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
@@ -2238,8 +2650,7 @@ export default function InventoryPage() {
                               </span>
                             </h4>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                              {catItems
-                                .sort((a, b) => a.component.name.localeCompare(b.component.name))
+                              {(alleLagerSort === 'klasse' ? catItems : [...catItems].sort((a, b) => a.component.name.localeCompare(b.component.name)))
                                 .map((item) => {
                                   const isOwnInventory = officer.id === user?.id
                                   // Jeder kann Items anfragen (außer Admins, die bearbeiten direkt)
@@ -2250,14 +2661,33 @@ export default function InventoryPage() {
                                       key={item.id}
                                       className="p-3 bg-gray-800/30 rounded-lg"
                                     >
-                                      <div className="flex items-center gap-1.5 mb-1">
+                                      <div className="flex items-center gap-1.5 mb-0.5">
                                         <p className="font-medium text-sm truncate">{item.component.name}</p>
-                                        {item.component.sub_category && (
+                                        {item.component.sub_category && alleLagerSort !== 'kategorie' && (
                                           <span className={`text-[10px] px-1.5 py-0 rounded border whitespace-nowrap ${getSubCategoryColor(item.component.sub_category)}`}>
                                             {item.component.sub_category}
                                           </span>
                                         )}
                                       </div>
+                                      {(item.component.size || item.component.grade || item.component.item_class) && (
+                                        <div className="flex items-center gap-1 mb-1">
+                                          {item.component.size && (
+                                            <span className="text-[10px] px-1 py-0 rounded bg-gray-700/50 text-gray-400">
+                                              S{item.component.size}
+                                            </span>
+                                          )}
+                                          {item.component.grade && (
+                                            <span className="text-[10px] px-1 py-0 rounded bg-gray-700/50 text-gray-400">
+                                              {item.component.grade}
+                                            </span>
+                                          )}
+                                          {item.component.item_class && alleLagerSort !== 'klasse' && (
+                                            <span className={`text-[10px] px-1 py-0 rounded border ${getItemClassColor(item.component.item_class)}`}>
+                                              {item.component.item_class}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
                                       <div className="flex items-center justify-between">
                                         {isEditing ? (
                                           // Admin Edit Controls

@@ -152,6 +152,7 @@ class MissionRegistration(Base):
     preferred_position_id = Column(Integer, ForeignKey("mission_positions.id"), nullable=True)
     availability_note = Column(String(255), nullable=True)  # "Kann ab 20:15"
     ship_info = Column(String(500), nullable=True)  # "Habe meine Polaris meta-gefittet am Einsatzort bereit"
+    user_loadout_ids = Column(JSON, nullable=True)  # [1, 3] → IDs der UserLoadouts
 
     status = Column(String(20), default="registered")  # registered, assigned, declined
     registered_at = Column(DateTime, default=datetime.utcnow)

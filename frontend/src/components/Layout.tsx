@@ -27,6 +27,7 @@ import {
   ChevronRight,
   Shield,
   Crosshair,
+  Wrench,
 } from 'lucide-react'
 import { useState, useRef } from 'react'
 import clsx from 'clsx'
@@ -62,6 +63,7 @@ const navCategories = [
     icon: Search,
     items: [
       { to: '/components', icon: Search, label: 'Item Search' },
+      { to: '/loadouts', icon: Wrench, label: 'Meta-Loadouts' },
     ],
   },
 ]

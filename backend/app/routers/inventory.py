@@ -15,7 +15,8 @@ from app.schemas.inventory import (
     InventoryResponse, InventoryUpdate, TransferCreate, TransferResponse,
     InventoryLogResponse, BulkLocationTransfer, BulkTransferToOfficer, PatchResetRequest,
     TransferRequestCreate, TransferRequestResponse, TransferRequestReject, TransferRequestCommentUpdate,
-    ComponentSearchResult, InventoryDashboardResponse, PioneerInventoryStats, LocationStats, CategoryStats
+    ComponentSearchResult, InventoryDashboardResponse, PioneerInventoryStats, LocationStats, CategoryStats,
+    TransferRequestSummaryItem, TransferRequestSummaryResponse
 )
 from app.auth.jwt import get_current_user
 from app.auth.dependencies import check_role
@@ -1224,6 +1225,66 @@ async def mark_transfers_seen(
     current_user.last_seen_transfers = datetime.now(timezone.utc)
     db.commit()
     return {"ok": True}
+
+
+@router.get("/transfer-requests/summary")
+async def get_transfer_requests_summary(
+    size: Optional[int] = None,
+    grade: Optional[str] = None,
+    sub_category: Optional[str] = None,
+    item_class: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Aggregierte Nachfrage-Übersicht: Offene Anfragen gruppiert nach Komponente."""
+    # Nur Pioneer oder Admin
+    if not current_user.is_pioneer and not current_user.has_permission(UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Nur für Pioneers und Admins")
+
+    query = db.query(TransferRequest).join(
+        Component, TransferRequest.component_id == Component.id
+    ).filter(
+        TransferRequest.status.in_([TransferRequestStatus.PENDING, TransferRequestStatus.APPROVED])
+    )
+
+    # Optionale Filter
+    if size is not None:
+        query = query.filter(Component.size == size)
+    if grade:
+        query = query.filter(Component.grade == grade)
+    if sub_category:
+        query = query.filter(Component.sub_category == sub_category)
+    if item_class:
+        query = query.filter(Component.item_class == item_class)
+
+    requests = query.order_by(TransferRequest.created_at.desc()).all()
+
+    # Gruppiere nach component_id
+    is_pioneer_or_admin = True  # Schon geprüft oben
+    by_component: dict = {}
+    for req in requests:
+        cid = req.component_id
+        if cid not in by_component:
+            by_component[cid] = {
+                "component": req.component,
+                "total_quantity": 0,
+                "request_count": 0,
+                "requests": [],
+            }
+        by_component[cid]["total_quantity"] += req.quantity
+        by_component[cid]["request_count"] += 1
+        by_component[cid]["requests"].append(
+            filter_pioneer_comment_inline(req, is_pioneer_or_admin)
+        )
+
+    # Sortiere nach total_quantity DESC
+    items = sorted(by_component.values(), key=lambda x: x["total_quantity"], reverse=True)
+
+    return {
+        "items": items,
+        "total_demand": sum(i["total_quantity"] for i in items),
+        "total_requests": sum(i["request_count"] for i in items),
+    }
 
 
 @router.post("/transfer-requests/{request_id}/approve")

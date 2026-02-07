@@ -18,6 +18,7 @@ from app.models.mission import (
     MissionRegistration, MissionAssignment, MissionTemplate,
     UserShip, MissionStatus, STANDARD_RADIO_FREQUENCIES
 )
+from app.models.loadout import Ship, ShipHardpoint, MetaLoadout, MetaLoadoutItem, UserLoadout
 
 __all__ = [
     "User",
@@ -65,4 +66,10 @@ __all__ = [
     "UserShip",
     "MissionStatus",
     "STANDARD_RADIO_FREQUENCIES",
+    # Meta-Loadouts
+    "Ship",
+    "ShipHardpoint",
+    "MetaLoadout",
+    "MetaLoadoutItem",
+    "UserLoadout",
 ]

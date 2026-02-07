@@ -206,7 +206,7 @@ class MissionRegistrationBase(BaseModel):
 
 
 class MissionRegistrationCreate(MissionRegistrationBase):
-    pass
+    user_loadout_ids: Optional[List[int]] = None
 
 
 class MissionRegistrationResponse(MissionRegistrationBase):
@@ -217,6 +217,9 @@ class MissionRegistrationResponse(MissionRegistrationBase):
     status: str
     registered_at: Optional[datetime] = None
     ship_info: Optional[str] = None
+    user_loadout_ids: Optional[List[int]] = None
+    # Aufgelöste UserLoadout-Daten (Ship-Name, Loadout-Name, is_ready)
+    user_loadouts_resolved: Optional[List[Dict[str, Any]]] = None
     # Optional: Info ob User Schiffe hat
     has_ships: bool = False
 

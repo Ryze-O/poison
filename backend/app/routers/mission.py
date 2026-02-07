@@ -295,6 +295,22 @@ async def get_mission(
                 "aliases": reg.user.aliases,
                 "created_at": reg.user.created_at,
             }
+        # UserLoadouts auflösen
+        user_loadouts_resolved = None
+        if reg.user_loadout_ids:
+            from app.models.loadout import UserLoadout as UL, MetaLoadout as ML, Ship as S
+            uls = db.query(UL).options(
+                joinedload(UL.loadout).joinedload(ML.ship),
+                joinedload(UL.ship),
+            ).filter(UL.id.in_(reg.user_loadout_ids)).all()
+            user_loadouts_resolved = [{
+                "id": ul.id,
+                "ship_name": ul.ship.name if ul.ship else None,
+                "ship_nickname": ul.ship_nickname,
+                "loadout_name": ul.loadout.name if ul.loadout else None,
+                "is_ready": ul.is_ready,
+            } for ul in uls]
+
         registrations.append({
             "id": reg.id,
             "mission_id": reg.mission_id,
@@ -304,6 +320,8 @@ async def get_mission(
             "preferred_position_id": reg.preferred_position_id,
             "availability_note": reg.availability_note,
             "ship_info": reg.ship_info,
+            "user_loadout_ids": reg.user_loadout_ids,
+            "user_loadouts_resolved": user_loadouts_resolved,
             "status": reg.status,
             "registered_at": reg.registered_at,
             "has_ships": ship_count > 0,
@@ -902,6 +920,7 @@ async def register_for_mission(
         preferred_position_id=reg_data.preferred_position_id,
         availability_note=reg_data.availability_note,
         ship_info=reg_data.ship_info,
+        user_loadout_ids=reg_data.user_loadout_ids,
         status="registered",
     )
     db.add(reg)
@@ -909,10 +928,28 @@ async def register_for_mission(
     db.refresh(reg)
 
     ship_count = db.query(UserShip).filter(UserShip.user_id == current_user.id).count()
+
+    # UserLoadouts auflösen
+    user_loadouts_resolved = None
+    if reg.user_loadout_ids:
+        from app.models.loadout import UserLoadout as UL, MetaLoadout, Ship
+        uls = db.query(UL).options(
+            joinedload(UL.loadout).joinedload(MetaLoadout.ship),
+            joinedload(UL.ship),
+        ).filter(UL.id.in_(reg.user_loadout_ids)).all()
+        user_loadouts_resolved = [{
+            "id": ul.id,
+            "ship_name": ul.ship.name if ul.ship else None,
+            "ship_nickname": ul.ship_nickname,
+            "loadout_name": ul.loadout.name if ul.loadout else None,
+            "is_ready": ul.is_ready,
+        } for ul in uls]
+
     return {
         **reg.__dict__,
         "user": current_user,
         "has_ships": ship_count > 0,
+        "user_loadouts_resolved": user_loadouts_resolved,
     }
 
 

@@ -187,3 +187,20 @@ class InventoryDashboardResponse(BaseModel):
     total_items: int
     total_quantity: int
     total_pioneers: int
+
+
+# ============== Transfer Request Summary ==============
+
+class TransferRequestSummaryItem(BaseModel):
+    """Aggregierter Eintrag: alle Anfragen für eine Komponente."""
+    component: ComponentResponse
+    total_quantity: int          # Summe angefragter Mengen
+    request_count: int           # Anzahl Bestellungen
+    requests: List[TransferRequestResponse]
+
+
+class TransferRequestSummaryResponse(BaseModel):
+    """Nachfrage-Übersicht für Pioneers."""
+    items: List[TransferRequestSummaryItem]
+    total_demand: int
+    total_requests: int

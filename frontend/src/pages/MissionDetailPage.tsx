@@ -25,6 +25,7 @@ import type {
   MissionDetail,
   MissionStatus,
   Briefing,
+  UserLoadout,
 } from '../api/types'
 
 const STATUS_LABELS: Record<MissionStatus, string> = {
@@ -66,6 +67,7 @@ export default function MissionDetailPage() {
   const [registrationNote, setRegistrationNote] = useState('')
   const [shipInfo, setShipInfo] = useState('')
   const [selectedUnitId, setSelectedUnitId] = useState<number | null>(null)
+  const [selectedLoadoutIds, setSelectedLoadoutIds] = useState<number[]>([])
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
@@ -82,6 +84,13 @@ export default function MissionDetailPage() {
     enabled: activeTab === 'briefing',
   })
 
+  // Eigene gefittete Schiffe (für Registrierung)
+  const { data: myShips } = useQuery<UserLoadout[]>({
+    queryKey: ['my-ships'],
+    queryFn: () => apiClient.get('/api/loadouts/my-ships').then((r) => r.data),
+    enabled: !!currentUser && ['member', 'officer', 'admin'].includes(currentUser.role),
+  })
+
   const canManage = effectiveRole === 'admin' || effectiveRole === 'officer' || currentUser?.is_kg_verwalter
 
   // Mutations
@@ -91,6 +100,7 @@ export default function MissionDetailPage() {
         preferred_unit_id: selectedUnitId,
         availability_note: registrationNote || null,
         ship_info: shipInfo || null,
+        user_loadout_ids: selectedLoadoutIds.length > 0 ? selectedLoadoutIds : null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mission', id] })
@@ -630,6 +640,54 @@ export default function MissionDetailPage() {
                       Teile dem Planer mit, welches Schiff du für den Einsatz bereit hast
                     </p>
                   </div>
+                  {/* Gefittete Schiffe auswählen */}
+                  {myShips && myShips.length > 0 && (
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-2">
+                        Gefittete Schiffe für diesen Einsatz (optional)
+                      </label>
+                      <div className="space-y-1.5">
+                        {myShips.filter(s => s.is_ready).map(ship => (
+                          <label
+                            key={ship.id}
+                            className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                              selectedLoadoutIds.includes(ship.id)
+                                ? 'border-krt-orange bg-krt-orange/10'
+                                : 'border-gray-700 hover:border-gray-600'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedLoadoutIds.includes(ship.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedLoadoutIds([...selectedLoadoutIds, ship.id])
+                                } else {
+                                  setSelectedLoadoutIds(selectedLoadoutIds.filter(id => id !== ship.id))
+                                }
+                              }}
+                              className="w-4 h-4 text-krt-orange rounded"
+                            />
+                            <div className="flex-1">
+                              <span className="font-medium text-sm">{ship.ship.name}</span>
+                              {ship.ship_nickname && (
+                                <span className="text-gray-400 text-sm ml-1">"{ship.ship_nickname}"</span>
+                              )}
+                              <span className="text-xs text-gray-500 ml-2">
+                                ({ship.loadout.name})
+                              </span>
+                            </div>
+                            <Check size={14} className="text-green-400" />
+                          </label>
+                        ))}
+                      </div>
+                      {myShips.filter(s => !s.is_ready).length > 0 && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {myShips.filter(s => !s.is_ready).length} Schiffe nicht einsatzbereit (nicht angezeigt)
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <button
                     onClick={() => registerMutation.mutate()}
                     disabled={registerMutation.isPending}
@@ -815,8 +873,26 @@ export default function MissionDetailPage() {
                         {reg.ship_info && (
                           <div className="text-xs text-krt-orange">🚀 {reg.ship_info}</div>
                         )}
+                        {reg.user_loadouts_resolved && reg.user_loadouts_resolved.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {reg.user_loadouts_resolved.map(ul => (
+                              <span
+                                key={ul.id}
+                                className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                  ul.is_ready
+                                    ? 'bg-green-500/20 text-green-400'
+                                    : 'bg-yellow-500/20 text-yellow-400'
+                                }`}
+                              >
+                                {ul.ship_name}
+                                {ul.ship_nickname && ` "${ul.ship_nickname}"`}
+                                {ul.loadout_name && ` (${ul.loadout_name})`}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      {!reg.has_ships && (
+                      {!reg.has_ships && !reg.user_loadouts_resolved?.length && (
                         <span className="text-xs text-yellow-400 flex items-center gap-1">
                           <AlertCircle size={12} />
                           Keine Schiffe
