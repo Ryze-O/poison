@@ -12,27 +12,38 @@ HARDPOINT_TYPE_MAP = {
     "power_plants": "power_plant",
     "coolers": "cooler",
     "shields": "shield",
+    "shield_generators": "shield",
     "quantum_drives": "quantum_drive",
     "weapons": "weapon_gun",
     "turrets": "turret",
     "missiles": "missile_launcher",
 }
 
-# Hardpoint-Gruppen die wir importieren
-RELEVANT_GROUPS = {"system", "weapon"}
-
-# Hardpoint-Typen die wir importieren
+# Hardpoint-Typen die wir importieren (keine Group-Filterung mehr nötig)
 RELEVANT_TYPES = set(HARDPOINT_TYPE_MAP.keys())
+
+# Size-Strings → Zahlen (FleetYards gibt manchmal Wörter statt Zahlen)
+SIZE_WORD_MAP = {
+    "small": 1, "one": 1,
+    "medium": 2, "two": 2,
+    "large": 3, "three": 3,
+    "capital": 4, "four": 4,
+    "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+}
 
 
 def _parse_size(size_value) -> int:
-    """Parse FleetYards size (kann String oder Int sein)."""
+    """Parse FleetYards size (kann String, Int oder Wort sein)."""
     if isinstance(size_value, int):
         return size_value
     if isinstance(size_value, str):
-        # z.B. "3" oder "S (1)"
+        # Wort-Mapping ("small", "three", etc.)
+        lower = size_value.lower().strip()
+        if lower in SIZE_WORD_MAP:
+            return SIZE_WORD_MAP[lower]
+        # Direkte Zahl ("3")
         try:
-            return int(size_value)
+            return int(lower)
         except ValueError:
             # "S (1)" → versuche Zahl in Klammern
             import re
