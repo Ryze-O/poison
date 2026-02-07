@@ -46,6 +46,7 @@ class MetaLoadout(Base):
     id = Column(Integer, primary_key=True, index=True)
     ship_id = Column(Integer, ForeignKey("ships.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(200), nullable=False)  # z.B. "Viper PvP Meta"
+    category = Column(String(100), nullable=True)  # z.B. "Light Fighter", "Ground", "GKS"
     description = Column(Text, nullable=True)
     erkul_link = Column(String(500), nullable=True)  # Erkul.games Loadout-Link
     is_active = Column(Boolean, default=True)

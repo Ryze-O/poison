@@ -63,6 +63,7 @@ class MetaLoadoutResponse(BaseModel):
     id: int
     ship: ShipResponse
     name: str
+    category: Optional[str]
     description: Optional[str]
     erkul_link: Optional[str]
     is_active: bool
@@ -81,6 +82,7 @@ class MetaLoadoutListResponse(BaseModel):
     id: int
     ship: ShipResponse
     name: str
+    category: Optional[str]
     description: Optional[str]
     erkul_link: Optional[str]
     is_active: bool
@@ -95,6 +97,7 @@ class MetaLoadoutListResponse(BaseModel):
 class MetaLoadoutCreate(BaseModel):
     ship_id: int
     name: str
+    category: Optional[str] = None
     description: Optional[str] = None
     erkul_link: Optional[str] = None
     version_date: Optional[date] = None
@@ -102,6 +105,7 @@ class MetaLoadoutCreate(BaseModel):
 
 class MetaLoadoutUpdate(BaseModel):
     name: Optional[str] = None
+    category: Optional[str] = None
     description: Optional[str] = None
     erkul_link: Optional[str] = None
     is_active: Optional[bool] = None
