@@ -3,6 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
+from datetime import datetime, timezone
 
 from app.database import get_db
 from app.models.user import User, UserRole
@@ -121,8 +122,8 @@ async def add_to_inventory(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Fügt Komponenten zum eigenen Lager hinzu. Nur Offiziere+."""
-    check_role(current_user, UserRole.OFFICER)
+    """Fügt Komponenten zum eigenen Lager hinzu. Member+."""
+    check_role(current_user, UserRole.MEMBER)
 
     if quantity <= 0:
         raise HTTPException(
@@ -192,8 +193,8 @@ async def remove_from_inventory(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Entfernt Komponenten aus dem eigenen Lager. Nur Offiziere+."""
-    check_role(current_user, UserRole.OFFICER)
+    """Entfernt Komponenten aus dem eigenen Lager. Member+."""
+    check_role(current_user, UserRole.MEMBER)
 
     if quantity <= 0:
         raise HTTPException(
@@ -241,8 +242,8 @@ async def set_item_location(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Setzt den Standort eines Inventory-Items. Nur Offiziere+."""
-    check_role(current_user, UserRole.OFFICER)
+    """Setzt den Standort eines Inventory-Items. Member+."""
+    check_role(current_user, UserRole.MEMBER)
 
     inventory = db.query(Inventory).filter(Inventory.id == inventory_id).first()
     if not inventory:
@@ -275,8 +276,8 @@ async def bulk_move_location(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Verschiebt alle eigenen Items von einem Standort zu einem anderen. Nur Offiziere+."""
-    check_role(current_user, UserRole.OFFICER)
+    """Verschiebt alle eigenen Items von einem Standort zu einem anderen. Member+."""
+    check_role(current_user, UserRole.MEMBER)
 
     # Ziel-Location prüfen (falls angegeben)
     if transfer.to_location_id:
@@ -351,8 +352,8 @@ async def move_item_location(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Verschiebt ein Item (oder Teil davon) an einen anderen Standort. Nur Offiziere+."""
-    check_role(current_user, UserRole.OFFICER)
+    """Verschiebt ein Item (oder Teil davon) an einen anderen Standort. Member+."""
+    check_role(current_user, UserRole.MEMBER)
 
     # Item finden
     item = db.query(Inventory).filter(
@@ -431,19 +432,21 @@ async def patch_reset(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Nach einem Patch: Nicht mehr vorhandene Items entfernen,
-    verbliebene Items an neue Homelocation verschieben.
-    Nur Offiziere+.
+    Nach einem Patch: Items abgleichen, Mengen anpassen, optional umziehen.
+    Member+.
     """
-    check_role(current_user, UserRole.OFFICER)
+    check_role(current_user, UserRole.MEMBER)
 
-    # Neue Location prüfen
-    new_location = db.query(Location).filter(Location.id == request.new_location_id).first()
-    if not new_location:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Neue Location nicht gefunden"
-        )
+    # Neue Location prüfen (optional - nur bei Umzug)
+    new_location = None
+    do_move = request.new_location_id is not None
+    if do_move:
+        new_location = db.query(Location).filter(Location.id == request.new_location_id).first()
+        if not new_location:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Neue Location nicht gefunden"
+            )
 
     # Alle eigenen Items laden
     all_items = db.query(Inventory).filter(
@@ -457,72 +460,88 @@ async def patch_reset(
             detail="Keine Items im Inventar"
         )
 
-    kept_ids = set(request.kept_item_ids)
+    # kept_items als Dict: inventory_id → neue Menge
+    kept_map = {ki.inventory_id: ki.quantity for ki in request.kept_items}
     removed_count = 0
-    moved_count = 0
+    kept_count = 0
+    adjusted_count = 0
     total_kept = 0
 
     for item in all_items:
-        if item.id in kept_ids:
-            # Item behalten und an neue Location verschieben
-            quantity = item.quantity
-            total_kept += quantity
-
-            # Prüfen ob am Ziel bereits ein Eintrag existiert
-            existing = db.query(Inventory).filter(
-                Inventory.user_id == current_user.id,
-                Inventory.component_id == item.component_id,
-                Inventory.location_id == request.new_location_id
-            ).first()
-
-            if existing and existing.id != item.id:
-                # Zusammenführen
-                existing.quantity += item.quantity
-                item.quantity = 0
-            else:
-                # Verschieben
-                item.location_id = request.new_location_id
-
-            moved_count += 1
-
-            # Log: Patch-Move
-            log_inventory_change(
-                db=db,
-                user_id=current_user.id,
-                component_id=item.component_id,
-                action=InventoryAction.ADD,  # Als "Add" loggen mit Note
-                quantity=0,
-                quantity_before=quantity,
-                quantity_after=quantity,
-                notes=f"Patch-Reset: Verschoben nach {new_location.name}"
-            )
-        else:
-            # Item verloren (Patch-Wipe)
+        if item.id in kept_map:
+            new_qty = max(0, kept_map[item.id])
             quantity_before = item.quantity
 
-            # Log: Patch-Verlust
+            if new_qty == 0:
+                # Komplett entfernt trotz in kept_items
+                log_inventory_change(
+                    db=db, user_id=current_user.id, component_id=item.component_id,
+                    action=InventoryAction.REMOVE, quantity=-quantity_before,
+                    quantity_before=quantity_before, quantity_after=0,
+                    notes="Patch-Reset: Item verloren"
+                )
+                item.quantity = 0
+                removed_count += 1
+                continue
+
+            # Menge anpassen wenn nötig
+            if new_qty < quantity_before:
+                diff = quantity_before - new_qty
+                log_inventory_change(
+                    db=db, user_id=current_user.id, component_id=item.component_id,
+                    action=InventoryAction.REMOVE, quantity=-diff,
+                    quantity_before=quantity_before, quantity_after=new_qty,
+                    notes=f"Patch-Reset: Menge reduziert ({quantity_before} → {new_qty})"
+                )
+                item.quantity = new_qty
+                adjusted_count += 1
+
+            total_kept += item.quantity
+
+            # Umzug durchführen wenn gewünscht
+            if do_move and new_location:
+                existing = db.query(Inventory).filter(
+                    Inventory.user_id == current_user.id,
+                    Inventory.component_id == item.component_id,
+                    Inventory.location_id == request.new_location_id
+                ).first()
+
+                if existing and existing.id != item.id:
+                    existing.quantity += item.quantity
+                    item.quantity = 0
+                else:
+                    item.location_id = request.new_location_id
+
+                log_inventory_change(
+                    db=db, user_id=current_user.id, component_id=item.component_id,
+                    action=InventoryAction.ADD, quantity=0,
+                    quantity_before=item.quantity, quantity_after=item.quantity,
+                    notes=f"Patch-Reset: Verschoben nach {new_location.name}"
+                )
+
+            kept_count += 1
+        else:
+            # Item nicht in kept_items → verloren
+            quantity_before = item.quantity
             log_inventory_change(
-                db=db,
-                user_id=current_user.id,
-                component_id=item.component_id,
-                action=InventoryAction.REMOVE,
-                quantity=-item.quantity,
-                quantity_before=quantity_before,
-                quantity_after=0,
+                db=db, user_id=current_user.id, component_id=item.component_id,
+                action=InventoryAction.REMOVE, quantity=-item.quantity,
+                quantity_before=quantity_before, quantity_after=0,
                 notes="Patch-Reset: Item verloren"
             )
-
             item.quantity = 0
             removed_count += 1
 
     db.commit()
 
+    location_msg = f" nach '{new_location.name}' verschoben" if new_location else ""
     return {
-        "message": f"Patch-Reset abgeschlossen: {moved_count} Item-Typen ({total_kept} Stück) nach '{new_location.name}' verschoben, {removed_count} Item-Typen entfernt",
-        "kept_count": moved_count,
+        "message": f"Patch-Reset: {kept_count} Items ({total_kept} Stück) behalten{location_msg}, {adjusted_count} Mengen angepasst, {removed_count} entfernt",
+        "kept_count": kept_count,
         "kept_total": total_kept,
+        "adjusted_count": adjusted_count,
         "removed_count": removed_count,
-        "new_location": new_location.name
+        "new_location": new_location.name if new_location else None
     }
 
 
@@ -951,8 +970,8 @@ async def create_transfer_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Erstellt eine Transfer-Anfrage an einen anderen User."""
-    check_role(current_user, UserRole.OFFICER)
+    """Erstellt eine Transfer-Anfrage an einen anderen User. Member+."""
+    check_role(current_user, UserRole.MEMBER)
 
     if request.quantity <= 0:
         raise HTTPException(
@@ -1148,6 +1167,41 @@ async def get_pending_requests_count(
             TransferRequest.status == TransferRequestStatus.AWAITING_RECEIPT
         ).count()
 
+    # Prüfe ob es ungelesene Anfragen gibt (neuer als last_seen_transfers)
+    has_unread = False
+    if current_user.last_seen_transfers is None:
+        # Noch nie gesehen → ungelesen wenn es überhaupt offene gibt
+        has_unread = (owner_pending + owner_approved + requester_pending + requester_approved + awaiting_receipt) > 0
+    else:
+        # Gibt es Anfragen die neuer sind als last_seen?
+        unread_count = db.query(TransferRequest).filter(
+            or_(
+                TransferRequest.owner_id == current_user.id,
+                TransferRequest.requester_id == current_user.id,
+            ),
+            TransferRequest.status.in_([
+                TransferRequestStatus.PENDING,
+                TransferRequestStatus.APPROVED,
+                TransferRequestStatus.AWAITING_RECEIPT,
+            ]),
+            TransferRequest.updated_at > current_user.last_seen_transfers
+        ).count()
+        # Auch neue Anfragen ohne update_at prüfen (created_at)
+        if unread_count == 0:
+            unread_count = db.query(TransferRequest).filter(
+                or_(
+                    TransferRequest.owner_id == current_user.id,
+                    TransferRequest.requester_id == current_user.id,
+                ),
+                TransferRequest.status.in_([
+                    TransferRequestStatus.PENDING,
+                    TransferRequestStatus.APPROVED,
+                    TransferRequestStatus.AWAITING_RECEIPT,
+                ]),
+                TransferRequest.created_at > current_user.last_seen_transfers
+            ).count()
+        has_unread = unread_count > 0
+
     return {
         "as_owner_pending": owner_pending,
         "as_owner_approved": owner_approved,
@@ -1156,8 +1210,20 @@ async def get_pending_requests_count(
         "as_requester_approved": requester_approved,
         "awaiting_receipt": awaiting_receipt,
         "admin_awaiting": admin_awaiting,
-        "total": owner_pending + owner_approved + owner_awaiting + requester_pending + requester_approved + awaiting_receipt + admin_awaiting
+        "total": owner_pending + owner_approved + owner_awaiting + requester_pending + requester_approved + awaiting_receipt + admin_awaiting,
+        "has_unread": has_unread
     }
+
+
+@router.post("/transfer-requests/mark-seen")
+async def mark_transfers_seen(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Markiert alle Transfer-Requests als gesehen (aktualisiert last_seen_transfers)."""
+    current_user.last_seen_transfers = datetime.now(timezone.utc)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/transfer-requests/{request_id}/approve")

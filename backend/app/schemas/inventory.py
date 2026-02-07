@@ -54,10 +54,16 @@ class BulkTransferToOfficer(BaseModel):
     to_location_id: Optional[int] = None     # Ziel-Standort (optional)
 
 
+class PatchKeptItem(BaseModel):
+    """Ein behaltenes Item beim Patch-Reset mit angepasster Menge."""
+    inventory_id: int
+    quantity: int  # Neue Menge (kann kleiner als original sein)
+
+
 class PatchResetRequest(BaseModel):
-    """Nach einem Patch: Items die noch vorhanden sind an neue Location verschieben."""
-    new_location_id: int                    # Neue Homelocation
-    kept_item_ids: List[int]                # IDs der Inventory-Items die noch da sind
+    """Nach einem Patch: Items abgleichen, Mengen anpassen, optional umziehen."""
+    new_location_id: Optional[int] = None   # Neue Homelocation (None = kein Umzug)
+    kept_items: List[PatchKeptItem]         # Items mit angepassten Mengen
 
 
 class TransferResponse(BaseModel):

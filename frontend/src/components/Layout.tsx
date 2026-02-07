@@ -116,14 +116,15 @@ export default function Layout() {
   const isAdmin = !isInPreviewMode && user?.role === 'admin'
   const isPioneer = user?.is_pioneer === true
 
-  // Transfer-Anfragen für Pioneers laden
+  // Transfer-Anfragen Badge laden (für alle mit Lager-Zugang)
+  const hasInventoryAccess = effectiveRole === 'member' || effectiveRole === 'officer' || effectiveRole === 'admin'
   const { data: pendingCount } = useQuery<PendingRequestsCount>({
     queryKey: ['transfer-requests', 'pending', 'count'],
     queryFn: async () => {
       const response = await apiClient.get('/api/inventory/transfer-requests/pending/count')
       return response.data
     },
-    enabled: isPioneer || isAdmin,
+    enabled: hasInventoryAccess,
     refetchInterval: 30000, // Alle 30 Sekunden aktualisieren
   })
 
@@ -248,12 +249,16 @@ export default function Layout() {
                       >
                         <item.icon size={18} />
                         <span className="flex-1">{item.label}</span>
-                        {/* Badge für Lager - nur für Pioneers */}
-                        {item.to === '/inventory' && isPioneer && pioneerPendingCount > 0 && (
-                          <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
-                            {pioneerPendingCount}
-                          </span>
-                        )}
+                        {/* Badge für Lager - rot wenn ungelesen, grau wenn gesehen */}
+                        {item.to === '/inventory' && (() => {
+                          const badgeCount = isPioneer ? pioneerPendingCount : (pendingCount?.total ?? 0)
+                          if (badgeCount <= 0) return null
+                          return (
+                            <span className={`${pendingCount?.has_unread ? 'bg-red-500' : 'bg-gray-500'} text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center`}>
+                              {badgeCount}
+                            </span>
+                          )
+                        })()}
                       </NavLink>
                     ))}
                   </div>

@@ -38,6 +38,59 @@ const actionColors: Record<InventoryAction, string> = {
   transfer_out: 'text-gray-400',
 }
 
+// Farbige Tags pro Sub-Kategorie
+const subCategoryColors: Record<string, string> = {
+  'Coolers': 'bg-sky-500/20 text-sky-400 border-sky-500/40',
+  'Power Plants': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+  'Shields': 'bg-green-500/20 text-green-400 border-green-500/40',
+  'Quantum Drives': 'bg-purple-500/20 text-purple-400 border-purple-500/40',
+  'Weapons': 'bg-red-500/20 text-red-400 border-red-500/40',
+  'Missile Launchers': 'bg-rose-500/20 text-rose-400 border-rose-500/40',
+  'Missiles': 'bg-rose-500/20 text-rose-400 border-rose-500/40',
+  'Turrets': 'bg-pink-500/20 text-pink-400 border-pink-500/40',
+  'Radar': 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40',
+  'Fuel Intakes': 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+  'Fuel Tanks': 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+  'Quantum Fuel Tanks': 'bg-amber-600/20 text-amber-300 border-amber-500/40',
+  'Mining Weapons': 'bg-teal-500/20 text-teal-400 border-teal-500/40',
+  'Salvage': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+  'Bombs': 'bg-orange-500/20 text-orange-400 border-orange-500/40',
+  'Grenades': 'bg-orange-500/20 text-orange-400 border-orange-500/40',
+  'Guns': 'bg-red-600/20 text-red-300 border-red-600/40',
+  'Helmets': 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
+  'Torso': 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
+  'Legs': 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
+  'Arms': 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
+  'Undersuits': 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
+  'Backpacks': 'bg-stone-500/20 text-stone-400 border-stone-500/40',
+  'Attachments': 'bg-slate-500/20 text-slate-400 border-slate-500/40',
+  'Interdiction': 'bg-violet-500/20 text-violet-400 border-violet-500/40',
+  'Defensive': 'bg-lime-500/20 text-lime-400 border-lime-500/40',
+  'Internal Storage': 'bg-zinc-500/20 text-zinc-400 border-zinc-500/40',
+  'Relays': 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+}
+
+// Farben pro Hauptkategorie
+const categoryColors: Record<string, string> = {
+  'Ship Components': 'bg-sky-500/20 text-sky-400 border-sky-500/40',
+  'Ship Weapons': 'bg-red-500/20 text-red-400 border-red-500/40',
+  'FPS Weapons': 'bg-orange-500/20 text-orange-400 border-orange-500/40',
+  'Armor': 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
+  'Erze': 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+  'Rohstoffe': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+  'Drogen': 'bg-purple-500/20 text-purple-400 border-purple-500/40',
+  'Waren': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+  'Salvage': 'bg-teal-500/20 text-teal-400 border-teal-500/40',
+}
+
+function getCategoryColor(category: string): string {
+  return categoryColors[category] || 'bg-gray-700/50 text-gray-300 border-gray-600/50'
+}
+
+function getSubCategoryColor(subCategory: string): string {
+  return subCategoryColors[subCategory] || 'bg-gray-700/50 text-gray-300 border-gray-600/50'
+}
+
 export default function InventoryPage() {
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
@@ -58,15 +111,17 @@ export default function InventoryPage() {
   const [addModal, setAddModal] = useState(false)
   const [quickAddMode, setQuickAddMode] = useState(true) // Quick-Add standardmäßig an
   const [quickAddCount, setQuickAddCount] = useState(0) // Zähler für hinzugefügte Items
-  const [lastLocationId, setLastLocationId] = useState<number | null>(null) // Letzter Standort merken
+  const [lastLocationId, setLastLocationId] = useState<number | null>(null) // Letzter Standort merken (Default: Area 18)
   const [bulkMoveModal, setBulkMoveModal] = useState(false)
   const [bulkFromLocation, setBulkFromLocation] = useState<number | null>(null)
   const [bulkToLocation, setBulkToLocation] = useState<number | null>(null)
   // Patch-Reset Modal
   const [patchModal, setPatchModal] = useState(false)
+  const [patchDoMove, setPatchDoMove] = useState(true) // Umzug durchführen?
   const [patchNewLocation, setPatchNewLocation] = useState<number | null>(null)
-  const [patchKeptItems, setPatchKeptItems] = useState<Set<number>>(new Set())
+  const [patchKeptItems, setPatchKeptItems] = useState<Map<number, number>>(new Map()) // ID → Menge
   const [filterSubCategory, setFilterSubCategory] = useState<string>('')
+  const [alleLagerSort, setAlleLagerSort] = useState<'alpha' | 'kategorie'>('alpha') // Sortierung Alle Lager
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set())
   const [editingUserId, setEditingUserId] = useState<number | null>(null)
@@ -119,7 +174,8 @@ export default function InventoryPage() {
   // Effektive Rolle (berücksichtigt Vorschaumodus)
   const effectiveRole = useAuthStore.getState().getEffectiveRole()
   // canManage: Kann eigenes Lager aktiv verwalten (hinzufügen/entfernen)
-  const canManage = effectiveRole !== 'member' && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
+  // Officer+, Pioneer und Member (Viper) können ihr eigenes Lager pflegen
+  const canManage = effectiveRole !== 'guest' && effectiveRole !== 'loot_guest' && !!user
   // hasInventory: Hat Zugriff auf Lager-Funktionen (alle außer Guest/Loot-Guest)
   const hasInventory = !!user && effectiveRole !== 'guest' && effectiveRole !== 'loot_guest'
   const isAdmin = effectiveRole === 'admin'
@@ -205,6 +261,14 @@ export default function InventoryPage() {
     queryFn: () => apiClient.get('/api/locations').then((r) => r.data),
   })
 
+  // Default Homelocation (Area 18) setzen wenn noch kein Standort gewählt
+  useEffect(() => {
+    if (locations && lastLocationId === null) {
+      const area18 = locations.find(l => l.name === 'Area 18')
+      if (area18) setLastLocationId(area18.id)
+    }
+  }, [locations, lastLocationId])
+
   // Locations nach System und Planet gruppieren und alphabetisch sortieren
   const groupedLocations = useMemo(() => {
     if (!locations) return { groups: {} as Record<string, { id: number; name: string; label: string }[]>, sortedSystems: [] as string[] }
@@ -286,6 +350,15 @@ export default function InventoryPage() {
     enabled: hasInventory,
     refetchInterval: 30000, // Alle 30 Sekunden aktualisieren
   })
+
+  // Transfer-Requests als gesehen markieren wenn geöffnet
+  useEffect(() => {
+    if (showTransferRequests) {
+      apiClient.post('/api/inventory/transfer-requests/mark-seen').then(() => {
+        queryClient.invalidateQueries({ queryKey: ['transfer-requests', 'pending', 'count'] })
+      })
+    }
+  }, [showTransferRequests])
 
   // Dashboard Query
   const { data: dashboard, isLoading: isDashboardLoading, error: dashboardError } = useQuery<InventoryDashboard>({
@@ -382,13 +455,14 @@ export default function InventoryPage() {
   })
 
   const patchResetMutation = useMutation({
-    mutationFn: (data: { new_location_id: number; kept_item_ids: number[] }) =>
+    mutationFn: (data: { new_location_id: number | null; kept_items: { inventory_id: number; quantity: number }[] }) =>
       apiClient.post('/api/inventory/patch-reset', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
       setPatchModal(false)
+      setPatchDoMove(true)
       setPatchNewLocation(null)
-      setPatchKeptItems(new Set())
+      setPatchKeptItems(new Map())
     },
   })
 
@@ -669,30 +743,25 @@ export default function InventoryPage() {
               </button>
               <button
                 onClick={() => {
-                  // Alle Items vorauswählen
+                  // Alle Items mit originaler Menge vorauswählen
                   if (myInventory) {
-                    setPatchKeptItems(new Set(myInventory.map(i => i.id)))
+                    const kept = new Map<number, number>()
+                    myInventory.forEach(i => kept.set(i.id, i.quantity))
+                    setPatchKeptItems(kept)
                   }
                   setPatchModal(true)
                 }}
                 className="btn bg-gray-600 hover:bg-gray-500 flex items-center gap-2"
-                title="Nach einem Patch: Items abgleichen und neue Homelocation setzen"
+                title="Nach einem Patch: Items abgleichen, Mengen anpassen, optional umziehen"
               >
                 <Package size={20} />
-                Patch
+                Patch / Umzug
               </button>
             </>
           )}
-          {/* Buttons nur für Officers+ (aktive Verwaltung) */}
+          {/* Buttons nur für aktive Verwaltung */}
           {canManage && (
             <>
-              <button
-                onClick={() => setBulkMoveModal(true)}
-                className="btn btn-secondary flex items-center gap-2"
-              >
-                <ArrowRightLeft size={20} />
-                Standort wechseln
-              </button>
               <button
                 onClick={() => setAddModal(true)}
                 className="btn btn-primary flex items-center gap-2"
@@ -1903,9 +1972,11 @@ export default function InventoryPage() {
                             .map(([subCategory, items]) => (
                               <div key={subCategory}>
                                 {/* Unterkategorie-Header */}
-                                <h4 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
-                                  {subCategory}
-                                  <span className="ml-2 text-xs text-gray-500">
+                                <h4 className="text-sm font-medium mb-2 border-b border-gray-700/50 pb-1 flex items-center gap-2">
+                                  <span className={`px-2 py-0.5 rounded border text-xs ${getSubCategoryColor(subCategory)}`}>
+                                    {subCategory}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
                                     ({items.reduce((sum, i) => sum + i.quantity, 0)})
                                   </span>
                                 </h4>
@@ -2020,9 +2091,25 @@ export default function InventoryPage() {
 
       {/* Alle Lager */}
       <div className="card">
-        <h2 className="text-xl font-bold mb-4">
-          {isAdmin ? 'Alle Lager' : isPioneer ? 'Lager-Übersicht (nur Ansicht)' : 'Sichtbare Lager'}
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">
+            {isAdmin ? 'Alle Lager' : isPioneer ? 'Lager-Übersicht (nur Ansicht)' : 'Sichtbare Lager'}
+          </h2>
+          <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-0.5">
+            <button
+              onClick={() => setAlleLagerSort('alpha')}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${alleLagerSort === 'alpha' ? 'bg-krt-orange text-white' : 'text-gray-400 hover:text-gray-300'}`}
+            >
+              A-Z
+            </button>
+            <button
+              onClick={() => setAlleLagerSort('kategorie')}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${alleLagerSort === 'kategorie' ? 'bg-krt-orange text-white' : 'text-gray-400 hover:text-gray-300'}`}
+            >
+              Kategorie
+            </button>
+          </div>
+        </div>
         {!isAdmin && !isPioneer && (
           <p className="text-sm text-gray-400 mb-4">
             Du siehst dein eigenes Lager und die Lager der Pioneers. Um Items von anderen anzufordern, klicke auf "Anfragen".
@@ -2045,13 +2132,20 @@ export default function InventoryPage() {
               })
               if (!items || items.length === 0) return null
 
-              // Gruppiere nach Kategorie
+              // Gruppiere nach Kategorie oder Sub-Kategorie
               const byCategory: Record<string, InventoryItem[]> = {}
+              const bySubCategory: Record<string, InventoryItem[]> = {}
               items.forEach(item => {
                 const cat = item.component.category || 'Sonstige'
                 if (!byCategory[cat]) byCategory[cat] = []
                 byCategory[cat].push(item)
+
+                const subCat = item.component.sub_category || 'Sonstige'
+                if (!bySubCategory[subCat]) bySubCategory[subCat] = []
+                bySubCategory[subCat].push(item)
               })
+              const displayGroups = alleLagerSort === 'kategorie' ? bySubCategory : byCategory
+              const getColorFn = alleLagerSort === 'kategorie' ? getSubCategoryColor : getCategoryColor
 
               const isExpanded = expandedUsers.has(officer.id)
               const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
@@ -2091,17 +2185,17 @@ export default function InventoryPage() {
                       {/* Kategorien-Tags (collapsed) */}
                       {!isExpanded && (
                         <div className="flex gap-1 flex-wrap justify-end">
-                          {Object.entries(byCategory).slice(0, 4).map(([cat, catItems]) => (
+                          {Object.entries(displayGroups).slice(0, 4).map(([cat, catItems]) => (
                             <span
                               key={cat}
-                              className="text-xs px-2 py-0.5 bg-gray-700/50 rounded text-gray-300"
+                              className={`text-xs px-2 py-0.5 rounded border ${getColorFn(cat)}`}
                             >
                               {cat}: {catItems.reduce((s, i) => s + i.quantity, 0)}
                             </span>
                           ))}
-                          {Object.keys(byCategory).length > 4 && (
+                          {Object.keys(displayGroups).length > 4 && (
                             <span className="text-xs px-2 py-0.5 bg-gray-700/50 rounded text-gray-400">
-                              +{Object.keys(byCategory).length - 4}
+                              +{Object.keys(displayGroups).length - 4}
                             </span>
                           )}
                         </div>
@@ -2131,13 +2225,15 @@ export default function InventoryPage() {
                       )}
 
                       {/* Kategorien */}
-                      {Object.entries(byCategory)
+                      {Object.entries(displayGroups)
                         .sort(([a], [b]) => a.localeCompare(b))
                         .map(([category, catItems]) => (
                           <div key={category}>
-                            <h4 className="text-sm font-medium text-gray-400 mb-2 border-b border-gray-700/50 pb-1">
-                              {category}
-                              <span className="ml-2 text-xs text-gray-500">
+                            <h4 className="text-sm font-medium mb-2 border-b border-gray-700/50 pb-1 flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded border text-xs ${getColorFn(category)}`}>
+                                {category}
+                              </span>
+                              <span className="text-xs text-gray-500">
                                 ({catItems.reduce((sum, i) => sum + i.quantity, 0)})
                               </span>
                             </h4>
@@ -2154,8 +2250,15 @@ export default function InventoryPage() {
                                       key={item.id}
                                       className="p-3 bg-gray-800/30 rounded-lg"
                                     >
-                                      <p className="font-medium text-sm truncate">{item.component.name}</p>
-                                      <div className="flex items-center justify-between mt-1">
+                                      <div className="flex items-center gap-1.5 mb-1">
+                                        <p className="font-medium text-sm truncate">{item.component.name}</p>
+                                        {item.component.sub_category && (
+                                          <span className={`text-[10px] px-1.5 py-0 rounded border whitespace-nowrap ${getSubCategoryColor(item.component.sub_category)}`}>
+                                            {item.component.sub_category}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center justify-between">
                                         {isEditing ? (
                                           // Admin Edit Controls
                                           <div className="flex items-center gap-1">
@@ -2803,33 +2906,43 @@ export default function InventoryPage() {
           <div className="card max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
             <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
               <Package size={24} className="text-gray-400" />
-              Patch-Reset
+              Patch / Umzug
             </h2>
             <p className="text-gray-400 mb-4">
-              Nach einem Patch: Wähle aus, welche Items du noch hast. Nicht ausgewählte werden aus dem Inventar entfernt.
-              Alle behaltenen Items werden an deine neue Homelocation verschoben.
+              Wähle aus, welche Items du noch hast und passe ggf. die Mengen an.
+              Nicht ausgewählte Items werden entfernt.
             </p>
 
             <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
-              {/* Neue Homelocation */}
-              <div>
-                <label className="label">Neue Homelocation</label>
-                <select
-                  value={patchNewLocation ?? ''}
-                  onChange={(e) => setPatchNewLocation(e.target.value ? Number(e.target.value) : null)}
-                  className="input"
-                >
-                  <option value="">Location wählen...</option>
-                  {groupedLocations.sortedSystems.map(system => (
-                    <optgroup key={system} label={`━━ ${system} ━━`}>
-                      {groupedLocations.groups[system].map((loc) => (
-                        <option key={loc.id} value={loc.id}>
-                          {loc.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+              {/* Umzug-Option */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={patchDoMove}
+                    onChange={(e) => setPatchDoMove(e.target.checked)}
+                    className="rounded border-gray-600 bg-gray-800"
+                  />
+                  <span className="text-sm">Umzug durchführen (alle behaltenen Items verschieben)</span>
+                </label>
+                {patchDoMove && (
+                  <select
+                    value={patchNewLocation ?? ''}
+                    onChange={(e) => setPatchNewLocation(e.target.value ? Number(e.target.value) : null)}
+                    className="input"
+                  >
+                    <option value="">Neue Location wählen...</option>
+                    {groupedLocations.sortedSystems.map(system => (
+                      <optgroup key={system} label={`━━ ${system} ━━`}>
+                        {groupedLocations.groups[system].map((loc) => (
+                          <option key={loc.id} value={loc.id}>
+                            {loc.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {/* Quick-Actions */}
@@ -2837,7 +2950,9 @@ export default function InventoryPage() {
                 <button
                   onClick={() => {
                     if (myInventory) {
-                      setPatchKeptItems(new Set(myInventory.map(i => i.id)))
+                      const kept = new Map<number, number>()
+                      myInventory.forEach(i => kept.set(i.id, i.quantity))
+                      setPatchKeptItems(kept)
                     }
                   }}
                   className="btn btn-secondary text-sm"
@@ -2845,7 +2960,7 @@ export default function InventoryPage() {
                   Alle auswählen
                 </button>
                 <button
-                  onClick={() => setPatchKeptItems(new Set())}
+                  onClick={() => setPatchKeptItems(new Map())}
                   className="btn btn-secondary text-sm"
                 >
                   Alle abwählen
@@ -2855,7 +2970,7 @@ export default function InventoryPage() {
                 </span>
               </div>
 
-              {/* Items Liste mit Checkboxen */}
+              {/* Items Liste mit Checkboxen + Mengenanpassung */}
               <div className="flex-1 overflow-y-auto border border-gray-700 rounded-lg">
                 {myInventory && myInventory.length > 0 ? (
                   <div className="divide-y divide-gray-700">
@@ -2879,13 +2994,13 @@ export default function InventoryPage() {
                                 onClick={() => {
                                   const itemIds = items.map(i => i.id)
                                   const allSelected = itemIds.every(id => patchKeptItems.has(id))
-                                  const newSet = new Set(patchKeptItems)
+                                  const newMap = new Map(patchKeptItems)
                                   if (allSelected) {
-                                    itemIds.forEach(id => newSet.delete(id))
+                                    itemIds.forEach(id => newMap.delete(id))
                                   } else {
-                                    itemIds.forEach(id => newSet.add(id))
+                                    items.forEach(i => newMap.set(i.id, i.quantity))
                                   }
-                                  setPatchKeptItems(newSet)
+                                  setPatchKeptItems(newMap)
                                 }}
                                 className="text-xs text-krt-orange hover:text-krt-orange/80"
                               >
@@ -2896,41 +3011,77 @@ export default function InventoryPage() {
                               </span>
                             </div>
                           </div>
-                          {items.map(item => (
-                            <label
-                              key={item.id}
-                              className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-800/30 transition-colors ${
-                                patchKeptItems.has(item.id) ? 'bg-gray-800/30' : 'bg-red-900/10'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={patchKeptItems.has(item.id)}
-                                onChange={(e) => {
-                                  const newSet = new Set(patchKeptItems)
-                                  if (e.target.checked) {
-                                    newSet.add(item.id)
-                                  } else {
-                                    newSet.delete(item.id)
-                                  }
-                                  setPatchKeptItems(newSet)
-                                }}
-                                className="rounded"
-                              />
-                              <div className="flex-1">
-                                <p className={`font-medium ${patchKeptItems.has(item.id) ? 'text-white' : 'text-gray-500 line-through'}`}>
-                                  {item.component.name}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {item.component.category}
-                                  {item.component.manufacturer && ` • ${item.component.manufacturer}`}
-                                </p>
+                          {items.map(item => {
+                            const isKept = patchKeptItems.has(item.id)
+                            const keptQty = patchKeptItems.get(item.id) ?? item.quantity
+                            return (
+                              <div
+                                key={item.id}
+                                className={`flex items-center gap-3 p-3 transition-colors ${
+                                  isKept ? 'bg-gray-800/30' : 'bg-red-900/10'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isKept}
+                                  onChange={(e) => {
+                                    const newMap = new Map(patchKeptItems)
+                                    if (e.target.checked) {
+                                      newMap.set(item.id, item.quantity)
+                                    } else {
+                                      newMap.delete(item.id)
+                                    }
+                                    setPatchKeptItems(newMap)
+                                  }}
+                                  className="rounded cursor-pointer"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className={`font-medium ${isKept ? 'text-white' : 'text-gray-500 line-through'}`}>
+                                    {item.component.name}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {item.component.category}
+                                    {item.component.manufacturer && ` • ${item.component.manufacturer}`}
+                                  </p>
+                                </div>
+                                {isKept ? (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => {
+                                        if (keptQty > 1) {
+                                          const newMap = new Map(patchKeptItems)
+                                          newMap.set(item.id, keptQty - 1)
+                                          setPatchKeptItems(newMap)
+                                        }
+                                      }}
+                                      className="w-7 h-7 rounded bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-sm"
+                                    >
+                                      −
+                                    </button>
+                                    <span className="w-10 text-center font-bold text-krt-orange">{keptQty}</span>
+                                    <button
+                                      onClick={() => {
+                                        if (keptQty < item.quantity) {
+                                          const newMap = new Map(patchKeptItems)
+                                          newMap.set(item.id, keptQty + 1)
+                                          setPatchKeptItems(newMap)
+                                        }
+                                      }}
+                                      disabled={keptQty >= item.quantity}
+                                      className="w-7 h-7 rounded bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-sm disabled:opacity-30"
+                                    >
+                                      +
+                                    </button>
+                                    {keptQty < item.quantity && (
+                                      <span className="text-xs text-gray-500 ml-1">/{item.quantity}</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="font-bold text-gray-600">{item.quantity}x</span>
+                                )}
                               </div>
-                              <span className={`font-bold ${patchKeptItems.has(item.id) ? 'text-krt-orange' : 'text-gray-600'}`}>
-                                {item.quantity}x
-                              </span>
-                            </label>
-                          ))}
+                            )
+                          })}
                         </div>
                       ))
                     })()}
@@ -2946,7 +3097,7 @@ export default function InventoryPage() {
               <div className="p-3 bg-gray-800/50 rounded-lg">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-300">
-                    Behalten: {patchKeptItems.size} Items ({myInventory?.filter(i => patchKeptItems.has(i.id)).reduce((s, i) => s + i.quantity, 0) || 0} Stück)
+                    Behalten: {patchKeptItems.size} Items ({Array.from(patchKeptItems.values()).reduce((s, q) => s + q, 0)} Stück)
                   </span>
                   <span className="text-red-400">
                     Entfernen: {(myInventory?.length || 0) - patchKeptItems.size} Items ({myInventory?.filter(i => !patchKeptItems.has(i.id)).reduce((s, i) => s + i.quantity, 0) || 0} Stück)
@@ -2959,8 +3110,9 @@ export default function InventoryPage() {
                 <button
                   onClick={() => {
                     setPatchModal(false)
+                    setPatchDoMove(true)
                     setPatchNewLocation(null)
-                    setPatchKeptItems(new Set())
+                    setPatchKeptItems(new Map())
                   }}
                   className="btn btn-secondary flex-1"
                 >
@@ -2968,17 +3120,18 @@ export default function InventoryPage() {
                 </button>
                 <button
                   onClick={() => {
-                    if (patchNewLocation) {
-                      patchResetMutation.mutate({
-                        new_location_id: patchNewLocation,
-                        kept_item_ids: Array.from(patchKeptItems),
-                      })
-                    }
+                    patchResetMutation.mutate({
+                      new_location_id: patchDoMove ? patchNewLocation : null,
+                      kept_items: Array.from(patchKeptItems.entries()).map(([id, qty]) => ({
+                        inventory_id: id,
+                        quantity: qty,
+                      })),
+                    })
                   }}
-                  disabled={!patchNewLocation || patchResetMutation.isPending}
+                  disabled={(patchDoMove && !patchNewLocation) || patchResetMutation.isPending}
                   className="btn bg-gray-600 hover:bg-gray-500 flex-1"
                 >
-                  {patchResetMutation.isPending ? 'Wird verarbeitet...' : 'Patch-Reset durchführen'}
+                  {patchResetMutation.isPending ? 'Wird verarbeitet...' : 'Durchführen'}
                 </button>
               </div>
             </div>
@@ -3026,7 +3179,7 @@ function ComponentSelectModal({
   const [modalCategory, setModalCategory] = useState('')
   const [modalManufacturer, setModalManufacturer] = useState('')
   const [selectedId, setSelectedId] = useState<number | null>(null)
-  const [quantity, setQuantity] = useState(1)
+  const [quantityStr, setQuantityStr] = useState('1')
   const [locationId, setLocationId] = useState<number | null>(lastLocationId)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
@@ -3039,6 +3192,13 @@ function ComponentSelectModal({
     const matchesManufacturer = !modalManufacturer || c.manufacturer === modalManufacturer
     return matchesSearch && matchesCategory && matchesManufacturer
   }).slice(0, 100) // Limit auf 100 Ergebnisse
+
+  // Auto-Selektion bei genau 1 Suchergebnis
+  useEffect(() => {
+    if (filteredComponents.length === 1) {
+      setSelectedId(filteredComponents[0].id)
+    }
+  }, [filteredComponents.length, filteredComponents[0]?.id])
 
   // Prüfen ob Komponente bereits im Inventar
   const getInventoryQuantity = (componentId: number) => {
@@ -3160,19 +3320,18 @@ function ComponentSelectModal({
             <input
               type="number"
               min={1}
-              value={quantity}
-              onChange={(e) => setQuantity(Number(e.target.value))}
+              value={quantityStr}
+              onChange={(e) => setQuantityStr(e.target.value)}
               className="input"
             />
           </div>
           <div>
-            <label className="label">Standort (optional)</label>
+            <label className="label">Standort</label>
             <select
               value={locationId ?? ''}
               onChange={(e) => setLocationId(e.target.value ? Number(e.target.value) : null)}
               className="input"
             >
-              <option value="">Kein Standort</option>
               {groupedLocations.sortedSystems.map(system => (
                 <optgroup key={system} label={`━━ ${system} ━━`}>
                   {groupedLocations.groups[system].map((loc) => (
@@ -3205,6 +3364,7 @@ function ComponentSelectModal({
           </button>
           <button
             onClick={() => {
+              const quantity = parseInt(quantityStr) || 1
               if (selectedId && selectedComponent) {
                 onSelect(selectedId, quantity, locationId)
                 if (quickAddMode) {
@@ -3212,7 +3372,7 @@ function ComponentSelectModal({
                   onSuccessfulAdd(locationId, selectedComponent.name, quantity)
                   setSuccessMessage(`${quantity}x ${selectedComponent.name} hinzugefügt`)
                   setSelectedId(null)
-                  setQuantity(1)
+                  setQuantityStr('1')
                   setModalSearch('')
                   // Standort NICHT resetten - der bleibt!
                   setTimeout(() => setSuccessMessage(null), 3000)
@@ -3222,7 +3382,7 @@ function ComponentSelectModal({
                 }
               }
             }}
-            disabled={!selectedId || isPending}
+            disabled={!selectedId || !locationId || isPending}
             className="btn btn-primary flex-1"
           >
             {isPending ? 'Wird hinzugefügt...' : quickAddMode ? 'Hinzufügen & Weiter' : 'Hinzufügen'}

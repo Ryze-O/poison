@@ -91,10 +91,13 @@ export default function TreasuryPage() {
     enabled: canManage && (showAccountForm || showForm || editingTransaction !== null),
   })
 
-  // Sortierte User für Dropdown (alphabetisch nach Display-Name)
+  // Sortierte User für Dropdown: Kassenwarte zuerst, dann alphabetisch
   const sortedUsers = useMemo(() => {
     if (!allUsers) return []
     return [...allUsers].sort((a, b) => {
+      // Kassenwarte zuerst
+      if (a.is_treasurer && !b.is_treasurer) return -1
+      if (!a.is_treasurer && b.is_treasurer) return 1
       const nameA = (a.display_name || a.username).toLowerCase()
       const nameB = (b.display_name || b.username).toLowerCase()
       return nameA.localeCompare(nameB, 'de')
@@ -973,11 +976,22 @@ export default function TreasuryPage() {
                     className="input"
                   >
                     <option value="">-- Auswählen --</option>
-                    {sortedUsers.map(user => (
-                      <option key={user.id} value={user.display_name || user.username}>
-                        {user.display_name || user.username}
-                      </option>
-                    ))}
+                    {sortedUsers.some(u => u.is_treasurer) && (
+                      <optgroup label="Kassenwarte">
+                        {sortedUsers.filter(u => u.is_treasurer).map(user => (
+                          <option key={user.id} value={user.display_name || user.username}>
+                            {user.display_name || user.username}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Alle Mitglieder">
+                      {sortedUsers.filter(u => !u.is_treasurer).map(user => (
+                        <option key={user.id} value={user.display_name || user.username}>
+                          {user.display_name || user.username}
+                        </option>
+                      ))}
+                    </optgroup>
                     <option value="__custom__">── Andere Person... ──</option>
                   </select>
                 )}
@@ -1362,11 +1376,22 @@ export default function TreasuryPage() {
                     className="input"
                   >
                     <option value="">-- Auswählen --</option>
-                    {sortedUsers.map(user => (
-                      <option key={user.id} value={user.display_name || user.username}>
-                        {user.display_name || user.username}
-                      </option>
-                    ))}
+                    {sortedUsers.some(u => u.is_treasurer) && (
+                      <optgroup label="Kassenwarte">
+                        {sortedUsers.filter(u => u.is_treasurer).map(user => (
+                          <option key={user.id} value={user.display_name || user.username}>
+                            {user.display_name || user.username}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Alle Mitglieder">
+                      {sortedUsers.filter(u => !u.is_treasurer).map(user => (
+                        <option key={user.id} value={user.display_name || user.username}>
+                          {user.display_name || user.username}
+                        </option>
+                      ))}
+                    </optgroup>
                     <option value="__custom__">── Andere Person... ──</option>
                   </select>
                 )}

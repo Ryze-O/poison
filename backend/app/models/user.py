@@ -37,6 +37,7 @@ class User(Base):
     is_treasurer = Column(Boolean, default=False, nullable=False)  # Kassenwart: verwaltet Teil der Staffelkasse
     is_kg_verwalter = Column(Boolean, default=False, nullable=False)  # KG-Verwalter: kann Staffelstruktur bearbeiten
     aliases = Column(String(500), nullable=True)  # Komma-separierte OCR-Aliase (z.B. "ry-ze,ry_ze")
+    last_seen_transfers = Column(DateTime(timezone=True), nullable=True)  # Wann zuletzt Transfer-Requests angesehen
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

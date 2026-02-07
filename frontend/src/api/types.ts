@@ -375,6 +375,7 @@ export interface PendingRequestsCount {
   awaiting_receipt: number      // Anfragen wo ich Erhalt bestätigen muss
   admin_awaiting: number        // Für Admins: Anfragen von inaktiven Usern
   total: number
+  has_unread: boolean           // Gibt es ungelesene Anfragen seit letztem Besuch?
 }
 
 // Komponenten-Suche & Dashboard
