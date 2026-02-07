@@ -53,6 +53,7 @@ class MetaLoadoutItemResponse(BaseModel):
     slot_index: int
     hardpoint_id: Optional[int]
     component: ComponentResponse
+    pioneer_stock: int = 0  # Wie viele bei Pioneers auf Lager
 
     class Config:
         from_attributes = True

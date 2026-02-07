@@ -317,6 +317,26 @@ async def get_loadout(
 
     if not loadout:
         raise HTTPException(status_code=404, detail="Loadout nicht gefunden")
+
+    # Pioneer-Lagerbestand für alle Komponenten im Loadout laden
+    component_ids = [item.component_id for item in loadout.items]
+    if component_ids:
+        from sqlalchemy import func
+        pioneer_stock_rows = db.query(
+            Inventory.component_id,
+            func.sum(Inventory.quantity).label("total")
+        ).join(User, Inventory.user_id == User.id).filter(
+            User.is_pioneer == True,
+            Inventory.component_id.in_(component_ids)
+        ).group_by(Inventory.component_id).all()
+        pioneer_stock = {row.component_id: row.total for row in pioneer_stock_rows}
+    else:
+        pioneer_stock = {}
+
+    # Items mit pioneer_stock anreichern
+    for item in loadout.items:
+        item.pioneer_stock = pioneer_stock.get(item.component_id, 0)
+
     return loadout
 
 

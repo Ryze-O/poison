@@ -905,6 +905,7 @@ export interface MetaLoadoutItem {
   slot_index: number
   hardpoint_id: number | null
   component: Component
+  pioneer_stock: number
 }
 
 export interface MetaLoadout {

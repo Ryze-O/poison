@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, Search, ChevronDown, ChevronRight, ExternalLink, Check, X, Send, Trash2, Edit2, Save, Loader, Ship as ShipIcon, Calendar, Download } from 'lucide-react'
+import { Plus, Search, ChevronDown, ChevronRight, ExternalLink, Check, X, Send, Trash2, Edit2, Save, Loader, Ship as ShipIcon, Calendar, Download, ShoppingCart, Package } from 'lucide-react'
 import ComponentSearchModal from '../components/ComponentSearchModal'
 import type { MetaLoadout, MetaLoadoutList, ShipWithHardpoints, ShipSearchResult, LoadoutCheck, Component, UserLoadout, ErkulImportResponse } from '../api/types'
 
@@ -1032,6 +1032,20 @@ export default function LoadoutsPage() {
                                                       {assignedItem.component.manufacturer}
                                                       {assignedItem.component.grade && ` · Grade ${assignedItem.component.grade}`}
                                                     </p>
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                      {assignedItem.component.shop_locations && (
+                                                        <span className="flex items-center gap-0.5 text-[10px] text-emerald-400" title={`Kaufbar: ${assignedItem.component.shop_locations}`}>
+                                                          <ShoppingCart size={10} />
+                                                          Kaufbar
+                                                        </span>
+                                                      )}
+                                                      {assignedItem.pioneer_stock > 0 && (
+                                                        <span className="flex items-center gap-0.5 text-[10px] text-krt-orange" title="Bei Pioneers auf Lager">
+                                                          <Package size={10} />
+                                                          {assignedItem.pioneer_stock}x Lager
+                                                        </span>
+                                                      )}
+                                                    </div>
                                                     {checkItem && checkItem.in_inventory === 0 && checkItem.available_from_pioneers > 0 && (
                                                       <p className="text-[10px] text-yellow-400 mt-0.5">
                                                         {checkItem.available_from_pioneers}x bei Pioneers
@@ -1102,6 +1116,20 @@ export default function LoadoutsPage() {
                                           <div key={item.id} className="p-3 rounded-lg border border-gray-600 bg-gray-800/40">
                                             <p className="font-medium text-sm truncate">{item.component.name}</p>
                                             <p className="text-[10px] text-gray-500">{item.component.manufacturer}</p>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                              {item.component.shop_locations && (
+                                                <span className="flex items-center gap-0.5 text-[10px] text-emerald-400" title={`Kaufbar: ${item.component.shop_locations}`}>
+                                                  <ShoppingCart size={10} />
+                                                  Kaufbar
+                                                </span>
+                                              )}
+                                              {item.pioneer_stock > 0 && (
+                                                <span className="flex items-center gap-0.5 text-[10px] text-krt-orange" title="Bei Pioneers auf Lager">
+                                                  <Package size={10} />
+                                                  {item.pioneer_stock}x Lager
+                                                </span>
+                                              )}
+                                            </div>
                                           </div>
                                         ))}
                                       </div>
