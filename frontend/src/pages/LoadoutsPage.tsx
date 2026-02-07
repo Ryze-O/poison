@@ -46,6 +46,7 @@ export default function LoadoutsPage() {
   const [shipSearch, setShipSearch] = useState('')
   const [selectedShip, setSelectedShip] = useState<ShipSearchResult | null>(null)
   const [newLoadoutName, setNewLoadoutName] = useState('')
+  const [newLoadoutCategory, setNewLoadoutCategory] = useState('')
   const [newLoadoutDesc, setNewLoadoutDesc] = useState('')
   const [newErkulLink, setNewErkulLink] = useState('')
   const [newVersionDate, setNewVersionDate] = useState('')
@@ -63,6 +64,7 @@ export default function LoadoutsPage() {
 
   // Edit loadout state
   const [editName, setEditName] = useState('')
+  const [editCategory, setEditCategory] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editErkul, setEditErkul] = useState('')
   const [editVersionDate, setEditVersionDate] = useState('')
@@ -244,6 +246,7 @@ export default function LoadoutsPage() {
     setShipSearch('')
     setSelectedShip(null)
     setNewLoadoutName('')
+    setNewLoadoutCategory('')
     setNewLoadoutDesc('')
     setNewErkulLink('')
     setNewVersionDate('')
@@ -271,17 +274,25 @@ export default function LoadoutsPage() {
     return groups
   }, [shipDetail])
 
-  // Loadouts nach Schiff gruppiert
-  const loadoutsByShip = useMemo(() => {
+  // Loadouts nach Kategorie gruppiert
+  const loadoutsByCategory = useMemo(() => {
     if (!loadouts) return {}
     const groups: Record<string, MetaLoadoutList[]> = {}
     loadouts.forEach(l => {
-      const key = l.ship.name
+      const key = l.category || 'Sonstige'
       if (!groups[key]) groups[key] = []
       groups[key].push(l)
     })
     return groups
   }, [loadouts])
+
+  // Sortier-Reihenfolge für Kategorien
+  const categoryOrder = [
+    'Ground', 'Snubs', 'Light Fighter', 'Medium Fighter', 'Heavy Fighter',
+    'Aufklärer', 'Interceptor', 'Interdictor', 'Electronic Warfare',
+    'Anti-GKS Fighter', 'Torpedo-/Bomber', 'Gunships', 'Medics',
+    'Transporter', 'Dropships', 'Sub GKS', 'GKS', 'Sonstige',
+  ]
 
   // Handler: Component zu Loadout-Slot zuweisen
   const handleAssignComponent = (component: Component) => {
@@ -424,6 +435,17 @@ export default function LoadoutsPage() {
               </div>
 
               <div>
+                <label className="label">Kategorie</label>
+                <input
+                  type="text"
+                  value={newLoadoutCategory}
+                  onChange={(e) => setNewLoadoutCategory(e.target.value)}
+                  placeholder="z.B. Light Fighter, Ground, GKS"
+                  className="input"
+                />
+              </div>
+
+              <div>
                 <label className="label">Beschreibung</label>
                 <textarea
                   value={newLoadoutDesc}
@@ -465,6 +487,7 @@ export default function LoadoutsPage() {
                     createLoadoutMutation.mutate({
                       ship_id: selectedShip.id,
                       name: newLoadoutName.trim(),
+                      category: newLoadoutCategory.trim() || undefined,
                       description: newLoadoutDesc.trim() || undefined,
                       erkul_link: newErkulLink.trim() || undefined,
                       version_date: newVersionDate || undefined,
@@ -727,19 +750,23 @@ export default function LoadoutsPage() {
           {isOfficer && ' Erstelle das erste Loadout über den Button oben.'}
         </div>
       ) : (
-        <div className="space-y-3">
-          {Object.entries(loadoutsByShip)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([shipName, shipLoadouts]) => {
-              const isExpanded = shipLoadouts.some(l => expandedLoadouts.has(l.id))
+        <div className="space-y-4">
+          {Object.entries(loadoutsByCategory)
+            .sort(([a], [b]) => {
+              const ia = categoryOrder.indexOf(a)
+              const ib = categoryOrder.indexOf(b)
+              return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+            })
+            .map(([catName, catLoadouts]) => {
+              const isExpanded = catLoadouts.some(l => expandedLoadouts.has(l.id))
               return (
-                <div key={shipName} className="card p-0 overflow-hidden">
-                  {/* Ship Header */}
+                <div key={catName} className="card p-0 overflow-hidden">
+                  {/* Category Header */}
                   <button
                     onClick={() => {
                       const newExpanded = new Set(expandedLoadouts)
-                      const allExpanded = shipLoadouts.every(l => newExpanded.has(l.id))
-                      shipLoadouts.forEach(l => {
+                      const allExpanded = catLoadouts.every(l => newExpanded.has(l.id))
+                      catLoadouts.forEach(l => {
                         if (allExpanded) newExpanded.delete(l.id)
                         else newExpanded.add(l.id)
                       })
@@ -750,22 +777,14 @@ export default function LoadoutsPage() {
                     <div className="flex items-center gap-3">
                       {isExpanded ? <ChevronDown size={18} className="text-krt-orange" /> : <ChevronRight size={18} className="text-gray-400" />}
                       <div>
-                        <p className="font-bold">{shipName}</p>
-                        <p className="text-xs text-gray-500">{shipLoadouts[0].ship.manufacturer} · {shipLoadouts.length} Loadout{shipLoadouts.length > 1 ? 's' : ''}</p>
+                        <p className="font-bold">{catName}</p>
+                        <p className="text-xs text-gray-500">{catLoadouts.length} Loadout{catLoadouts.length > 1 ? 's' : ''}</p>
                       </div>
                     </div>
-                    {shipLoadouts[0].ship.image_url && (
-                      <img
-                        src={shipLoadouts[0].ship.image_url}
-                        alt={shipName}
-                        className="h-12 w-auto rounded opacity-60"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                      />
-                    )}
                   </button>
 
-                  {/* Loadouts for this ship */}
-                  {shipLoadouts.map(loadout => {
+                  {/* Loadouts in this category */}
+                  {catLoadouts.map(loadout => {
                     if (!expandedLoadouts.has(loadout.id)) return null
                     const isSelected = selectedLoadoutId === loadout.id
                     const isEditing = editingLoadoutId === loadout.id
@@ -781,6 +800,10 @@ export default function LoadoutsPage() {
                             }}
                             className="flex items-center gap-2 text-left flex-1"
                           >
+                            {loadout.ship.image_url && (
+                              <img src={loadout.ship.image_url} alt={loadout.ship.name} className="h-8 w-auto rounded opacity-70" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                            )}
+                            <span className="text-sm text-gray-400">{loadout.ship.name}</span>
                             <span className="font-medium text-krt-orange">{loadout.name}</span>
                             {loadout.description && (
                               <span className="text-xs text-gray-500">— {loadout.description}</span>
@@ -810,6 +833,7 @@ export default function LoadoutsPage() {
                                   setEditingLoadoutId(isEditing ? null : loadout.id)
                                   if (!isEditing) {
                                     setEditName(loadout.name)
+                                    setEditCategory(loadout.category || '')
                                     setEditDesc(loadout.description || '')
                                     setEditErkul(loadout.erkul_link || '')
                                     setEditVersionDate(loadout.version_date || '')
@@ -845,6 +869,10 @@ export default function LoadoutsPage() {
                               <input value={editName} onChange={(e) => setEditName(e.target.value)} className="input" />
                             </div>
                             <div>
+                              <label className="label">Kategorie</label>
+                              <input value={editCategory} onChange={(e) => setEditCategory(e.target.value)} className="input" placeholder="z.B. Light Fighter, Ground, GKS" />
+                            </div>
+                            <div>
                               <label className="label">Beschreibung</label>
                               <input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} className="input" />
                             </div>
@@ -864,6 +892,7 @@ export default function LoadoutsPage() {
                                     id: loadout.id,
                                     data: {
                                       name: editName.trim(),
+                                      category: editCategory.trim() || null,
                                       description: editDesc.trim() || null,
                                       erkul_link: editErkul.trim() || null,
                                       version_date: editVersionDate || null,

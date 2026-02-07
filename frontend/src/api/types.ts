@@ -912,6 +912,7 @@ export interface MetaLoadout {
   id: number
   ship: Ship
   name: string
+  category: string | null
   description: string | null
   erkul_link: string | null
   is_active: boolean
@@ -926,6 +927,7 @@ export interface MetaLoadoutList {
   id: number
   ship: Ship
   name: string
+  category: string | null
   description: string | null
   erkul_link: string | null
   is_active: boolean
