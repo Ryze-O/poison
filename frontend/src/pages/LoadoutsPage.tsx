@@ -12,7 +12,7 @@ const hardpointTypeLabels: Record<string, string> = {
   turret: 'Türme',
   missile_launcher: 'Raketen',
   shield: 'Schilde',
-  power_plant: 'Kraftwerk',
+  power_plant: 'Powerplant',
   cooler: 'Kühler',
   quantum_drive: 'Quantum Drive',
 }
