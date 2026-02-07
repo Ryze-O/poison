@@ -18,6 +18,8 @@ from app.schemas.loadout import (
     LoadoutCheckResponse, LoadoutCheckItem,
     UserLoadoutCreate, UserLoadoutUpdate, UserLoadoutResponse, UserLoadoutWithUser,
     ErkulImportRequest, ErkulImportResponse, ErkulImportedItem,
+    ErkulBulkPreviewRequest, ErkulBulkPreviewResponse, ErkulBulkPreviewItem, ErkulBulkPreviewMatch,
+    ErkulBulkImportRequest, ErkulBulkImportResponse, ErkulBulkImportResultItem,
 )
 
 router = APIRouter()
@@ -623,6 +625,297 @@ async def import_from_erkul(
         unmatched_count=len(unmatched_items),
         unmatched_items=unmatched_items,
         items=imported_items,
+    )
+
+
+# ============== Erkul Hilfsfunktionen ==============
+
+import httpx as _httpx
+import base64 as _base64
+import json as _json
+import re as _re
+from datetime import date as _date
+
+_ERKUL_TYPE_MAP = {
+    "power-plant": "power_plant", "cooler": "cooler", "shield": "shield",
+    "qdrive": "quantum_drive", "weapon": "weapon_gun", "mount": "weapon_gun",
+    "turret": "turret", "missile-rack": "missile_launcher",
+}
+_ERKUL_SKIP_TYPES = {"paint", "controller-flight", "radar", "life-support", "jumpdrive"}
+
+
+def _parse_erkul_code(url_or_code: str) -> str:
+    """Erkul-Code aus URL oder direktem Code extrahieren."""
+    match = _re.search(r'(?:loadout/|calculator;loadout=)([a-zA-Z0-9]+)', url_or_code.strip())
+    return match.group(1) if match else url_or_code.strip()
+
+
+async def _fetch_erkul(code: str) -> dict:
+    """Erkul-Loadout abrufen und dekodieren."""
+    async with _httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            f"https://server.erkul.games/loadouts/{code}",
+            headers={"Origin": "https://www.erkul.games", "Referer": "https://www.erkul.games/"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    loadout_json = _json.loads(_base64.b64decode(data["loadout"]))
+    return {
+        "erkul_name": data.get("name", ""),
+        "ship_local": loadout_json.get("ship", {}).get("localName", ""),
+        "items": loadout_json.get("loadout", []),
+    }
+
+
+def _extract_erkul_components(erkul_items: list) -> list[tuple[str, str]]:
+    """Erkul-Items in (hardpoint_type, local_name) Paare umwandeln."""
+    result = []
+    for item_data in (erkul_items or []):
+        calc_type = item_data.get("item", {}).get("calculatorType", "")
+        local_name = item_data.get("item", {}).get("localName", "")
+        is_stock = item_data.get("item", {}).get("stock", False)
+        if calc_type in _ERKUL_SKIP_TYPES or not local_name:
+            continue
+        if calc_type == "mount":
+            for sub in item_data.get("loadout", []):
+                if sub.get("item", {}).get("calculatorType") == "weapon" and sub.get("item", {}).get("localName"):
+                    result.append(("weapon_gun", sub["item"]["localName"]))
+            continue
+        if calc_type == "missile-rack" and not is_stock:
+            result.append(("missile_launcher", local_name))
+            continue
+        hp_type = _ERKUL_TYPE_MAP.get(calc_type)
+        if hp_type and not is_stock:
+            result.append((hp_type, local_name))
+    return result
+
+
+def _resolve_ship_from_erkul(db: Session, ship_local: str) -> Ship | None:
+    """Schiff anhand von Erkul localName in DB finden oder von FleetYards importieren."""
+    # Aus localName ableiten (z.B. "aegs_gladius" -> "gladius")
+    parts = ship_local.split("_", 1)
+    search_term = parts[1].replace("_", " ") if len(parts) > 1 else ship_local
+
+    # In DB suchen
+    ship = db.query(Ship).filter(Ship.name.ilike(f"%{search_term}%")).first()
+    if ship:
+        return ship
+
+    # FleetYards Fallback
+    from app.services.fleetyards_import import search_ships_fleetyards, import_ship_from_fleetyards
+    results = search_ships_fleetyards(search_term)
+    if results:
+        slug = results[0]["slug"]
+        existing = db.query(Ship).filter(Ship.slug == slug).first()
+        if existing:
+            return existing
+        try:
+            ship = import_ship_from_fleetyards(db, slug)
+            db.commit()
+            return ship
+        except Exception:
+            pass
+    return None
+
+
+def _import_erkul_items_to_loadout(db: Session, loadout: MetaLoadout, erkul_items: list) -> tuple[int, int]:
+    """Erkul-Items in ein Loadout importieren. Gibt (imported, unmatched) zurück."""
+    extracted = _extract_erkul_components(erkul_items)
+    db.query(MetaLoadoutItem).filter(MetaLoadoutItem.loadout_id == loadout.id).delete()
+
+    slot_counters: dict[str, int] = {}
+    imported = 0
+    unmatched = 0
+
+    for hp_type, erkul_local_name in extracted:
+        slot_idx = slot_counters.get(hp_type, 0)
+        slot_counters[hp_type] = slot_idx + 1
+
+        component = db.query(Component).filter(Component.class_name.ilike(erkul_local_name)).first()
+        if not component:
+            unmatched += 1
+            continue
+
+        hardpoint = db.query(ShipHardpoint).filter(
+            ShipHardpoint.ship_id == loadout.ship_id,
+            ShipHardpoint.hardpoint_type == hp_type,
+            ShipHardpoint.slot_index == slot_idx,
+        ).first()
+
+        db.add(MetaLoadoutItem(
+            loadout_id=loadout.id,
+            hardpoint_type=hp_type, slot_index=slot_idx,
+            component_id=component.id,
+            hardpoint_id=hardpoint.id if hardpoint else None,
+        ))
+        imported += 1
+
+    return imported, unmatched
+
+
+# ============== Erkul Bulk Import ==============
+
+@router.post("/bulk-preview", response_model=ErkulBulkPreviewResponse)
+async def bulk_preview_erkul(
+    data: ErkulBulkPreviewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Vorschau für Bulk-Import von Erkul-Links (Officer+)."""
+    check_role(current_user, UserRole.OFFICER)
+
+    results = []
+    for url in data.urls:
+        code = _parse_erkul_code(url)
+        if not code:
+            results.append(ErkulBulkPreviewItem(
+                erkul_url=url, erkul_code="", erkul_name="", ship_name="",
+                ship_id=None, components_count=0, unmatched_count=0,
+                existing_matches=[], error="Ungültiger Erkul-Link",
+            ))
+            continue
+
+        try:
+            erkul = await _fetch_erkul(code)
+        except Exception as e:
+            results.append(ErkulBulkPreviewItem(
+                erkul_url=url, erkul_code=code, erkul_name="", ship_name="",
+                ship_id=None, components_count=0, unmatched_count=0,
+                existing_matches=[], error=f"Erkul-Fehler: {str(e)[:100]}",
+            ))
+            continue
+
+        # Schiff auflösen
+        ship = _resolve_ship_from_erkul(db, erkul["ship_local"])
+        ship_name = ship.name if ship else erkul["ship_local"]
+        ship_id = ship.id if ship else None
+
+        # Komponenten zählen
+        extracted = _extract_erkul_components(erkul["items"])
+        matched = 0
+        unmatched = 0
+        for _, local_name in extracted:
+            comp = db.query(Component).filter(Component.class_name.ilike(local_name)).first()
+            if comp:
+                matched += 1
+            else:
+                unmatched += 1
+
+        # Existierende Loadouts für dieses Schiff finden
+        existing = []
+        if ship_id:
+            existing_loadouts = db.query(MetaLoadout).filter(
+                MetaLoadout.ship_id == ship_id, MetaLoadout.is_active == True
+            ).all()
+            existing = [
+                ErkulBulkPreviewMatch(id=l.id, name=l.name, category=l.category)
+                for l in existing_loadouts
+            ]
+
+        results.append(ErkulBulkPreviewItem(
+            erkul_url=url,
+            erkul_code=code,
+            erkul_name=erkul["erkul_name"],
+            ship_name=ship_name,
+            ship_id=ship_id,
+            components_count=matched + unmatched,
+            unmatched_count=unmatched,
+            existing_matches=existing,
+        ))
+
+    return ErkulBulkPreviewResponse(items=results)
+
+
+@router.post("/bulk-import", response_model=ErkulBulkImportResponse)
+async def bulk_import_erkul(
+    data: ErkulBulkImportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Bulk-Import von Erkul-Loadouts (Officer+). Kann neue erstellen oder bestehende ersetzen."""
+    check_role(current_user, UserRole.OFFICER)
+
+    results = []
+    created = 0
+    replaced = 0
+    failed = 0
+
+    for item in data.items:
+        code = _parse_erkul_code(item.erkul_url)
+        try:
+            erkul = await _fetch_erkul(code)
+        except Exception as e:
+            results.append(ErkulBulkImportResultItem(
+                name=item.name, ship_name="", imported_count=0,
+                unmatched_count=0, replaced=False, error=str(e)[:100],
+            ))
+            failed += 1
+            continue
+
+        # Ersetzen oder neu?
+        if item.replace_id:
+            loadout = db.query(MetaLoadout).filter(MetaLoadout.id == item.replace_id).first()
+            if not loadout:
+                results.append(ErkulBulkImportResultItem(
+                    name=item.name, ship_name="", imported_count=0,
+                    unmatched_count=0, replaced=False, error="Loadout zum Ersetzen nicht gefunden",
+                ))
+                failed += 1
+                continue
+
+            # Loadout-Metadaten aktualisieren
+            loadout.name = item.name
+            if item.category:
+                loadout.category = item.category
+            loadout.erkul_link = f"https://www.erkul.games/loadout/{code}"
+            loadout.version_date = _date.today()
+            ship_name = loadout.ship.name if loadout.ship else ""
+            is_replaced = True
+        else:
+            # Neues Loadout - Schiff auflösen
+            ship = _resolve_ship_from_erkul(db, erkul["ship_local"])
+            if not ship:
+                results.append(ErkulBulkImportResultItem(
+                    name=item.name, ship_name=erkul["ship_local"], imported_count=0,
+                    unmatched_count=0, replaced=False, error="Schiff nicht gefunden",
+                ))
+                failed += 1
+                continue
+
+            loadout = MetaLoadout(
+                ship_id=ship.id,
+                name=item.name,
+                category=item.category,
+                erkul_link=f"https://www.erkul.games/loadout/{code}",
+                is_active=True,
+                version_date=_date.today(),
+                created_by_id=current_user.id,
+            )
+            db.add(loadout)
+            db.flush()
+            ship_name = ship.name
+            is_replaced = False
+
+        # Items importieren
+        imp_count, unm_count = _import_erkul_items_to_loadout(db, loadout, erkul["items"])
+        db.commit()
+
+        if is_replaced:
+            replaced += 1
+        else:
+            created += 1
+
+        results.append(ErkulBulkImportResultItem(
+            name=item.name, ship_name=ship_name,
+            imported_count=imp_count, unmatched_count=unm_count,
+            replaced=is_replaced,
+        ))
+
+    return ErkulBulkImportResponse(
+        results=results,
+        total_created=created,
+        total_replaced=replaced,
+        total_failed=failed,
     )
 
 

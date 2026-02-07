@@ -1000,3 +1000,50 @@ export interface ErkulImportResponse {
   unmatched_items: string[]
   items: ErkulImportedItem[]
 }
+
+// ============== Erkul Bulk Import ==============
+
+export interface ErkulBulkPreviewMatch {
+  id: number
+  name: string
+  category: string | null
+}
+
+export interface ErkulBulkPreviewItem {
+  erkul_url: string
+  erkul_code: string
+  erkul_name: string
+  ship_name: string
+  ship_id: number | null
+  components_count: number
+  unmatched_count: number
+  existing_matches: ErkulBulkPreviewMatch[]
+  error: string | null
+}
+
+export interface ErkulBulkPreviewResponse {
+  items: ErkulBulkPreviewItem[]
+}
+
+export interface ErkulBulkImportItem {
+  erkul_url: string
+  name: string
+  category?: string | null
+  replace_id?: number | null
+}
+
+export interface ErkulBulkImportResultItem {
+  name: string
+  ship_name: string
+  imported_count: number
+  unmatched_count: number
+  replaced: boolean
+  error: string | null
+}
+
+export interface ErkulBulkImportResponse {
+  results: ErkulBulkImportResultItem[]
+  total_created: number
+  total_replaced: number
+  total_failed: number
+}

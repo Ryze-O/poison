@@ -2,9 +2,9 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../hooks/useAuth'
-import { Plus, Search, ChevronDown, ChevronRight, ExternalLink, Check, X, Send, Trash2, Edit2, Save, Loader, Ship as ShipIcon, Calendar, Download, ShoppingCart, Package } from 'lucide-react'
+import { Plus, Search, ChevronDown, ChevronRight, ExternalLink, Check, X, Send, Trash2, Edit2, Save, Loader, Ship as ShipIcon, Calendar, Download, ShoppingCart, Package, Upload } from 'lucide-react'
 import ComponentSearchModal from '../components/ComponentSearchModal'
-import type { MetaLoadout, MetaLoadoutList, ShipWithHardpoints, ShipSearchResult, LoadoutCheck, Component, UserLoadout, ErkulImportResponse } from '../api/types'
+import type { MetaLoadout, MetaLoadoutList, ShipWithHardpoints, ShipSearchResult, LoadoutCheck, Component, UserLoadout, ErkulImportResponse, ErkulBulkPreviewItem, ErkulBulkImportResponse } from '../api/types'
 
 // Hardpoint-Typ Labels und Farben
 const hardpointTypeLabels: Record<string, string> = {
@@ -73,6 +73,13 @@ export default function LoadoutsPage() {
   const [showErkulImport, setShowErkulImport] = useState<number | null>(null) // loadout_id
   const [erkulUrl, setErkulUrl] = useState('')
   const [erkulResult, setErkulResult] = useState<ErkulImportResponse | null>(null)
+
+  // Bulk Import state
+  const [showBulkImport, setShowBulkImport] = useState(false)
+  const [bulkUrls, setBulkUrls] = useState('')
+  const [bulkPreview, setBulkPreview] = useState<ErkulBulkPreviewItem[] | null>(null)
+  const [bulkConfig, setBulkConfig] = useState<Record<number, { name: string; category: string; action: 'new' | number }>>({})
+  const [bulkResult, setBulkResult] = useState<ErkulBulkImportResponse | null>(null)
 
   // UserLoadout (Meine gefitteten Schiffe) state
   const [showAddMyShip, setShowAddMyShip] = useState(false)
@@ -203,6 +210,41 @@ export default function LoadoutsPage() {
       setErkulResult(data)
       setErkulUrl('')
       queryClient.invalidateQueries({ queryKey: ['loadout', vars.loadoutId] })
+      queryClient.invalidateQueries({ queryKey: ['loadouts'] })
+    },
+  })
+
+  // Bulk Import Mutations
+  const bulkPreviewMutation = useMutation({
+    mutationFn: async (urls: string[]) => {
+      const res = await apiClient.post('/api/loadouts/bulk-preview', { urls })
+      return res.data as { items: ErkulBulkPreviewItem[] }
+    },
+    onSuccess: (data) => {
+      setBulkPreview(data.items)
+      // Config für jedes Preview-Item initialisieren
+      const config: Record<number, { name: string; category: string; action: 'new' | number }> = {}
+      data.items.forEach((item, idx) => {
+        if (!item.error) {
+          config[idx] = {
+            name: item.erkul_name,
+            category: '',
+            action: item.existing_matches.length > 0 ? item.existing_matches[0].id : 'new',
+          }
+        }
+      })
+      setBulkConfig(config)
+    },
+  })
+
+  const bulkImportMutation = useMutation({
+    mutationFn: async (items: Array<{ erkul_url: string; name: string; category?: string | null; replace_id?: number | null }>) => {
+      const res = await apiClient.post('/api/loadouts/bulk-import', { items })
+      return res.data as ErkulBulkImportResponse
+    },
+    onSuccess: (data) => {
+      setBulkResult(data)
+      setBulkPreview(null)
       queryClient.invalidateQueries({ queryKey: ['loadouts'] })
     },
   })
@@ -341,13 +383,22 @@ export default function LoadoutsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Meta-Loadouts</h1>
         {isOfficer && (
-          <button
-            onClick={() => setShowCreateForm(!showCreateForm)}
-            className="btn btn-primary flex items-center gap-2"
-          >
-            <Plus size={16} />
-            Neues Loadout
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setShowBulkImport(true); setBulkPreview(null); setBulkResult(null); setBulkUrls('') }}
+              className="btn btn-secondary flex items-center gap-2"
+            >
+              <Upload size={16} />
+              Erkul Bulk-Import
+            </button>
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              className="btn btn-primary flex items-center gap-2"
+            >
+              <Plus size={16} />
+              Neues Loadout
+            </button>
+          </div>
         )}
       </div>
 
@@ -1025,10 +1076,10 @@ export default function LoadoutsPage() {
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                                           {hardpoints.map(hp => {
                                             const assignedItem = items.find(i => i.slot_index === hp.slot_index)
-                                            // Check-Daten für diesen Slot
-                                            const checkItem = loadoutCheck?.items.find(
-                                              ci => ci.hardpoint_type === type && ci.slot_index === hp.slot_index
-                                            )
+                                            // Check-Daten für diesen Slot (nur wenn Check aktiv)
+                                            const checkItem = checkLoadoutId === selectedLoadout.id
+                                              ? loadoutCheck?.items.find(ci => ci.hardpoint_type === type && ci.slot_index === hp.slot_index)
+                                              : undefined
 
                                             return (
                                               <div
@@ -1141,8 +1192,18 @@ export default function LoadoutsPage() {
                                         </span>
                                       </h4>
                                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                                        {(groupedItems[type] || []).map(item => (
-                                          <div key={item.id} className="p-3 rounded-lg border border-gray-600 bg-gray-800/40">
+                                        {(groupedItems[type] || []).map(item => {
+                                          const checkItem = checkLoadoutId === selectedLoadout.id
+                                            ? loadoutCheck?.items.find(ci => ci.hardpoint_type === item.hardpoint_type && ci.slot_index === item.slot_index)
+                                            : undefined
+                                          return (
+                                          <div key={item.id} className={`p-3 rounded-lg border ${
+                                            checkItem
+                                              ? checkItem.in_inventory > 0
+                                                ? 'border-green-500/40 bg-green-500/5'
+                                                : 'border-red-500/40 bg-red-500/5'
+                                              : 'border-gray-600 bg-gray-800/40'
+                                          }`}>
                                             <p className="font-medium text-sm truncate">{item.component.name}</p>
                                             <p className="text-[10px] text-gray-500">{item.component.manufacturer}</p>
                                             <div className="flex items-center gap-2 mt-0.5">
@@ -1160,7 +1221,8 @@ export default function LoadoutsPage() {
                                               )}
                                             </div>
                                           </div>
-                                        ))}
+                                          )
+                                        })}
                                       </div>
                                     </div>
                                   ))}
@@ -1176,26 +1238,32 @@ export default function LoadoutsPage() {
                                 {checkLoadoutId === selectedLoadout.id ? 'Check ausblenden' : 'Was fehlt mir?'}
                               </button>
 
-                              {loadoutCheck && loadoutCheck.total_missing > 0 && (
+                              {checkLoadoutId === selectedLoadout.id && loadoutCheck && loadoutCheck.total_missing > 0 && (
                                 <button
                                   onClick={() => requestMissingMutation.mutate(selectedLoadout.id)}
                                   disabled={requestMissingMutation.isPending}
                                   className="btn btn-primary text-sm flex items-center gap-1"
                                 >
-                                  <Send size={14} />
+                                  {requestMissingMutation.isPending ? <Loader size={14} className="animate-spin" /> : <Send size={14} />}
                                   Fehlende anfragen ({loadoutCheck.total_missing})
                                 </button>
                               )}
 
                               {requestMissingMutation.isSuccess && (
                                 <span className="text-sm text-green-400">
-                                  {(requestMissingMutation.data as { created: number }).created} Anfragen erstellt
+                                  {(requestMissingMutation.data as { detail: string }).detail}
+                                </span>
+                              )}
+
+                              {requestMissingMutation.isError && (
+                                <span className="text-sm text-red-400">
+                                  Fehler beim Erstellen der Anfragen
                                 </span>
                               )}
                             </div>
 
-                            {/* Check-Zusammenfassung */}
-                            {loadoutCheck && checkLoadoutId === selectedLoadout.id && (
+                            {/* Check-Zusammenfassung (nur bei aktivem Check) */}
+                            {checkLoadoutId === selectedLoadout.id && loadoutCheck && (
                               <div className="bg-gray-800/30 rounded-lg p-3 text-sm">
                                 <div className="flex items-center gap-4">
                                   <span className="text-green-400">{loadoutCheck.total_owned} vorhanden</span>
@@ -1212,6 +1280,244 @@ export default function LoadoutsPage() {
                 </div>
               )
             })}
+        </div>
+      )}
+
+      {/* Bulk Import Modal */}
+      {showBulkImport && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1a1a] border border-gray-700 rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <Upload size={18} className="text-krt-orange" />
+                Erkul Bulk-Import
+              </h2>
+              <button onClick={() => setShowBulkImport(false)} className="text-gray-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Step 1: URLs eingeben */}
+              {!bulkPreview && !bulkResult && (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-400">
+                    Erkul-Links einfügen (einen pro Zeile). Unterstützt URLs und Codes.
+                  </p>
+                  <textarea
+                    value={bulkUrls}
+                    onChange={(e) => setBulkUrls(e.target.value)}
+                    placeholder={"https://www.erkul.games/loadout/4ZwmqCps\nhttps://www.erkul.games/loadout/abc123\n..."}
+                    className="input w-full font-mono text-sm"
+                    rows={8}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setShowBulkImport(false)} className="btn btn-secondary">
+                      Abbrechen
+                    </button>
+                    <button
+                      onClick={() => {
+                        const urls = bulkUrls.split('\n').map(u => u.trim()).filter(u => u.length > 0)
+                        if (urls.length === 0) return
+                        bulkPreviewMutation.mutate(urls)
+                      }}
+                      disabled={bulkPreviewMutation.isPending || !bulkUrls.trim()}
+                      className="btn btn-primary flex items-center gap-2"
+                    >
+                      {bulkPreviewMutation.isPending ? <Loader size={14} className="animate-spin" /> : <Search size={14} />}
+                      Vorschau laden ({bulkUrls.split('\n').filter(u => u.trim()).length})
+                    </button>
+                  </div>
+                  {bulkPreviewMutation.isError && (
+                    <p className="text-sm text-red-400">
+                      Fehler: {(bulkPreviewMutation.error as Error).message || 'Vorschau fehlgeschlagen'}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Step 2: Vorschau konfigurieren */}
+              {bulkPreview && !bulkResult && (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-400">
+                    {bulkPreview.length} Loadout{bulkPreview.length > 1 ? 's' : ''} gefunden. Konfiguriere Name, Kategorie und Aktion.
+                  </p>
+
+                  <div className="space-y-3">
+                    {bulkPreview.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className={`rounded-lg border p-3 ${
+                          item.error
+                            ? 'border-red-500/40 bg-red-500/5'
+                            : 'border-gray-700 bg-gray-800/30'
+                        }`}
+                      >
+                        {item.error ? (
+                          <div className="flex items-center gap-2">
+                            <X size={14} className="text-red-400 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm text-red-400">{item.error}</p>
+                              <p className="text-xs text-gray-500 truncate">{item.erkul_url}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {/* Header */}
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-medium text-krt-orange">{item.ship_name}</span>
+                              <span className="text-xs text-gray-500">
+                                {item.components_count} Komponenten
+                                {item.unmatched_count > 0 && (
+                                  <span className="text-yellow-400 ml-1">({item.unmatched_count} nicht zugeordnet)</span>
+                                )}
+                              </span>
+                              {!item.ship_id && (
+                                <span className="text-xs bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">Schiff nicht in DB</span>
+                              )}
+                            </div>
+
+                            {/* Config */}
+                            {bulkConfig[idx] && (
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                <div>
+                                  <label className="text-[10px] text-gray-500 block mb-0.5">Name</label>
+                                  <input
+                                    value={bulkConfig[idx].name}
+                                    onChange={(e) => setBulkConfig(prev => ({
+                                      ...prev,
+                                      [idx]: { ...prev[idx], name: e.target.value },
+                                    }))}
+                                    className="input text-sm"
+                                    placeholder="Loadout-Name"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-gray-500 block mb-0.5">Kategorie</label>
+                                  <input
+                                    value={bulkConfig[idx].category}
+                                    onChange={(e) => setBulkConfig(prev => ({
+                                      ...prev,
+                                      [idx]: { ...prev[idx], category: e.target.value },
+                                    }))}
+                                    className="input text-sm"
+                                    placeholder="z.B. Light Fighter"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-gray-500 block mb-0.5">Aktion</label>
+                                  <select
+                                    value={bulkConfig[idx].action}
+                                    onChange={(e) => setBulkConfig(prev => ({
+                                      ...prev,
+                                      [idx]: { ...prev[idx], action: e.target.value === 'new' ? 'new' : Number(e.target.value) },
+                                    }))}
+                                    className="input text-sm"
+                                  >
+                                    <option value="new">Neu hinzufügen</option>
+                                    {item.existing_matches.map(m => (
+                                      <option key={m.id} value={m.id}>
+                                        Ersetzen: {m.name}{m.category ? ` (${m.category})` : ''}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-700/50">
+                    <button
+                      onClick={() => { setBulkPreview(null); setBulkConfig({}) }}
+                      className="btn btn-secondary"
+                    >
+                      Zurück
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">
+                        {Object.keys(bulkConfig).length} von {bulkPreview.filter(i => !i.error).length} bereit
+                      </span>
+                      <button
+                        onClick={() => {
+                          const items = Object.entries(bulkConfig).map(([idxStr, cfg]) => {
+                            const preview = bulkPreview[Number(idxStr)]
+                            return {
+                              erkul_url: preview.erkul_url,
+                              name: cfg.name,
+                              category: cfg.category || null,
+                              replace_id: cfg.action === 'new' ? null : cfg.action,
+                            }
+                          })
+                          bulkImportMutation.mutate(items)
+                        }}
+                        disabled={bulkImportMutation.isPending || Object.keys(bulkConfig).length === 0}
+                        className="btn btn-primary flex items-center gap-2"
+                      >
+                        {bulkImportMutation.isPending ? <Loader size={14} className="animate-spin" /> : <Download size={14} />}
+                        Importieren ({Object.keys(bulkConfig).length})
+                      </button>
+                    </div>
+                  </div>
+                  {bulkImportMutation.isError && (
+                    <p className="text-sm text-red-400">
+                      Fehler: {(bulkImportMutation.error as Error).message || 'Import fehlgeschlagen'}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Step 3: Ergebnisse */}
+              {bulkResult && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4 text-sm">
+                    {bulkResult.total_created > 0 && (
+                      <span className="text-green-400">{bulkResult.total_created} neu erstellt</span>
+                    )}
+                    {bulkResult.total_replaced > 0 && (
+                      <span className="text-krt-orange">{bulkResult.total_replaced} ersetzt</span>
+                    )}
+                    {bulkResult.total_failed > 0 && (
+                      <span className="text-red-400">{bulkResult.total_failed} fehlgeschlagen</span>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    {bulkResult.results.map((r, idx) => (
+                      <div key={idx} className={`flex items-center justify-between p-2 rounded text-sm ${
+                        r.error ? 'bg-red-500/5' : 'bg-gray-800/30'
+                      }`}>
+                        <div className="flex items-center gap-2">
+                          {r.error
+                            ? <X size={14} className="text-red-400" />
+                            : <Check size={14} className="text-green-400" />
+                          }
+                          <span className="font-medium">{r.name}</span>
+                          <span className="text-gray-500">{r.ship_name}</span>
+                          {r.replaced && <span className="text-xs bg-krt-orange/20 text-krt-orange px-1.5 py-0.5 rounded">ersetzt</span>}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {r.error
+                            ? <span className="text-red-400">{r.error}</span>
+                            : `${r.imported_count} Komp.${r.unmatched_count > 0 ? `, ${r.unmatched_count} unbekannt` : ''}`
+                          }
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button onClick={() => setShowBulkImport(false)} className="btn btn-primary">
+                      Schließen
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

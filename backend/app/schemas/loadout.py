@@ -178,6 +178,69 @@ class ErkulImportResponse(BaseModel):
     items: List[ErkulImportedItem]
 
 
+# ============== Erkul Bulk Import Schemas ==============
+
+class ErkulBulkPreviewRequest(BaseModel):
+    """Mehrere Erkul-Links zur Vorschau."""
+    urls: List[str]
+
+
+class ErkulBulkPreviewMatch(BaseModel):
+    """Existierendes Loadout das ersetzt werden könnte."""
+    id: int
+    name: str
+    category: Optional[str]
+
+
+class ErkulBulkPreviewItem(BaseModel):
+    """Vorschau eines einzelnen Erkul-Loadouts."""
+    erkul_url: str
+    erkul_code: str
+    erkul_name: str
+    ship_name: str
+    ship_id: Optional[int]
+    components_count: int
+    unmatched_count: int
+    existing_matches: List[ErkulBulkPreviewMatch]
+    error: Optional[str] = None
+
+
+class ErkulBulkPreviewResponse(BaseModel):
+    """Vorschau-Ergebnis für Bulk-Import."""
+    items: List[ErkulBulkPreviewItem]
+
+
+class ErkulBulkImportItem(BaseModel):
+    """Einzelner Import-Eintrag."""
+    erkul_url: str
+    name: str
+    category: Optional[str] = None
+    replace_id: Optional[int] = None  # Wenn gesetzt: bestehendes Loadout ersetzen
+
+
+class ErkulBulkImportRequest(BaseModel):
+    """Bulk-Import Anfrage."""
+    items: List[ErkulBulkImportItem]
+
+
+class ErkulBulkImportResultItem(BaseModel):
+    """Ergebnis eines einzelnen Imports."""
+    name: str
+    ship_name: str
+    imported_count: int
+    unmatched_count: int
+    replaced: bool
+    error: Optional[str] = None
+
+
+class ErkulBulkImportResponse(BaseModel):
+    """Ergebnis des Bulk-Imports."""
+    results: List[ErkulBulkImportResultItem]
+    total_created: int
+    total_replaced: int
+    total_failed: int
+
+
 # ============== UserLoadout Schemas ==============
 
 class UserLoadoutCreate(BaseModel):
