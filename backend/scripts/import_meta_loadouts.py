@@ -364,14 +364,11 @@ def main():
         print(f"  Schiff: {ship.name} (ID {ship.id})")
 
         # Meta-Loadout anlegen
-        desc_parts = [category]
-        if notes:
-            desc_parts.append(notes)
-
         loadout = MetaLoadout(
             ship_id=ship.id,
             name=name,
-            description=" | ".join(desc_parts),
+            category=category,
+            description=notes,
             erkul_link=f"https://www.erkul.games/loadout/{code}",
             is_active=True,
             version_date=today,
