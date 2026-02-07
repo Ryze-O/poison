@@ -973,8 +973,8 @@ export default function LoadoutsPage() {
                               </div>
                             )}
 
-                            {/* Slot-Ansicht: Hardpoints des Schiffs */}
-                            {shipDetail && shipDetail.hardpoints.length > 0 && (
+                            {/* Slot-Ansicht: Hardpoints des Schiffs oder nur Loadout-Items */}
+                            {((shipDetail?.hardpoints?.length ?? 0) > 0 || (selectedLoadout.items?.length ?? 0) > 0) && (
                               <div className="space-y-4">
                                 {hardpointOrder
                                   .filter(type => groupedHardpoints[type])
